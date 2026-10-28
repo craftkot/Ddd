@@ -1,25 +1,20 @@
-# RelayBox v0.3 (Android)
+# RelayBox Android v0.4
 
-RelayBox collects Avito, FunPay and Playerok Android notifications into a local inbox, opens official chat websites in an embedded WebView and offers sender-to-chat URL bookmarking.
+Unified Android notification inbox for Avito, FunPay, and Playerok, with official sites inside WebView.
 
-Features:
-- Android NotificationListenerService (permission required)
-- Encrypted local message history (AES-256-GCM, Android Keystore), up to 1000 rows
-- Inbox search and platform/unread filters, mark all read
-- Account login on official WebView sites, optional mirrored notifications that open RelayBox
-- Manual link to a particular conversation, file attachments in WebView
+## What's new in 0.4
+- Custom launcher icon (Avito color dots + gold crown + green gamepad + central conversation bubble).
+- Automated CI quality gate: JUnit URL validation, Android Lint, APK archive + signature + icon verification, emulator installation and UI smoke test.
+- Android emulator screenshots and test reports attached to GitHub Actions runs.
+- The verified APK artifact is only uploaded if all checks pass.
 
-Limitations:
-- Does not read server-side chat history or integrate with proprietary APIs.
-- Clicking an original Avito notification opens Avito, not RelayBox. Mirrored notifications can open RelayBox.
-- Browser push notifications must first be enabled on the respective sites.
-- Bookmarking chat URLs requires the site to expose distinct URLs.
-- WebView login, CAPTCHA, third-party SSO and website changes may prevent login.
-- This is a debug build, not an official client of any marketplace.
+## Building & checking
+Push to main or open **Actions → RelayBox Android • Build + automated tests → Run workflow**.
+Successful build contains:
+- `RelayBox-v0.4-verified-apk` — Android installable debug APK.
+- `RelayBox-v0.4-qa-reports` — JUnit, Android Lint, emulator results, screenshot.
 
-Build with GitHub Actions: Actions > Build RelayBox Android APK > Run workflow.
-Download artifact named RelayBox-v0.3-debug-apk and extract app-debug.apk.
-Android Studio alternative: JDK 17, Android SDK 35, Gradle 8.11.1, AGP 8.9.2.
-The repository omits gradle-wrapper.jar; Actions installs Gradle.
+## Limitations
+NotificationListenerService can observe allowed system notifications after the user grants access; this is not equivalent to API access to marketplace chat histories. WebView login, SSO and the exact chat links can fail if marketplace websites change; synthetic emulator tests cannot verify real credentials, incoming marketplace push, or external service availability. Original marketplace notifications still open their original app; optional RelayBox mirror notifications open RelayBox.
 
-After installing: give RelayBox notification access through Android settings, enable its mirrored notifications if desired, sign into services via embedded WebView.
+App requires Android 8.0+. WebView cookies remain on device; encrypted message data is stored locally. No remote backend.
