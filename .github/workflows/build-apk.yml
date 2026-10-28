@@ -26,7 +26,8 @@ jobs:
           echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
           "$SDKMANAGER" --list_installed | grep -E 'platforms;android-35|build-tools;35.0.0' || true
       - name: Install Android SDK 35 if missing
-        run: '"$SDKMANAGER"' --install 'platforms;android-35' 'build-tools;35.0.0'
+        run: |
+          "$SDKMANAGER" --install 'platforms;android-35' 'build-tools;35.0.0'
       - name: Compile Android debug APK
         run: gradle --no-daemon --stacktrace :app:assembleDebug
       - name: Upload APK
