@@ -52,6 +52,7 @@ public final class ChatActivity extends Activity {
         LinearLayout root=new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(0xFF101827);
         setContentView(root);
+        NavigationBars.apply(this);
         TextView title=new TextView(this);
         title.setText(platform.label+" · Чат"); title.setTextColor(Color.WHITE);title.setTextSize(20);
         title.setPadding(18,15,18,10);root.addView(title);
@@ -142,6 +143,14 @@ public final class ChatActivity extends Activity {
         try {startActivity(new Intent(Intent.ACTION_VIEW,uri));}
         catch(Exception ignored){new AlertDialog.Builder(this).setMessage("Не найден браузер.")
                 .setPositiveButton("ОК",null).show();}
+    }
+    @Override protected void onResume() {
+        super.onResume();
+        NavigationBars.apply(this);
+    }
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) NavigationBars.apply(this);
     }
     @Override protected void onSaveInstanceState(Bundle state){
         if(web!=null)state.putString("url",web.getUrl());super.onSaveInstanceState(state);

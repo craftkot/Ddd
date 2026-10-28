@@ -55,6 +55,7 @@ public final class MainActivity extends Activity {
         page.setOrientation(LinearLayout.VERTICAL);
         page.setBackgroundColor(BG);
         setContentView(page);
+        NavigationBars.apply(this);
         render();
     }
     @android.annotation.SuppressLint("UnspecifiedRegisterReceiverFlag")
@@ -69,7 +70,15 @@ public final class MainActivity extends Activity {
         if(registered) { unregisterReceiver(receiver); registered=false; }
         super.onStop();
     }
-    @Override protected void onResume() { super.onResume(); if(page!=null) render(); }
+    @Override protected void onResume() {
+        super.onResume();
+        NavigationBars.apply(this);
+        if(page!=null) render();
+    }
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) NavigationBars.apply(this);
+    }
 
     private int dp(int size) { return (int)(size*getResources().getDisplayMetrics().density+0.5f); }
     private GradientDrawable shape(int color,int radius) {
@@ -263,6 +272,7 @@ public final class MainActivity extends Activity {
         sw.setChecked(getSharedPreferences("relaybox",0).getBoolean(pref,initial));
         sw.setOnCheckedChangeListener((v,checked)-> {
             getSharedPreferences("relaybox",0).edit().putBoolean(pref,checked).apply();
+            if(pref.equals("hide_system_navigation")) NavigationBars.apply(this);
             if(pref.equals("mirror")&&checked) requestPostPermission();
         });
         card.addView(sw); body.addView(card);
@@ -274,6 +284,7 @@ public final class MainActivity extends Activity {
     private void settings(LinearLayout body) {
         heading(body,"Настройки","Разрешения, уведомления и конфиденциальность");
         action(body,listenerAccess()?"Доступ к уведомлениям: разрешён":"Разрешить чтение уведомлений",this::openAccess);
+        settingSwitch(body,"Скрывать системные кнопки Android","hide_system_navigation",true);
         settingSwitch(body,"Уведомления браузеров","browsers",true);
         settingSwitch(body,"Расширенное распознавание (менее точно)","loose",false);
         settingSwitch(body,"Дублировать уведомления в шторке","mirror",false);
