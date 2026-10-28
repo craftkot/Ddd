@@ -56,6 +56,7 @@ public final class MainActivity extends Activity {
         setContentView(page);
         render();
     }
+    @android.annotation.SuppressLint("UnspecifiedRegisterReceiverFlag")
     @Override protected void onStart() {
         super.onStart();
         IntentFilter f=new IntentFilter(CaptureService.ACTION_NEW);
@@ -149,8 +150,19 @@ public final class MainActivity extends Activity {
         page.addView(nav);
     }
     private boolean listenerAccess() {
-        NotificationManager manager=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
-        return manager!=null && manager.isNotificationListenerAccessGranted(new ComponentName(this,CaptureService.class));
+        ComponentName target = new ComponentName(this, CaptureService.class);
+        if (Build.VERSION.SDK_INT >= 27) {
+            NotificationManager manager=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
+            return manager!=null && manager.isNotificationListenerAccessGranted(target);
+        }
+        String enabled = Settings.Secure.getString(
+                getContentResolver(), "enabled_notification_listeners");
+        if (enabled == null) return false;
+        for (String item : enabled.split(":")) {
+            ComponentName component = ComponentName.unflattenFromString(item);
+            if (target.equals(component)) return true;
+        }
+        return false;
     }
     private void openAccess() {
         try { startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)); }
