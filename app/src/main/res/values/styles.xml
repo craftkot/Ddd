@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources><style name="RelayTheme" parent="android:style/Theme.Material.Light.NoActionBar"><item name="android:fontFamily">sans</item><item name="android:colorAccent">#436BE6</item><item name="android:statusBarColor">#111B30</item><item name="android:navigationBarColor">#111B30</item><item name="android:windowLightStatusBar">false</item></style></resources>
