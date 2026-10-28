@@ -60,11 +60,23 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: |
+            set -e
             gradle --no-daemon :app:connectedDebugAndroidTest
             mkdir -p build/ci
             adb shell am start -W -n dev.relaybox.app/.MainActivity
-            adb shell screencap -p /sdcard/relaybox-home.png
-            adb pull /sdcard/relaybox-home.png build/ci/relaybox-home.png
+            visible=0
+            for attempt in 1 2 3 4 5; do
+              sleep 3
+              adb shell uiautomator dump /sdcard/relaybox-ui.xml >/dev/null 2>&1 || true
+              adb pull /sdcard/relaybox-ui.xml build/ci/relaybox-ui.xml >/dev/null 2>&1 || true
+              if grep -Fq 'text="RelayBox"' build/ci/relaybox-ui.xml 2>/dev/null; then
+                visible=1
+                break
+              fi
+            done
+            test "$visible" -eq 1
+            adb shell screencap -p /sdcard/relaybox-screen.png
+            adb pull /sdcard/relaybox-screen.png build/ci/relaybox-screen.png
       - name: Upload test reports and emulator screenshot
         if: always()
         uses: actions/upload-artifact@v4
@@ -75,7 +87,8 @@ jobs:
             app/build/outputs/androidTest-results/
             app/build/test-results/
             build/apk-badging.txt
-            build/ci/relaybox-home.png
+            build/ci/relaybox-screen.png
+            build/ci/relaybox-ui.xml
           if-no-files-found: warn
           retention-days: 30
       - name: Publish verified APK
