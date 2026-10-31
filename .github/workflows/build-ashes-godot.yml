@@ -54,6 +54,8 @@ jobs:
         run: |
           godot --headless --path godot-duel --script res://scripts/smoke_ui.gd 2>&1 | tee /tmp/ui-smoke.log
           if grep -E 'SCRIPT ERROR|Parse Error|Invalid call|ERROR:|UI SMOKE FAILED' /tmp/ui-smoke.log; then exit 1; fi
+      - name: Run true pixel-art and gameplay regression
+        run: godot --headless --path godot-duel --script res://scripts/smoke_pixel.gd
       - name: Test native GUI startup
         run: |
           godot --headless --path godot-duel --quit-after 3 2>&1 | tee /tmp/native-start.log
@@ -61,14 +63,14 @@ jobs:
       - name: Export Android debug APK
         run: |
           mkdir -p godot-duel/build
-          godot --headless --path godot-duel --export-debug Android build/AshesGodot-v0.10-debug.apk
-          test -s godot-duel/build/AshesGodot-v0.10-debug.apk
-          unzip -tq godot-duel/build/AshesGodot-v0.10-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify godot-duel/build/AshesGodot-v0.10-debug.apk
+          godot --headless --path godot-duel --export-debug Android build/AshesGodot-v0.11-debug.apk
+          test -s godot-duel/build/AshesGodot-v0.11-debug.apk
+          unzip -tq godot-duel/build/AshesGodot-v0.11-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify godot-duel/build/AshesGodot-v0.11-debug.apk
       - uses: actions/upload-artifact@v4
         with:
           name: Ashes-Godot-Native-Android
-          path: godot-duel/build/AshesGodot-v0.10-debug.apk
+          path: godot-duel/build/AshesGodot-v0.11-debug.apk
           if-no-files-found: error
       - name: Publish separate Godot alpha
         if: github.event_name == 'push'
@@ -82,5 +84,5 @@ jobs:
             echo "Skipping outdated build $GITHUB_SHA; branch is now $CURRENT_SHA"
             exit 0
           fi
-          gh release delete ashes-godot-v0.10.0-alpha --yes --cleanup-tag || true
-          gh release create ashes-godot-v0.10.0-alpha godot-duel/build/AshesGodot-v0.10-debug.apk#AshesGodot-v0.10-debug.apk --target "$GITHUB_SHA" --title "Пепел и карты · Godot v0.10 alpha" --notes "Original AI-generated illustrated atlas, heroes, enemies, illustrated cards, blood-moon arena. Offline Godot PvE. Online PvP remains in the earlier APK."
+          gh release delete ashes-godot-v0.11.0-alpha --yes --cleanup-tag || true
+          gh release create ashes-godot-v0.11.0-alpha godot-duel/build/AshesGodot-v0.11-debug.apk#AshesGodot-v0.11-debug.apk --target "$GITHUB_SHA" --title "Пепел и карты · Godot v0.11 pixel-art alpha" --notes "Original AI-generated illustrated atlas, heroes, enemies, illustrated cards, blood-moon arena. Offline Godot PvE. Online PvP remains in the earlier APK."
