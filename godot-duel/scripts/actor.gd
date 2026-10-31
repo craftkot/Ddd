@@ -1,34 +1,29 @@
 extends Control
-## Painted portrait from original image-generated atlas; animated on the GPU.
-const ART = preload("res://scripts/painted_assets.gd")
-var kind: String = "guard"
-var seed: float = 0.0
-var hp_fraction: float = 1.0
-var walking: bool = true
+## Authored pixel-by-pixel 32x48 bitmap sprites, enlarged only by integer scales.
+const PX = preload("res://scripts/pixel_forge.gd")
+var kind:String="guard"
+var seed:float=0.0
+var hp_fraction:float=1.0
+var walking:bool=true
 
-func _ready() -> void:
- custom_minimum_size = Vector2(130,168)
+func _ready()->void:
+ custom_minimum_size=Vector2(132,192)
  mouse_filter=Control.MOUSE_FILTER_IGNORE
+ texture_filter=CanvasItem.TEXTURE_FILTER_NEAREST
  set_process(true)
- queue_redraw()
 
-func _process(delta: float) -> void:
+func _process(delta:float)->void:
  if walking:
   seed+=delta
   queue_redraw()
 
-func _draw() -> void:
- var w=size.x
- var h=size.y
- if w<4 or h<4:return
- var sx=w*.5
- var sw=minf(w*.91,h*.92)
- var sh=minf(h*.93,w*1.51)
- var bob=sin(seed*1.55)*2.5
- var center=Vector2(sx,h*.54+bob)
- draw_circle(center+Vector2(0,h*.04),minf(w*.30,h*.17),Color("#d77e5c",.07))
- draw_arc(center+Vector2(0,-h*.14),minf(w*.35,h*.23),0,TAU,70,Color("#b78b63",.42),1.4)
- draw_rect(Rect2(sx-w*.31,h*.91,w*.62,7),Color(0,0,0,.47),true)
- draw_texture_rect_region(ART.ATLAS,Rect2(sx-sw*.5,h*.48-sh*.5+bob,sw,sh),ART.character_region(kind),Color.WHITE)
- if hp_fraction<.55:
-  draw_arc(center,minf(w,h)*.46,PI*.1,PI*.91,22,Color("#a84848",.62),2.0)
+func _draw()->void:
+ if size.x<2 or size.y<2:return
+ var scale_factor=maxi(1,mini(int(size.x/32.0),int(size.y/48.0)))
+ var dims=Vector2(32*scale_factor,48*scale_factor)
+ var shift=roundi(sin(seed*2.0)*2.0)
+ var origin=Vector2(floor((size.x-dims.x)*.5),floor((size.y-dims.y)*.5)+shift)
+ draw_rect(Rect2(origin.x+scale_factor*7,origin.y+dims.y-4,scale_factor*18,3),Color("#0b1019",.7))
+ draw_texture_rect(PX.actor(kind),Rect2(origin,dims),false,Color.WHITE)
+ if hp_fraction<.3:
+  draw_rect(Rect2(origin.x,origin.y+3,dims.x,2),Color("#e16f6c",.67))
