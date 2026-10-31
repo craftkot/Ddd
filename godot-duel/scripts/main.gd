@@ -4,6 +4,7 @@ const RULES = preload("res://scripts/game_state.gd")
 const ACTOR = preload("res://scripts/actor.gd")
 const ROUTE = preload("res://scripts/route_board.gd")
 const COMBAT_BOARD = preload("res://scripts/combat_board.gd")
+const RUNE = preload("res://scripts/rune_art.gd")
 const INK = Color("#10151f")
 const PANEL = Color("#242938")
 const PANEL_ALT = Color("#302d3b")
@@ -21,6 +22,7 @@ var enemy_controls: Array = []
 var dragging: int = -1
 var touch_start: Vector2 = Vector2.ZERO
 var fingerprint: String = ""
+var collection_visible: bool = false
 
 func _ready() -> void:
  set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -127,6 +129,8 @@ func render_ui() -> void:
   "map": show_map()
   "fight": show_fight()
   "reward": show_rewards()
+  "upgrade": show_upgrade()
+  "remove": show_remove()
   "shop": show_shop()
   "rest": show_rest()
   "treasure": show_treasure()
@@ -191,6 +195,9 @@ func stats()->void:
 
 func show_map() -> void:
  stats()
+ if collection_visible:
+  show_deck_list()
+  return
  page.add_child(title("ДРЕВО СУДЕБ"))
  page.add_child(make_text("Этаж %d из 15. Ты можешь перейти только по соединённой ветви." % (game.floor+1),16,QUIET))
  var allowed=game.reachable()
@@ -200,6 +207,7 @@ func show_map() -> void:
   var typ=str(game.map_rows[game.floor][id]["type"])
   row.add_child(make_button(symbol(typ)+"  "+type_name(typ),_choose_node.bind(id)))
  # A real Godot canvas with curved, connected paths and touchable nodes.
+ page.add_child(make_button("КОЛОДА · "+str(game.deck.size())+" карт",_toggle_deck,true))
  var route_scroll=ScrollContainer.new()
  route_scroll.custom_minimum_size=Vector2(0,535)
  route_scroll.size_flags_horizontal=Control.SIZE_EXPAND_FILL
@@ -211,6 +219,21 @@ func show_map() -> void:
  route_scroll.add_child(route_view)
  # Pan the graph to the player's current floor; choices above remain fixed.
  route_scroll.call_deferred("set", "scroll_vertical", maxi(0,int(route_view.y_for(game.floor)-250.0)))
+
+func _toggle_deck()->void:
+ collection_visible=not collection_visible
+ render_ui()
+
+func show_deck_list()->void:
+ page.add_child(title("ТВОЯ КОЛОДА"))
+ page.add_child(make_button("Вернуться к маршруту",_toggle_deck))
+ var grid=GridContainer.new()
+ grid.columns=3
+ grid.add_theme_constant_override("h_separation",6)
+ grid.add_theme_constant_override("v_separation",9)
+ page.add_child(grid)
+ for i in range(game.deck.size()):
+  grid.add_child(build_card(game.deck[i],i,"inspect"))
 
 func _choose_node(i:int)->void:
  if game.select_node(i):render_ui()
@@ -312,70 +335,143 @@ func build_card(entry:Dictionary,index:int,mode:String)->PanelContainer:
  var c=game.card(str(entry["id"]))
  var tier=str(c.get("rarity","common"))
  var kind=str(c.get("t","skill"))
- var color=Color("#623736") if kind=="attack" else Color("#31566a") if kind=="skill" else Color("#5c3f6e")
+ var color=Color("#693b39") if kind=="attack" else Color("#31536c") if kind=="skill" else Color("#5c4677")
  var outline=GOLD if tier=="rare" else Color("#85bad7") if tier=="uncommon" else Color("#94816a")
  var wrap=PanelContainer.new()
- wrap.custom_minimum_size=Vector2(161,231)
- wrap.add_theme_stylebox_override("panel",panel_style(color,outline,13))
+ wrap.custom_minimum_size=Vector2(196,300)
+ wrap.add_theme_stylebox_override("panel",panel_style(color,outline,12))
  var stack=VBoxContainer.new()
- stack.add_theme_constant_override("separation",6)
+ stack.add_theme_constant_override("separation",5)
  wrap.add_child(stack)
- var cost=make_text("⚡ %d  •  %s" % [int(c.get("c",0)),tier.to_upper()],12,outline)
+ var cost=make_text("ЭНЕРГИЯ %d  ·  %s" % [int(c.get("c",0)),tier.to_upper()],13,outline)
  stack.add_child(cost)
  stack.add_child(make_text(str(c.get("n","")),17,TEXT))
- var illustration=PanelContainer.new()
- illustration.custom_minimum_size=Vector2(0,80)
- illustration.add_theme_stylebox_override("panel",panel_style(Color("#171e29"),outline.darkened(.4),5))
- illustration.add_child(make_text(str(c.get("e","✦")),42,GOLD))
- stack.add_child(illustration)
+ var art=PanelContainer.new()
+ art.custom_minimum_size=Vector2(0,105)
+ art.add_theme_stylebox_override("panel",panel_style(Color("#1a1f2d"),outline.darkened(.3),3))
+ var rune=RUNE.new()
+ rune.code=str(entry["id"])
+ rune.school=str(c.get("school",""))
+ rune.mode=kind
+ art.add_child(rune)
+ stack.add_child(art)
  var description=str(c.get("d",""))
- if description.length()>96:description=description.substr(0,93)+"..."
- stack.add_child(make_text(description,12,TEXT))
- var action=make_button("Выбрать",_tap_card.bind(index),true) if mode=="combat" else make_button("Взять",_reward.bind(index),true)
- action.custom_minimum_size=Vector2(0,43)
+ if description.is_empty() and c.has("effects"):
+  var elements=[]
+  for fx in c["effects"]:
+   elements.append(str(fx["key"])+" "+str(fx["value"]))
+  description=" · ".join(elements)
+ stack.add_child(make_text(description.substr(0,135),12,TEXT))
+ if int(entry.get("up",0))>0:
+  stack.add_child(make_text("✦ УЛУЧШЕНО",12,GOLD))
+ var action: Button
+ if mode=="reward":
+  action=make_button("Добавить в колоду",_reward.bind(index),true)
+ elif mode=="shop":
+  action=make_button("Купить · %d золота" % game.shop_card_price(index),_buy_card.bind(index),true)
+  action.disabled=game.gold<game.shop_card_price(index)
+ elif mode=="upgrade":
+  action=make_button("Улучшить",_upgrade_card.bind(index),true)
+  action.disabled=int(entry.get("up",0))>0
+ elif mode=="remove":
+  action=make_button("Удалить за 75 золота",_remove_card.bind(index),true)
+  action.disabled=game.gold<75 or game.shop_removed or game.deck.size()<=8
+ elif mode=="inspect":
+  action=make_button("Просмотр",func():pass,true)
+  action.disabled=true
+ else:
+  action=make_button("Выбрать",_tap_card.bind(index),true)
+  if mode=="combat" and int(c.get("c",99))>int(game.fight["energy"]):
+   action.disabled=true
+ action.custom_minimum_size=Vector2(0,48)
  action.add_theme_font_size_override("font_size",13)
- if mode=="combat" and int(c.get("c",99))>int(game.fight["energy"]):action.disabled=true
+ stack.add_spacer(false)
  stack.add_child(action)
  return wrap
 
+func _card_grid(source:Array,mode:String)->void:
+ var grid=GridContainer.new()
+ grid.columns=3
+ grid.add_theme_constant_override("h_separation",8)
+ grid.add_theme_constant_override("v_separation",12)
+ page.add_child(grid)
+ for i in range(source.size()):
+  grid.add_child(build_card(source[i],i,mode))
+
 func show_rewards()->void:
  stats()
- page.add_child(title("ПОБЕДА"))
- page.add_child(make_text("Выбери одну карту. Можно отказаться от награды.",16,QUIET))
- for i in range(game.reward_cards.size()):
-  var c=game.card(str(game.reward_cards[i]))
-  page.add_child(make_button("%s   ⚡%d   [%s]\n%s" % [c.get("n",""),c.get("c",0),c.get("rarity",""),c.get("d","")],_reward.bind(i),true))
- page.add_child(make_button("Пропустить карту",_reward.bind(-1)))
+ page.add_child(title("СРАЖЕНИЕ ОКОНЧЕНО"))
+ page.add_child(make_text("Выбери одну из трёх карт для колоды. Отказ тоже допустим.",17,QUIET))
+ var cards=[]
+ for id in game.reward_cards:cards.append(game.make_card(str(id)))
+ _card_grid(cards,"reward")
+ page.add_child(make_button("Не брать карту",_reward.bind(-1),true))
+
 func _reward(index:int)->void:
  game.pick_reward(index)
  render_ui()
 
 func show_shop()->void:
  stats()
- page.add_child(title("ТЕНЕВОЙ РЫНОК"))
+ page.add_child(title("РЫНОК ПОД ПЕПЛОМ"))
+ page.add_child(make_text("Цена учитывает редкость. Удаление слабых карт повышает стабильность колоды.",16,QUIET))
+ var cards=[]
+ for id in game.shop_cards:
+  if str(id)!="":cards.append(game.make_card(str(id)))
+ # Show actual original offer indexes; empty sold slots are skipped.
  for i in range(game.shop_cards.size()):
-  var id=str(game.shop_cards[i])
-  if id=="":continue
-  var c=game.card(id)
-  page.add_child(make_button("%s · %s\n◈ %d" % [c.get("n",""),c.get("rarity",""),game.shop_card_price(i)],_buy_card.bind(i),true))
+  if str(game.shop_cards[i])=="":continue
+  page.add_child(build_card(game.make_card(str(game.shop_cards[i])),i,"shop"))
  for i in range(game.shop_relics.size()):
   var id=str(game.shop_relics[i])
   if id=="":continue
   var r=game.relic(id)
-  page.add_child(make_button("✦ %s\n◈ 115 · %s" % [r.get("n",""),r.get("d","")],_buy_relic.bind(i),true))
- page.add_child(make_button("Покинуть магазин",func():game.next_floor();render_ui()))
-func _buy_card(i:int)->void:
- game.buy_card(i)
+  page.add_child(make_button("✦ %s\n%s\n◈ 115" % [r.get("n",""),r.get("d","")],_buy_relic.bind(i),true))
+ var options=framed()
+ options.add_child(make_text("УСЛУГИ И ЗЕЛЬЯ",18,GOLD))
+ var prices={"salve":35,"cleanser":40,"steel":42,"aether":58,"ember":48}
+ if not game.shop_potion_sold:
+  options.add_child(make_button("Купить зелье «%s» · %d золота" % [game.shop_potion,prices.get(game.shop_potion,50)],_buy_potion,true))
+ if not game.shop_removed:
+  options.add_child(make_button("Удалить карту из колоды · 75 золота",_open_remove,true))
+ page.add_child(make_button("Уйти с рынка",_leave_shop))
+
+func _buy_potion()->void:
+ game.buy_potion()
  render_ui()
-func _buy_relic(i:int)->void:
- game.buy_relic(i)
+func _leave_shop()->void:
+ game.next_floor()
+ render_ui()
+func _open_remove()->void:
+ game.screen="remove"
+ render_ui()
+func _remove_card(index:int)->void:
+ if game.remove_card(index):
+  game.screen="shop"
+ render_ui()
+func _upgrade_card(index:int)->void:
+ game.upgrade_card(index)
+ render_ui()
+func show_upgrade()->void:
+ stats()
+ page.add_child(title("КУЗНИЦА"))
+ page.add_child(make_text("Выбери одну карту. Изменение сохраняется до конца забега.",17,QUIET))
+ _card_grid(game.deck,"upgrade")
+func show_remove()->void:
+ stats()
+ page.add_child(title("ОЧИЩЕНИЕ КОЛОДЫ"))
+ page.add_child(make_text("Избавься от слабой карты, если у тебя достаточно золота.",17,QUIET))
+ _card_grid(game.deck,"remove")
+ page.add_child(make_button("Вернуться в магазин",_back_shop,true))
+func _back_shop()->void:
+ game.screen="shop"
  render_ui()
 func show_rest()->void:
  stats()
- page.add_child(title("КОСТЁР"))
- page.add_child(make_text("Лечить раны или улучшить карту?",18,QUIET))
- page.add_child(make_button("❤ Восстановить 30% HP",_rest.bind(true)))
- page.add_child(make_button("⚒ Улучшить случайную карту",_rest.bind(false)))
+ page.add_child(title("НОЧНОЙ ПРИВАЛ"))
+ page.add_child(make_text("Восстановить силы сейчас или усилить карту на все будущие бои?",18,QUIET))
+ page.add_child(make_button("❤ Восстановить 30% здоровья",_rest.bind(true)))
+ page.add_child(make_button("⚒ Выбрать карту для улучшения",_rest.bind(false),true))
 func _rest(heal_choice:bool)->void:
  game.rest(heal_choice)
  render_ui()
@@ -386,7 +482,9 @@ func show_treasure()->void:
   var id=str(game.shop_relics[i]);var r=game.relic(id)
   page.add_child(make_button("%s  %s\n%s" % [r.get("e","✦"),r.get("n",""),r.get("d","")],_treasure.bind(id),true))
 func _treasure(id:String)->void:
- game.gain_relic(id);game.next_floor();render_ui()
+ game.gain_relic(id)
+ game.next_floor()
+ render_ui()
 func show_event()->void:
  stats()
  var ev=game.active_event
@@ -395,7 +493,9 @@ func show_event()->void:
  for i in range(ev.get("options",[]).size()):
   page.add_child(make_button(str(ev["options"][i][0]),_choose_event.bind(i),true))
 func _choose_event(i:int)->void:
- game.event_option(i);render_ui()
+ game.event_option(i)
+ render_ui()
+
 func show_final()->void:
  page.add_child(title("ПУТЬ ПРОЙДЕН"))
  var text="Колода: %d карт, реликвий: %d. Сетевой PvP будет перенесён после проверки этого нативного игрового клиента." % [game.deck.size(),game.relics.size()]
