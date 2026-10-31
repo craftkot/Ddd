@@ -104,6 +104,7 @@ func render_ui() -> void:
  top_row.add_child(version)
  if game.screen=="fight":
   var battle=COMBAT_BOARD.new()
+  battle.name="BattleCanvas"
   battle.game=game
   battle.transition_requested.connect(_combat_updated)
   root.add_child(battle)
@@ -159,9 +160,6 @@ func _open_class()->void:
 
 func _resume_run()->void:
  if game.load_game():render_ui()
- var notice=framed()
- notice.add_child(make_text("Переход на новый движок",20,GOLD))
- notice.add_child(make_text("Это первый нативный порт. Финальный PvP по интернету и AV-контрприёмы пока остаются в старой Android-версии. В этой APK проверяется новый бой и интерфейс.",15,QUIET))
 
 func show_class() -> void:
  page.add_child(title("ВЫБЕРИ ПУТЬ"))
