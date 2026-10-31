@@ -1,4 +1,4 @@
-# Пепел и карты — 2-player card roguelike (alpha v0.3)
+# Пепел и карты — 2-player card roguelike (alpha v0.4)
 
 Android 8.0+, Russian interface. Self-contained WebView gameplay, Android-native HTTP messaging.
 Two independent fifteen-stage branching runs with enemies, elites, shops, random events, rests, relics, rewards and deck upgrades. Surviving players enter a shared turn-based PvP duel.
@@ -11,3 +11,9 @@ This version contains 161 cards, 136 relics, 15 map nodes, 16 card schools, 1–
 
 Build: JDK 17, Android SDK 35, Gradle 8.9+, `gradle :app:assembleDebug` from this directory.
 The CI workflow uploads a debuggable APK. Build success is separate from real two-phone network validation.
+
+## Playable art and controls (v0.4)
+
+The Android game now uses the Ashen Atelier interface, with custom inline-vector fantasy figures and independently authored card art. Combat is left-to-right; cards are presented in a fanned hand at the bottom. Tap an attack card and an enemy to target, or hold/drag it onto the target. Non-target support cards play on tap or when dragged up. The UI shows enemy intents, staggered card dealing, a 15-node vertical branching route, graphical card rewards, merchants, resting, relic chests, and story decisions. PvP retains the v0.3 AV, reaction and five-action dilemma rules and has its own targetable opponent.
+
+Art is programmatically rendered and is NOT copied from Slay the Spire. This is a code-generated vector art pass, not a fully hand-painted asset pack. Runs and network interactions still require testing on real Android phones; unit tests and CI builds do not prove touch ergonomics or two-device reliability.
