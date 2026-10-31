@@ -1,6 +1,6 @@
 extends Control
 ## Native touch battle with original generated 2D painting atlases.
-const ART = preload("res://scripts/painted_assets.gd")
+const PX = preload("res://scripts/pixel_forge.gd")
 signal transition_requested
 var game: RefCounted
 var chosen: int = -1
@@ -28,6 +28,7 @@ const EDGE = Color("#72635d")
 
 func _ready() -> void:
  mouse_filter = Control.MOUSE_FILTER_STOP
+ texture_filter=CanvasItem.TEXTURE_FILTER_NEAREST
  size_flags_vertical = Control.SIZE_EXPAND_FILL
  size_flags_horizontal = Control.SIZE_EXPAND_FILL
  set_process(true)
@@ -75,19 +76,17 @@ func _draw() -> void:
  potion_areas.clear()
  var dusk=Color("#101522")
  draw_rect(Rect2(Vector2.ZERO,size),dusk)
- # Moonlit ruined cathedral: original generated painting embedded in Godot APK.
- var scene_rect=Rect2(0,h*.06,w,h*.53)
- draw_texture_rect(ART.BACKGROUND,scene_rect,false,Color(1,1,1,.92))
- draw_rect(Rect2(0,h*.46,w,h*.14),Color("#101420",.42))
- draw_line(Vector2(0,h*.52),Vector2(w,h*.52),Color("#6f483f",.72),2.0)
- # Film-grain scratches and scrolling embers; texture itself remains still.
- for i in range(9):
-  var fx=fmod(float(i*97)+tick*float((i%3)+1)*3.6,w)
-  var fy=h*.10+fmod(float(i*59)-tick*11.0,h*.44)
-  draw_circle(Vector2(fx,fy),1.2+float(i%2),Color("#e7a477",.29))
+ # 192x128 texel authored scene, nearest-neighbour magnification.
+ var scene_rect=Rect2(0,h*.078,w,h*.49)
+ draw_texture_rect(PX.scene(),scene_rect,false,Color(1,1,1,.98))
+ draw_rect(Rect2(0,h*.53,w,h*.053),Color("#111624",.55))
+ for i in range(10):
+  var xx=fmod(float(i*81)+tick*float(i%3+1)*6.0,w)
+  var yy=h*.19+fmod(float(i*37)-tick*8.0,h*.31)
+  draw_rect(Rect2(roundi(xx),roundi(yy),3,3),Color("#b47759",.45))
  # Status and resources.
- plate(Rect2(9,9,w-18,69),Color("#202432",.98),Color("#96775f"))
- label("ЭТАЖ %d  /  ХОД %d" % [game.floor+1,game.fight["round"]],Vector2(22,32),15,GOLD)
+ plate(Rect2(9,9,w-18,69),Color("#1b2131",.98),Color("#c6a178"))
+ label("ЭТАЖ %d  ·  ХОД %d" % [game.floor+1,game.fight["round"]],Vector2(22,32),15,GOLD)
  label("ЗДОРОВЬЕ %d/%d" % [game.hp,game.max_hp],Vector2(22,57),19,WHITE)
  label("ЭНЕРГИЯ %d" % game.fight["energy"],Vector2(w-185,35),19,SKY)
  label("БРОНЯ %d" % game.fight["block"],Vector2(w-185,58),17,GREEN)
@@ -143,8 +142,8 @@ func _draw() -> void:
  # Hand occupies the bottom third and remains onscreen, regardless of actions.
  var cards=game.fight["hand"]
  var count=cards.size()
- var card_w=minf(166.0,maxf(95.0,w*.235))
- var card_h=minf(244.0,maxf(165.0,h*.248))
+ var card_w=minf(188.0,maxf(118.0,w*.254))
+ var card_h=minf(268.0,maxf(184.0,h*.260))
  var overlap=minf(card_w*.72,(w-card_w-30.0)/maxf(1,count-1))
  var center=(count-1)*.5
  var baseline=h-82.0-card_h
@@ -153,7 +152,7 @@ func _draw() -> void:
   var x=w*.5-card_w*.5+shift*overlap
   var yy=baseline+absf(shift)*4.0
   if chosen==i:yy-=38.0
-  var cardrect=Rect2(x,yy,card_w,card_h)
+  var cardrect=Rect2(roundi(x),roundi(yy),roundi(card_w),roundi(card_h))
   hand_areas.append(cardrect)
  for i in range(count):
   if i==held:continue
@@ -169,7 +168,7 @@ func _draw() -> void:
  var footer=Rect2(0,h-75,w,75)
  plate(footer,Color("#121927"),GOLD)
  label("КОЛОДА %d  ·  СБРОС %d  ·  ИЗГНАНО %d" % [game.fight["library"].size(),game.fight["discard"].size(),game.fight["exhaust"].size()],Vector2(12,h-52),13,MUTED)
- label("Коснись карты или перетащи её к цели",Vector2(12,h-24),12,GOLD)
+ label("ПЕРЕТАЩИ НА ВРАГА",Vector2(12,h-24),12,GOLD)
  finish_area=Rect2(w-190,h-70,183,62)
  plate(finish_area,Color("#884034"),GOLD)
  label("КОНЕЦ ХОДА",Vector2(w-179,h-32),17,WHITE)
@@ -178,14 +177,14 @@ func _draw() -> void:
   label("−"+str(last_damage),Vector2(w*.58,h*.18-hit_flash*22),29,RED)
 
 func _draw_figure(center:Vector2,kind:String,scale:float)->void:
- # Nine hand-painted character poses are cropped from the generated sprite sheet.
- var sway=sin(tick*1.5+center.x*.015)*2.5
- var src=ART.character_region(kind)
- var dest=Rect2(center.x-63*scale,center.y-109*scale+sway,126*scale,200*scale)
- draw_circle(center+Vector2(0,42*scale),40*scale,Color("#17111b",.28))
- draw_texture_rect_region(ART.ATLAS,dest,src,Color.WHITE)
+ var bob=roundi(sin(tick*1.65+center.x*.01)*2.0)
+ var factor=maxi(2,int(round(scale*4.0)))
+ var dims=Vector2(32*factor,48*factor)
+ var destination=Rect2(roundi(center.x-dims.x*.5),roundi(center.y-dims.y*.62)+bob,dims.x,dims.y)
+ draw_rect(Rect2(center.x-dims.x*.35,center.y+dims.y*.37,dims.x*.7,4),Color("#0b1018",.6))
+ draw_texture_rect(PX.actor(kind),destination,false)
  if kind=="boss":
-  draw_arc(center+Vector2(0,-53*scale),40*scale,0,TAU,40,Color("#d58963",.73),2.0)
+  draw_rect(Rect2(destination.position.x,destination.position.y-6,dims.x,3),Color("#e5a278",.75))
 
 func _card(entry:Dictionary,r:Rect2,selected:bool=false,floating:bool=false)->void:
  var definition:Dictionary=game.card(str(entry["id"]))
@@ -196,9 +195,9 @@ func _card(entry:Dictionary,r:Rect2,selected:bool=false,floating:bool=false)->vo
  var valid=int(definition.get("c",0))<=int(game.fight["energy"])
  plate(r.grow(3 if selected else 0),Color("#27222c"),frame)
  plate(Rect2(r.position+Vector2(5,5),r.size-Vector2(10,10)),primary.darkened(.64),frame.darkened(.3))
- var cost_at=r.position+Vector2(23,20)
- draw_circle(cost_at,18,Color("#27547b"))
- draw_arc(cost_at,18,0,TAU,22,SKY,2)
+ var cost_at=r.position+Vector2(24,22)
+ draw_rect(Rect2(cost_at.x-18,cost_at.y-18,36,36),Color("#27547b"))
+ draw_rect(Rect2(cost_at.x-18,cost_at.y-18,36,36),SKY,false,3)
  label(str(definition.get("c",0)),cost_at+Vector2(-7,8),21,WHITE)
  var cname=str(definition.get("n","Карта"))
  var cap=word_line(cname,r.size.x-58,15,2)
@@ -206,10 +205,14 @@ func _card(entry:Dictionary,r:Rect2,selected:bool=false,floating:bool=false)->vo
   label(str(cap[i]),r.position+Vector2(46,18+i*19),15,WHITE)
  var art=Rect2(r.position+Vector2(9,58),Vector2(r.size.x-18,r.size.y*.36))
  plate(art,Color("#1d2331"),frame.darkened(.35))
- # Draw actual painted card artwork, not a procedural placeholder glyph.
- var card_index=ART.card_index(str(entry["id"]),str(definition.get("school","")),kind)
- draw_texture_rect_region(ART.ATLAS,art.grow(-2),ART.card_region(card_index),Color.WHITE)
- draw_rect(art.grow(-2),Color("#efc78d",.45),false,1.0)
+ # Each source card is authored at 48x32 logical pixels and scaled in whole pixels.
+ var pixel=PX.card_art(str(entry["id"]),str(definition.get("school","")),kind)
+ var zoom=maxi(1,mini(int((art.size.x-4.0)/48.0),int((art.size.y-4.0)/32.0)))
+ var dimensions=Vector2(48*zoom,32*zoom)
+ var artwork=Rect2(roundi(art.position.x+(art.size.x-dimensions.x)*.5),
+  roundi(art.position.y+(art.size.y-dimensions.y)*.5),dimensions.x,dimensions.y)
+ draw_texture_rect(pixel,artwork,false)
+ draw_rect(artwork,frame,false,1.0)
  var body=Rect2(r.position.x+9,art.end.y+6,r.size.x-18,r.end.y-art.end.y-29)
  plate(body,Color("#171b26"),frame.darkened(.25))
  var desc=str(definition.get("d",""))
