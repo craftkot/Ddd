@@ -132,3 +132,50 @@ check([
 'if(before-duel.fighters[enemy].hp>cap)throw Error("single-turn cap bypassed: "+(before-duel.fighters[enemy].hp)+" > "+cap);'
 ].join('\n'));
 console.log("PASS: AV speed, role-independent initiative, counter windows, action-5 simultaneous gambit, one-shot protection.");
+
+/* Stress test 270 bot-vs-bot duels (all 9 class matchups, varying draft archetypes).
+   This is a stability / first-mover smoke test, not proof of competitive parity. */
+const simulated=check([
+'var reports={host:0,guest:0,draw:0,unresolved:0,firstWins:0,firstTotal:0,actions:[],matrix:{}};',
+'var archetypes=["Яд","Огонь","Кровь","Оборона","Сила","Проклятия","Знание","Энергия","Шипы","Лёд","Гроза","Тени","Лечение","Охота","Кинжалы","Цена силы"];',
+'function drafted(c,school){',
+' const r=newRun(c),schoolPool=COMMON.filter(id=>art(id).school===school);',
+' for(let i=0;i<8;i++)r.deck.push(inst(choose(schoolPool.length?schoolPool:COMMON)));',
+' r.deck.push(inst(choose(["pvp001","pvp002","pvp003","pvp004","pvp005","pvp017","pvp018","pvp024"])));',
+' r.relics=unique(RELICS.map(x=>x.id),4);',
+' return r;',
+'}',
+'for(const c1 of ["guard","oracle","hunter"])for(const c2 of ["guard","oracle","hunter"]){',
+' for(let game=0;game<30;game++){',
+'  G.role="host";G.done=true;G.otherDead=false;G.runner=drafted(c1,choose(archetypes));G.other=drafted(c2,choose(archetypes));G.duel=null;',
+'  pvStartDuel();const d=G.duel;const first=d.turn;let count=0;let plays=0;',
+'  while(!d.winner&&count++<1000){',
+'   if(d.phase==="gambit"){',
+'    for(const who of ["host","guest"])if(!d.picks[who])pvAction({action:"pick",id:d.offers[(count+ (who==="host"?0:1))%3].id},who);',
+'   }else if(d.phase==="reaction"){',
+'    let who=d.pending.by==="host"?"guest":"host";const id=d.pending.card.id;',
+'    let kind=(art(id).effects||[]).some(x=>x.key==="detonate"||x.key==="poison"||x.key==="burn")?"purge":"interrupt";',
+'    pvAction({action:"counter",kind},who);',
+'   }else if(d.phase==="play"){',
+'    const who=d.turn,f=d.fighters[who];',
+'    const legal=f.hand.map((c,i)=>({c,i})).filter(({c})=>art(c.id).c<=f.energy&&art(c.id).t!=="reaction");',
+'    if(legal.length&&plays<7){',
+'     const attacks=legal.filter(({c})=>art(c.id).t==="attack");',
+'     let choice=choose(attacks.length&&plays>1?attacks:legal);',
+'     pvAction({action:"play",index:choice.i},who);plays++;',
+'    }else{pvAction({action:"end"},who);plays=0}',
+'   }else throw Error("Unknown PvP phase "+d.phase);',
+'  }',
+'  if(count>=1000||!d.winner){reports.unresolved++;continue}',
+'  reports[d.winner]++;reports.actions.push(d.actions);',
+'  reports.firstTotal++;if(d.winner===first)reports.firstWins++;',
+'  const key=c1+"-"+c2;reports.matrix[key]||(reports.matrix[key]={host:0,guest:0,draw:0});reports.matrix[key][d.winner]++;',
+' }',
+'}',
+'reports.avgActions=reports.actions.reduce((a,b)=>a+b,0)/Math.max(1,reports.actions.length);',
+'reports.firstMoverWin=reports.firstWins/Math.max(1,reports.firstTotal);',
+'reports'
+].join('\n'));
+console.log("PvP automated combat matrix:",JSON.stringify(simulated));
+assert.strictEqual(simulated.unresolved,0,"PvP must never softlock in 270 consecutive simulations");
+assert(simulated.avgActions>3&&simulated.avgActions<65,"duel duration must be finite");
