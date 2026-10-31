@@ -1,27 +1,35 @@
-# EHTID P2P Chat — Android prototype
+# EHTID P2P Chat v0.2 — Internet
 
-## How it works
-Two Android devices running the app on **the same Wi-Fi LAN** communicate over
-a direct TCP socket. Android NSD/mDNS advertises the first device automatically.
+This is a **prototype** Android messenger for any pair of Internet-connected phones. It no longer requires the same Wi-Fi network.
 
-1. Install the same APK on both phones and connect to the same Wi-Fi.
-2. Launch on phone A and send a message. It opens a server socket and advertises a service.
-3. Launch on phone B. It detects phone A and joins automatically; phone A transfers up to 100 messages.
-4. Both phones can send and receive text messages while the app is open.
+## Usage
 
-Messages are stored locally in Android SharedPreferences. There is no cloud server,
-account, Firebase, tracker, or backend. Use only on trusted Wi-Fi: **messages are
-not encrypted or authenticated**; any person on the LAN running the app can join.
-Some guest Wi-Fi and hotspot configurations block peer traffic or mDNS.
-A host must keep the app open; this prototype does not run a foreground service.
-Messages are not queued for offline peers. Network delivery is not end-to-end confirmed.
+1. Install the same APK on both phones. Allow access to the Internet.
+2. Phone A: open the app and send a message. It becomes **host**. Copy its 20-character room code and share it privately.
+3. Phone B: open app, paste the code into "Вставь код собеседника" and tap "Войти".
+4. The app automatically uses a hosted rendezvous service to find each other. It attempts an **encrypted direct WebRTC DataChannel** with public STUN servers.
+5. If a carrier's CGNAT, firewall or router prevents direct P2P, **messages are sent as encrypted ciphertext via the ntfy.sh public relay**, so both can still chat with Internet access and the app open. The UI displays which transport is active.
 
-Different mobile networks / public Internet require rendezvous + ICE/STUN/TURN or
-another NAT traversal method. This APK does not pretend to offer internet P2P.
+## Architecture / limitations
+
+- Real P2P: WebRTC DataChannel, DTLS encryption, ICE + STUN (Google/Cloudflare).
+- Signaling/rendezvous: ntfy.sh topic named by SHA-256 of room code; no personal accounts.
+- Fallback text relay: ntfy.sh (not P2P), AES-256-GCM with a key derived from the 20-character high-entropy room code.
+- Every outgoing message has a random identifier, messages are deduplicated and last 100 are saved on-device per room.
+- DataChannel messages use ACK+3-second relay fallback if direct delivery isn't confirmed.
+- The host sends its recent history when the guest joins.
+- Code must be sent once out-of-band. Devices cannot find the correct remote chat without any identifier.
+- **No TURN server**. CGNAT/firewall combinations may prevent *direct* WebRTC; fallback requires ntfy.sh reachability and its external service availability, quotas and retention.
+- Not designed as a secure production messenger: there is no forward secrecy in relay fallback, no independently verified peer identity, no code revocation, no background service, no push notifications, no guaranteed offline delivery and no formal audit. The room code is a shared secret; never post publicly.
+- The relay is a third-party service; it can see communication metadata and ciphertext, but not decrypt it without the room code.
+- Messages may be lost if offline longer than the relay's cache retention. This is a best-effort prototype.
+- Android target SDK 32, min 24.
 
 ## Build
-JDK 17, Android SDK platform 35, Gradle 8.9:
-`gradle :app:assembleDebug`
 
-CI builds an installable debug-signed APK in Actions artifacts on branch
-`feature/p2p-chat`. Main branch of RelayBox is unchanged.
+Use JDK 17, Android SDK 35, Gradle 8.9:
+
+    cd p2p-chat
+    gradle --no-daemon :app:assembleDebug
+
+CI: branch feature/p2p-chat -> Actions -> Build P2P Chat APK -> artifact EHTID-P2P-Chat-debug-APK.
