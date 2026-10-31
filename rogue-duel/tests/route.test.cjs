@@ -19,7 +19,7 @@ const sandbox={document:doc,console,crypto:crypto.webcrypto,TextEncoder,TextDeco
  AndroidNet:{listen(topic){broadcasts.push({listen:topic})},post(topic,text){broadcasts.push({post:topic})},copyText(code){broadcasts.push({copied:code});return true}}};
 sandbox.window=sandbox;
 const context=vm.createContext(sandbox);
-const scripts=[main,"expansion-data.js","expansion-relics.js","expansion-combat.js","expansion-visual.js","pvp-balance.js","route-tree.js","atelier.js","connection-ui.js"];
+const scripts=[main,"expansion-data.js","expansion-relics.js","expansion-combat.js","expansion-visual.js","pvp-balance.js","route-tree.js","encounter-director.js","run-economy.js","atelier.js","connection-ui.js","run-save.js"];
 for(const [i,s] of scripts.entries())vm.runInContext(i===0?s:fs.readFileSync(root+s,"utf8"),context,{timeout:4000,filename:i===0?"inline.js":s});
 const run=s=>vm.runInContext(s,context,{timeout:5000});
 async function check(){
