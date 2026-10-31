@@ -86,7 +86,7 @@ check([
 'if(G.duel.phase!=="play")throw Error("wrong phase");',
 'if(G.duel.fighters.host.speed!==100||G.duel.fighters.guest.speed!==100)throw Error("base speed");',
 'if(G.duel.fighters.host.gauge<0||G.duel.fighters.guest.gauge<0)throw Error("negative gauge");',
-'if(Math.min(G.duel.fighters.host.ward,G.duel.fighters.guest.ward)!==0)throw Error("expected asymmetric opening protection");'
+'var later=G.duel.turn==="host"?"guest":"host";if(G.duel.fighters[later].ward<5)throw Error("second player has no opening ward");'
 ].join('\n'));
 check([
 'var duel=G.duel;var starter=duel.turn;var target=starter==="host"?"guest":"host";',
