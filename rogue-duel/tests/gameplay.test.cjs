@@ -25,8 +25,8 @@ const count=check("window.EXPANSION_STATS");
 console.log("CONTENT COUNTS",count);
 assert(count.cards>=100,"100+ cards");assert(count.relics>=100,"100+ relics");
 assert.strictEqual(count.newCards,112);assert.strictEqual(count.newRelics,112);
-check("G.runner=newRun('oracle');G.stage=5;createFight(false);");
-assert.strictEqual(check("G.combat.enemies.length"),4,"4 targets at stage 6");
+check("G.runner=newRun('oracle');G.stage=12;createFight(false);");
+assert.strictEqual(check("G.combat.enemies.length"),4,"4 targets at late-game stage");
 check("G.combat=null;");
 check([
 'var testHero=makeFighter({...newRun("oracle"),hp:500,maxHp:500});',
