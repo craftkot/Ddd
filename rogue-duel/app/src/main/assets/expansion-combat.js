@@ -51,12 +51,12 @@ function ashHook(event,owner,target,ctx={}){
   }
  }finally{ash.triggering=false}
 }
-makeFighter=window.makeFighter=function(r){return ashExtra(ashOld.makeFighter(r))};
+makeFighter=window.makeFighter=function(r){const f=ashExtra(ashOld.makeFighter(r));f.hero=r.hero;return f};
 startTurn=window.startTurn=function(f){
  ashExtra(f);
  const previous=f.rounds||0;
  f.block=previous===0?f.block:f.carry;
- f.carry=0;f.rounds=previous+1;f.energy=3+(previous===0&&f.relics.includes("spark")?1:0);
+ f.carry=0;f.rounds=previous+1;f.energy=3+(previous===0&&f.relics.includes("spark")?1:0)+(previous===0?(f.ashStartupEnergy||0):0);
  if(previous===0&&f.relics.includes("chain"))f.block+=10;
  if(f.regen)ashHeal(f,f.regen);
  f.hooks={};
@@ -66,7 +66,7 @@ startTurn=window.startTurn=function(f){
 beginEffects=window.beginEffects=function(f,enemy){
  ashExtra(f);if(enemy)ashExtra(enemy);
  ashOld.beginEffects(f,enemy);
- ashHook("start",f,enemy,{});
+ ashHook("start",f,enemy,{});f.ashStartupEnergy=Math.max(0,f.energy||0);
 };
 endTurnStatuses=window.endTurnStatuses=function(f,attacker){
  ashExtra(f);
@@ -176,11 +176,11 @@ const ASH_MONSTERS=[
 ];
 createMonster=window.createMonster=function(elite){
  const [name,kind,role]=choose(ASH_MONSTERS.slice(0,elite?8:7));
- const hp=(elite?57:30)+G.stage*5;
- return ashExtra({name,kind:elite?"boss":kind,role,hp,maxHp:hp,attack:7+2*G.stage,block:0,energy:0,str:elite?2:0,poison:0,weak:0,vuln:0,thorns:0,rounds:0,intent:0,deck:[],discard:[],hand:[],relics:[]})
+ const hp=(elite?65:31)+Math.floor(G.stage*2.8);
+ return ashExtra({name,kind:elite?"boss":kind,role,hp,maxHp:hp,attack:7+Math.floor(G.stage*.85),block:0,energy:0,str:elite?2:0,poison:0,weak:0,vuln:0,thorns:0,rounds:0,intent:0,deck:[],discard:[],hand:[],relics:[]})
 };
 createFight=window.createFight=function(elite){
- const qty=elite?(G.stage>=5?2:1):Math.min(4,1+(G.stage>=1?1:0)+(G.stage>=3?1:0)+(G.stage>=5?1:0));
+ const qty=elite?(G.stage>=5?2:1):Math.min(4,1+(G.stage>=2?1:0)+(G.stage>=5?1:0)+(G.stage>=10?1:0));
  const p=makeFighter(G.runner),enemies=Array.from({length:qty},()=>createMonster(elite));
  if(qty>1)enemies.forEach(e=>{e.maxHp=Math.round(e.maxHp/(.65+qty*.18));e.hp=e.maxHp});
  G.combat={player:p,enemies,target:0,elite,round:1};
@@ -200,15 +200,15 @@ playSolo=window.playSolo=function(index){
 };
 winFight=window.winFight=function(){
  const c=G.combat;if(!c||!c.enemies)return ashOld.winFight();
- const p=c.player;G.runner.hp=Math.max(1,p.hp);
+ const p=c.player;ashHook("win",p,null,{});
+ G.runner.hp=Math.max(1,p.hp);
  if(p.relics.includes("sun"))ashHeal(G.runner,7);
  if(p.relics.includes("flask"))ashHeal(G.runner,12);
  const gold=c.elite?75:30+G.stage*6;G.runner.gold+=gold;
- ashHook("win",p,null,{});
  const options=RELICS.filter(x=>!G.runner.relics.includes(x.id));
  const relic=c.elite&&options.length?choose(options).id:null;
  if(relic)addRelic(relic);
- G.reward={title:"Отряд уничтожен",desc:(relic?"Реликвия: "+RELICS.find(x=>x.id===relic).n+". ":"")+"Выбери одну карту в колоду.",gold,choices:unique(COMMON,3).map(inst)};
+ G.reward={title:"Отряд уничтожен",desc:(relic?"Реликвия: "+RELICS.find(x=>x.id===relic).n+". ":"")+"Выбери одну карту в колоду.",gold,choices:ashAffinityCards(G.runner,3)};
  G.combat=null;G.screen="reward";render()
 };
 soloEnd=window.soloEnd=function(){
