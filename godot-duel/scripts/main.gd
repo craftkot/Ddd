@@ -5,6 +5,7 @@ const ACTOR = preload("res://scripts/actor.gd")
 const ROUTE = preload("res://scripts/route_board.gd")
 const COMBAT_BOARD = preload("res://scripts/combat_board.gd")
 const RUNE = preload("res://scripts/rune_art.gd")
+const ART = preload("res://scripts/painted_assets.gd")
 const INK = Color("#10151f")
 const PANEL = Color("#242938")
 const PANEL_ALT = Color("#302d3b")
@@ -88,6 +89,16 @@ func render_ui() -> void:
  bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
  bg.mouse_filter=Control.MOUSE_FILTER_IGNORE
  add_child(bg)
+ if game.screen!="fight":
+  var painted=TextureRect.new()
+  painted.name="PaintedArenaBackground"
+  painted.texture=ART.atlas_region(ART.arena_region())
+  painted.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+  painted.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+  painted.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
+  painted.mouse_filter=Control.MOUSE_FILTER_IGNORE
+  painted.modulate=Color(1.0,0.88,0.85,.22 if game.screen in ["lobby","class","map"] else .14)
+  add_child(painted)
  root=VBoxContainer.new()
  root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
  root.add_theme_constant_override("separation",0)
@@ -99,7 +110,7 @@ func render_ui() -> void:
  top.add_child(top_row)
  var brand=make_text("✦ ПЕПЕЛ И КАРТЫ",21,GOLD)
  top_row.add_child(brand)
- var version=make_text("GODOT  •  ALPHA 0.9",11,QUIET)
+ var version=make_text("GODOT  •  ALPHA 0.10",11,QUIET)
  version.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
  top_row.add_child(version)
  if game.screen=="fight":
@@ -409,6 +420,15 @@ func _reward(index:int)->void:
  game.pick_reward(index)
  render_ui()
 
+func relic_icon(id:String)->TextureRect:
+ var pic=TextureRect.new()
+ pic.texture=ART.atlas_region(ART.card_region(int(abs(hash(id)))%12))
+ pic.custom_minimum_size=Vector2(76,76)
+ pic.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+ pic.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+ pic.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ return pic
+
 func show_shop()->void:
  stats()
  page.add_child(title("РЫНОК ПОД ПЕПЛОМ"))
@@ -424,7 +444,9 @@ func show_shop()->void:
   var id=str(game.shop_relics[i])
   if id=="":continue
   var r=game.relic(id)
-  page.add_child(make_button("✦ %s\n%s\n◈ 115" % [r.get("n",""),r.get("d","")],_buy_relic.bind(i),true))
+  var offer=framed(false,Color("#24222a"))
+  offer.add_child(relic_icon(id))
+  offer.add_child(make_button("✦ %s\n%s\n◈ 115" % [r.get("n",""),r.get("d","")],_buy_relic.bind(i),true))
  var options=framed()
  options.add_child(make_text("УСЛУГИ И ЗЕЛЬЯ",18,GOLD))
  var prices={"salve":35,"cleanser":40,"steel":42,"aether":58,"ember":48}
@@ -485,7 +507,9 @@ func show_treasure()->void:
  page.add_child(title("ЗАБЫТЫЙ ТАЙНИК"))
  for i in range(game.shop_relics.size()):
   var id=str(game.shop_relics[i]);var r=game.relic(id)
-  page.add_child(make_button("%s  %s\n%s" % [r.get("e","✦"),r.get("n",""),r.get("d","")],_treasure.bind(id),true))
+  var relic_row=framed(false,Color("#25212d"))
+  relic_row.add_child(relic_icon(id))
+  relic_row.add_child(make_button("%s  %s\n%s" % [r.get("e","✦"),r.get("n",""),r.get("d","")],_treasure.bind(id),true))
 func _treasure(id:String)->void:
  game.gain_relic(id)
  game.next_floor()
