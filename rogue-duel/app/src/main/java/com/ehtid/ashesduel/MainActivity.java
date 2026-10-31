@@ -9,6 +9,9 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.view.View;
 import android.net.Uri;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
@@ -37,7 +40,7 @@ public class MainActivity extends Activity {
                 if ("game.ehtid".equals(u.getHost()) && "https".equals(u.getScheme())) {
                     String filename = u.getPath().replaceFirst("^/", "");
                     if (filename.isEmpty()) filename = "index.html";
-                    if (!filename.matches("index\\.html|expansion-data\\.js|expansion-relics\\.js|expansion-combat\\.js|expansion-visual\\.js|pvp-balance\\.js|atelier\\.js|route-tree\\.js|atelier\\.css|expansion\\.css")) return null;
+                    if (!filename.matches("index\\.html|expansion-data\\.js|expansion-relics\\.js|expansion-combat\\.js|expansion-visual\\.js|pvp-balance\\.js|atelier\\.js|connection-ui\\.js|route-tree\\.js|atelier\\.css|connection-ui\\.css|expansion\\.css")) return null;
                     String mime = filename.endsWith(".js") ? "application/javascript" : filename.endsWith(".css") ? "text/css" : "text/html";
                     try {
                         return new WebResourceResponse(mime, "UTF-8", getAssets().open(filename));
@@ -60,6 +63,16 @@ public class MainActivity extends Activity {
     }
 
     public class NetworkBridge {
+        @JavascriptInterface public boolean copyText(String code) {
+            if (code == null || !code.matches("[A-HJ-NP-Z2-9]{4}")) return false;
+            try {
+                ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                if (clipboard == null) return false;
+                clipboard.setPrimaryClip(ClipData.newPlainText("Код комнаты", code));
+                return true;
+            } catch (Exception ex) { return false; }
+        }
+
         @JavascriptInterface public void listen(String topic) {
             if (!topic.matches("[a-z0-9-]{10,90}")) return;
             if (topic.equals(activeTopic)) return;
