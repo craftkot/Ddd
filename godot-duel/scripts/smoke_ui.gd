@@ -1,6 +1,7 @@
 extends SceneTree
 ## Scene-level regression: scene render passes and native combat board interaction.
 const APP = preload("res://scenes/main.tscn")
+const ART = preload("res://scripts/painted_assets.gd")
 func _initialize() -> void:
  call_deferred("_check")
 func _check() -> void:
@@ -8,6 +9,9 @@ func _check() -> void:
  root.add_child(app)
  await process_frame
  if app.game.screen!="lobby":_fail("lobby startup");return
+ if ART.ATLAS==null or ART.ATLAS.get_width()!=200 or ART.ATLAS.get_height()!=558:_fail("generated art atlas was not imported");return
+ if ART.hero_region(2).end.x>200 or ART.card_region(11).end.y>558:_fail("sprite atlas region out of bounds");return
+ if app.find_child("PaintedArenaBackground",true,false)==null:_fail("menu does not render generated arena");return
  app.game.new_run("guard")
  app.render_ui()
  await process_frame
@@ -49,7 +53,7 @@ func _check() -> void:
  app.game.screen="upgrade"
  app.render_ui()
  await process_frame
- print("PASS: native Godot lobby, route, battle input canvas, card targeting, rewards, shop, rest, upgrade.")
+ print("PASS: generated 200x558 painted atlas, arena background, character regions, illustrated cards, native UI and combat gestures.")
  quit(0)
 func _fail(detail:String)->void:
  push_error("UI SMOKE FAILED: "+detail)
