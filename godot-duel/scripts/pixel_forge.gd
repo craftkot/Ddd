@@ -226,7 +226,7 @@ static func scene()->Texture2D:
  for y in range(98,128,12):
   _rect(im,0,y,192,1,Color("#262632"))
   for x in range(0,192,31):
-   _rect(im,x+((y//12)%2)*14,y,1,11,Color("#27252f"))
+   _rect(im,x+(int(y/12)%2)*14,y,1,11,Color("#27252f"))
  for x in [27,90,161]:
   _rect(im,x,71,3,15,Color("#69463b"))
   _rect(im,x-2,67,7,8,Color("#d98a4e"))
