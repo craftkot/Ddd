@@ -33,6 +33,9 @@ var active_event: Dictionary = {}
 var logs: Array = []
 var state: Dictionary = {}
 var reason: String = ""
+var shop_removed: bool = false
+var shop_potion: String = ""
+var shop_potion_sold: bool = false
 
 func _init() -> void:
  var f = FileAccess.open(DATA_PATH, FileAccess.READ)
@@ -72,6 +75,9 @@ func new_run(id: String) -> void:
  hp = int(cls["hp"])
  max_hp = hp
  gold = 75
+ shop_removed=false
+ shop_potion=""
+ shop_potion_sold=false
  deck.clear()
  for c in cls["deck"]:
   deck.append(make_card(c))
@@ -504,6 +510,9 @@ func pick_reward(index:int)->void:
 func setup_shop()->void:
  shop_cards=offer_cards()
  shop_relics=offer_relics(2)
+ shop_removed=false
+ shop_potion_sold=false
+ shop_potion=str(roll(["salve","cleanser","steel","aether","ember"]))
 
 func shop_card_price(index:int)->int:
  if index<0 or index>=shop_cards.size():return 9999
@@ -522,9 +531,36 @@ func buy_relic(index:int)->bool:
 
 func rest(heal_choice:bool)->void:
  if screen!="rest":return
- if heal_choice:hp=mini(max_hp,hp+int(ceil(max_hp*.3)))
- elif deck.size()>0:deck[rng.randi_range(0,deck.size()-1)]["up"]+=1
+ if heal_choice:
+  hp=mini(max_hp,hp+int(ceil(max_hp*.3)))
+  next_floor()
+ else:
+  screen="upgrade"
+
+func upgrade_card(index:int)->bool:
+ if screen!="upgrade" or index<0 or index>=deck.size():return false
+ if int(deck[index].get("up",0))>=1:return false
+ deck[index]["up"]=1
  next_floor()
+ return true
+
+func remove_card(index:int)->bool:
+ if screen!="shop" or shop_removed or gold<75 or deck.size()<=8:return false
+ if index<0 or index>=deck.size():return false
+ gold-=75
+ shop_removed=true
+ deck.remove_at(index)
+ return true
+
+func buy_potion()->bool:
+ if screen!="shop" or shop_potion_sold or potions.size()>=3:return false
+ var prices={"salve":35,"cleanser":40,"steel":42,"aether":58,"ember":48}
+ var cost=int(prices.get(shop_potion,50))
+ if gold<cost:return false
+ gold-=cost
+ potions.append(shop_potion)
+ shop_potion_sold=true
+ return true
 
 func event_option(index:int)->void:
  if screen!="event" or index<0 or index>=active_event.get("options",[]).size():return
@@ -594,6 +630,7 @@ func save_game()->bool:
   "history":history,"fight":fight,"reward_cards":reward_cards,
   "shop_cards":shop_cards,"shop_relics":shop_relics,
   "active_event":active_event,"logs":logs,"screen":screen,
+  "shop_removed":shop_removed,"shop_potion":shop_potion,"shop_potion_sold":shop_potion_sold,
   "random_state":rng.state
  }
  var file=FileAccess.open(SAVE_PATH,FileAccess.WRITE)
@@ -616,6 +653,8 @@ func load_game()->bool:
  fight=doc.get("fight",{});reward_cards=doc.get("reward_cards",[])
  shop_cards=doc.get("shop_cards",[]);shop_relics=doc.get("shop_relics",[])
  active_event=doc.get("active_event",{});logs=doc.get("logs",[])
+ shop_removed=bool(doc.get("shop_removed",false));shop_potion=str(doc.get("shop_potion",""))
+ shop_potion_sold=bool(doc.get("shop_potion_sold",false))
  screen=str(doc["screen"])
  rng.state=int(doc.get("random_state",rng.state))
  return true
