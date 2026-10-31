@@ -1,4 +1,5 @@
 extends Control
+const PX=preload("res://scripts/pixel_forge.gd")
 ## Native Godot interactive route graph: a real directed tree/DAG.
 signal node_chosen(index: int)
 var state: RefCounted
@@ -57,7 +58,7 @@ func _build_nodes()->void:
    style.bg_color=Color("#6c4234") if available else Color("#25443b") if visited else DARK
    style.border_color=GOLD if available else GREEN if visited else Color("#53606c")
    style.set_border_width_all(2)
-   style.set_corner_radius_all(15)
+   style.set_corner_radius_all(0)
    button.add_theme_stylebox_override("normal",style)
    button.add_theme_stylebox_override("disabled",style)
    if available:button.pressed.connect(_emit_choice.bind(index))
@@ -82,6 +83,7 @@ func _reposition()->void:
 func _draw()->void:
  if state==null:return
  draw_rect(Rect2(0,0,size.x,canvas_height),Color("#211f2b"))
+ draw_texture_rect(PX.scene(),Rect2(0,0,size.x,canvas_height),false,Color(1,1,1,.09))
  # Terrain parchment grid.
  for y in range(0,int(canvas_height),36):
   draw_line(Vector2(0,y),Vector2(size.x,y),Color("#5b5360",.09),1.0)
@@ -105,4 +107,4 @@ func _draw()->void:
    if a[0]==row and a[1]==source and b[0]==row+1 and b[1]==target:
     chosen=true
   var reachable=row==state.floor-1 and state.position==source and active.has(target)
-  draw_polyline(points,GREEN if chosen else GOLD if reachable else PATH,.0+5.0 if chosen else 3.0,true)
+  draw_polyline(points,GREEN if chosen else GOLD if reachable else PATH,5.0 if chosen else 3.0,false)
