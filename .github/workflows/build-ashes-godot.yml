@@ -48,6 +48,12 @@ jobs:
           echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android" >> "$GITHUB_ENV"
       - name: Import Godot and validate GDScript
         run: godot --headless --path godot-duel --editor --quit
+      - name: Parse native source files individually
+        run: |
+          for file in pixel_forge.gd game_state.gd actor.gd rune_art.gd combat_board.gd main.gd smoke_pixel.gd; do
+            echo "=== CHECK $file ==="
+            godot --headless --path godot-duel --check-only --script "res://scripts/$file" || true
+          done
       - name: Test native rules
         run: godot --headless --path godot-duel --script res://scripts/smoke.gd
       - name: Run live native scene regression
