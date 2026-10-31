@@ -2,7 +2,7 @@
 const fs=require("fs"),vm=require("vm"),assert=require("assert"),crypto=require("crypto");
 const root="app/src/main/assets/";
 const main=fs.readFileSync(root+"index.html","utf8").match(/<script>([\s\S]*?)<\/script>/)[1];
-const els={app:{innerHTML:"",insertAdjacentHTML(){},classList:{add(){},remove(){}}},net:{textContent:""},codeInput:{value:"ABCDEFGHJKLMNPQRSTUV"}};
+const els={app:{innerHTML:"",insertAdjacentHTML(){},classList:{add(){},remove(){}}},net:{textContent:""},codeInput:{value:"AB2C"},roomPanel:{innerHTML:"",hidden:false}};
 const events={};
 const doc={
  getElementById:id=>els[id]||(els[id]={innerHTML:"",textContent:""}),
@@ -16,10 +16,10 @@ const doc={
 };
 const broadcasts=[];
 const sandbox={document:doc,console,crypto:crypto.webcrypto,TextEncoder,TextDecoder,Math,URL,Date,alert(x){throw Error(String(x))},location:{reload(){}},setInterval(){return 1},clearInterval(){},setTimeout(){return 1},clearTimeout(){},btoa,atob,
- AndroidNet:{listen(topic){broadcasts.push({listen:topic})},post(topic,text){broadcasts.push({post:topic})}}};
+ AndroidNet:{listen(topic){broadcasts.push({listen:topic})},post(topic,text){broadcasts.push({post:topic})},copyText(code){broadcasts.push({copied:code});return true}}};
 sandbox.window=sandbox;
 const context=vm.createContext(sandbox);
-const scripts=[main,"expansion-data.js","expansion-relics.js","expansion-combat.js","expansion-visual.js","pvp-balance.js","route-tree.js","atelier.js"];
+const scripts=[main,"expansion-data.js","expansion-relics.js","expansion-combat.js","expansion-visual.js","pvp-balance.js","route-tree.js","atelier.js","connection-ui.js"];
 for(const [i,s] of scripts.entries())vm.runInContext(i===0?s:fs.readFileSync(root+s,"utf8"),context,{timeout:4000,filename:i===0?"inline.js":s});
 const run=s=>vm.runInContext(s,context,{timeout:5000});
 async function check(){
@@ -27,6 +27,8 @@ async function check(){
  assert.strictEqual(result.tested,180);
  await run("dispatch('join','')");
  assert.strictEqual(run("G.role"),"guest");
+ assert.strictEqual(run("G.code"),"AB2C");
+ assert(els.roomPanel.innerHTML.includes("КОМНАТА"),"network panel absent after guest joins");
  assert.strictEqual(run("G.screen"),"hero");
  assert(broadcasts.some(e=>e.listen),"guest must listen to room transport");
  await run("dispatch('hero','oracle')");
@@ -39,7 +41,7 @@ async function check(){
  assert(html.includes('data-map-stage="0"'),"first stage missing");
  let guestMap=run("G.map.map(x=>x.join(':')).join('|')");
  await run("dispatch('node','0')");
- console.log("GUEST ROUTE DIAG",JSON.stringify(run("({role:G.role,stage:G.stage,screen:G.screen,warning:G.lastRouteWarning,position:G.routeTree.position,reachable:ASH_TREE.reachable(0),first:G.map[0],visited:G.routeTree.visited})")));
+
  assert.strictEqual(run("G.screen"),"fight","guest cannot enter combat");
  assert.strictEqual(run("G.routeTree.visited.length"),1);
  assert.strictEqual(run("G.routeTree.position.index"),0);
@@ -61,6 +63,21 @@ async function check(){
  assert.notStrictEqual(run("G.map.map(x=>x.join(':')).join('|')"),guestMap,"routes must differ");
  await run("dispatch('node','1')");
  assert.notStrictEqual(run("G.screen"),"map","host map selection broken");
+ const peer=run("ASH_NET");
+ run("ASH_NET.markPeer({_via:'relay'})");
+ assert.strictEqual(run("ASH_NET.state().connected"),true,"peer must be online after valid message");
+ run("ASH_NET.net.pings.set('probe',Date.now()-115)");
+ run("handleMessage({type:'pong',token:'probe',_via:'relay'})");
+ const measured=run("ASH_NET.state().ping");
+ assert(measured!==null&&measured>=110&&measured<1000,"RTT must be measured, got "+measured);
+ run("ASH_NET.net.peerSeen=Date.now()-30000;ASH_NET.tick()");
+ assert.strictEqual(run("ASH_NET.state().connected"),false,"peer offline detection missing");
+ await run("dispatch('create','')");
+ assert.strictEqual(run("G.code.length"),4,"new room code is not four characters");
+ assert(broadcasts.some(x=>x.copied===run("G.code")),"host code was not automatically copied");
+ assert(els.roomPanel.innerHTML.includes("data-a=\"copyRoom\""),"manual code copy missing");
+ assert(els.roomPanel.innerHTML.includes("latency-"),"ping indicator missing");
+ console.log("PASS network: 4-character host/guest rooms, automatic clipboard, ping/pong RTT, offline status and connection GUI.");
  console.log("PASS route-tree: 180 DAGs with "+result.edges+" edges; guest join, class, 15 levels, final gate, independent host route.");
 }
 check().catch(e=>{console.error(e);process.exitCode=1});
