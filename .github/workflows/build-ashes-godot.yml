@@ -50,6 +50,10 @@ jobs:
         run: godot --headless --path godot-duel --editor --quit
       - name: Test native rules
         run: godot --headless --path godot-duel --script res://scripts/smoke.gd
+      - name: Run live native scene regression
+        run: |
+          godot --headless --path godot-duel --script res://scripts/smoke_ui.gd 2>&1 | tee /tmp/ui-smoke.log
+          if grep -E 'SCRIPT ERROR|Parse Error|Invalid call|ERROR:|UI SMOKE FAILED' /tmp/ui-smoke.log; then exit 1; fi
       - name: Test native GUI startup
         run: |
           godot --headless --path godot-duel --quit-after 3 2>&1 | tee /tmp/native-start.log
