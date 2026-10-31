@@ -132,7 +132,11 @@ func show_lobby() -> void:
  var intro=framed(true,Color("#25212c"))
  intro.add_child(make_text("15 этажей • разветвлённая карта • 161 карта • 136 реликвий",19,GOLD))
  intro.add_child(make_text("Три класса, комбинации эффектов, отряды врагов, магазины и выбор наград. Касайся карт и выбирай цели.",16))
- intro.add_child(make_button("Начать одиночное приключение",func():game.screen="class";render_ui()))
+ intro.add_child(make_button("Начать одиночное приключение",_open_class))
+
+func _open_class()->void:
+ game.screen="class"
+ render_ui()
  var notice=framed()
  notice.add_child(make_text("Переход на новый движок",20,GOLD))
  notice.add_child(make_text("Это первый нативный порт. Финальный PvP по интернету и AV-контрприёмы пока остаются в старой Android-версии. В этой APK проверяется новый бой и интерфейс.",15,QUIET))
