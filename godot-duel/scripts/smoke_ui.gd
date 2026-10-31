@@ -10,6 +10,7 @@ func _check() -> void:
  await process_frame
  if app.game.screen!="lobby":_fail("lobby startup");return
  if ART.ATLAS==null or ART.ATLAS.get_width()!=200 or ART.ATLAS.get_height()!=558:_fail("generated art atlas was not imported");return
+ if ART.BACKGROUND==null or ART.BACKGROUND.get_width()!=320 or ART.BACKGROUND.get_height()!=569:_fail("generated full-scene art is missing");return
  if ART.hero_region(2).end.x>200 or ART.card_region(11).end.y>558:_fail("sprite atlas region out of bounds");return
  if app.find_child("PaintedArenaBackground",true,false)==null:_fail("menu does not render generated arena");return
  app.game.new_run("guard")
