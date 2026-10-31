@@ -215,7 +215,7 @@ function heroView(){
 function lobbyView(){
  return '<div class="etch-lobby"><div class="hero-crest">⚔</div><div class="eyebrow">ДВА ПУТИ · ОДНА ДУЭЛЬ</div><h1>Пепел и карты</h1><p class="lead">Собери колоду, пройди разветвлённый путь и сразись с другим игроком. Действия определяются скоростью и контрприёмами.</p>'+
  '<div class="etch-panel"><h3>Создать приключение</h3><p class="sub">Первый игрок создаёт комнату, второй подключается по коду.</p><button data-a="create" class="etch-btn cta etch-wide">Создать комнату</button></div>'+
- '<div class="etch-panel"><h3>Присоединиться к другу</h3><input class="input" id="codeInput" maxlength="25" placeholder="КОД КОМНАТЫ"><button data-a="join" class="etch-btn cool etch-wide">Войти к другу</button></div>'+
+ '<div class="etch-panel"><h3>Присоединиться к другу</h3><input class="input" id="codeInput" maxlength="4" placeholder="КОД ИЗ 4 СИМВОЛОВ" autocapitalize="characters" autocomplete="off" spellcheck="false"><button data-a="join" class="etch-btn cool etch-wide">Войти к другу</button></div>'+
  '<div class="etch-actions"><button class="etch-btn plain" data-a="demo">Одиночное прохождение</button><button data-a="catalog" class="etch-btn plain">Коллекция карт</button></div></div>'
 }
 function upgradeView(){
