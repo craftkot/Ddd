@@ -151,11 +151,11 @@ function pvGambitApply(choice,own,foe){
  }
 }
 function pvBeginGambit(d){
- d.phase="gambit";d.offers=[...PVP_CHOICES.filter(x=>x.type==="buff")].slice((Math.floor(d.actions/5)-1)%5,(Math.floor(d.actions/5)-1)%5+1);
- d.offers.push(PVP_CHOICES[(d.actions/5+4)%PVP_CHOICES.length]);
- d.offers.push(PVP_CHOICES[(d.actions/5+8)%PVP_CHOICES.length]);
- const ids=new Set(d.offers.map(x=>x.id));
- if(ids.size<3)d.offers=[PVP_CHOICES[(d.actions/5)%12],PVP_CHOICES[(d.actions/5+4)%12],PVP_CHOICES[(d.actions/5+8)%12]];
+ d.phase="gambit";const cycle=Math.floor(d.actions/5)-1;
+ d.offers=["buff","risk","control"].map((type,i)=>{
+   const pool=PVP_CHOICES.filter(x=>x.type===type);
+   return pool[(cycle+i)%pool.length]
+ });
  d.picks={host:null,guest:null};
  for(const side of ["host","guest"])pvRelic(d.fighters[side],"gambit")
  d.log.push("⚖ Перелом судьбы: оба игрока выбирают модификатор.")
@@ -184,7 +184,13 @@ function pvCheckDeaths(d){
 const pvBaseHit=hit,pvBaseTrueDamage=ashTrueDamage,pvBaseEffect=ashEffect;
 let pvContext=null;
 ashTrueDamage=function(f,n){
- if(!pvContext||pvContext.target!==f)return pvBaseTrueDamage(f,n);
+ if(!pvContext||pvContext.target!==f){
+   if(G.duel&&G.duel.fighters&&(f===G.duel.fighters.host||f===G.duel.fighters.guest)){
+     const absorbed=Math.min(n,f.ward||0);f.ward=Math.max(0,(f.ward||0)-absorbed);
+     return pvBaseTrueDamage(f,Math.max(0,n-absorbed))
+   }
+   return pvBaseTrueDamage(f,n)
+ }
  const block=Math.min(f.ward||0,n);f.ward=Math.max(0,(f.ward||0)-block);
  let remaining=Math.max(0,n-block);
  if(pvContext.reduce)remaining=Math.ceil(remaining*pvContext.reduce);
@@ -194,24 +200,31 @@ ashTrueDamage=function(f,n){
 };
 hit=window.hit=function(a,b,n){
  if(!pvContext||pvContext.attacker!==a||pvContext.target!==b)return pvBaseHit(a,b,n);
- const hp=b.hp;
  const scale=pvContext.reduce||1;
- const res=pvBaseHit(a,b,Math.max(0,Math.round(n*scale)));
- const dealt=Math.min(hp-b.hp,Math.max(0,pvContext.limit-pvContext.damage));
- if(hp-b.hp>dealt)b.hp+=hp-b.hp-dealt;
+ const adjusted=Math.max(0,Math.round(n*scale));
+ let predicted=Math.max(0,adjusted+a.str+a.charge+a.bonusDamage);
+ if(a.weak)predicted=Math.floor(predicted*.75);
+ if(b.vuln)predicted=Math.ceil(predicted*1.5);
+ predicted+=b.mark||0;
+ const oldBlock=b.block;
+ const blockUsed=Math.min(oldBlock,predicted);
+ const allowed=Math.max(0,pvContext.limit-pvContext.damage);
+ const extraBlock=Math.max(0,predicted-blockUsed-allowed);
+ b.block+=extraBlock;
+ const dealt=pvBaseHit(a,b,adjusted);
  pvContext.damage+=dealt;
  return dealt
 };
 ashEffect=function(e,a,b,card,pvp){
- if(e.key==="advance"){a.nextAdvance=(a.nextAdvance||0)+100*e.value;return 0}
+ if(e.key==="advance"){if(a.speed)a.nextAdvance=(a.nextAdvance||0)+100*e.value;else if(e.value>=16)draw(a,1);return 0}
  if(e.key==="retard"){a.nextAdvance=(a.nextAdvance||0)-100*e.value;return 0}
- if(e.key==="delay"){if(b&&Number.isFinite(b.gauge))b.gauge=Math.min(18000,b.gauge+100*e.value);return 0}
- if(e.key==="speed"){if(a.speed)a.speed=pvClamp(a.speed+e.value,PV.minSpeed,PV.maxSpeed);return 0}
- if(e.key==="slow"){if(b&&b.speed)b.speed=pvClamp(b.speed-e.value,PV.minSpeed,PV.maxSpeed);return 0}
+ if(e.key==="delay"){if(b&&Number.isFinite(b.gauge))b.gauge=Math.min(18000,b.gauge+100*e.value);else if(b)b.weak=(b.weak||0)+1;return 0}
+ if(e.key==="speed"){if(a.speed)a.speed=pvClamp(a.speed+e.value,PV.minSpeed,PV.maxSpeed);else if(e.value>0)a.dodge=(a.dodge||0)+1;return 0}
+ if(e.key==="slow"){if(b&&b.speed)b.speed=pvClamp(b.speed-e.value,PV.minSpeed,PV.maxSpeed);else if(b)b.weak=(b.weak||0)+1;return 0}
  if(e.key==="ward"){a.ward=pvClamp((a.ward||0)+e.value,0,80);return 0}
  if(e.key==="purify"){for(const field of ["poison","burn","bleed"])a[field]=Math.floor((a[field]||0)*(100-e.value)/100);return 0}
  if(e.key==="tax"){if(b)b.nextTax=Math.min(2,(b.nextTax||0)+e.value);return 0}
- if(e.key.startsWith("counter")){a.block+=6;return 0} // usable in PvE too, dedicated PvP counter logic below
+ if(e.key.startsWith("counter")){a.block+=e.key==="counterguard"?20:8;if(e.key==="counterclean")for(const k of ["poison","burn","bleed"])a[k]=Math.floor((a[k]||0)*.2);a.ward=(a.ward||0)+8;return 0} // usable in PvE too, dedicated PvP counter logic below
  return pvBaseEffect(e,a,b,card,pvp)
 };
 function pvResolveCard(d){
@@ -228,9 +241,10 @@ function pvResolveCard(d){
  if(pending.counter==="pvp015"||pending.counter==="pvp023")def.block+=7;
  if(pending.counter==="pvp016"){def.block+=7;def.ward+=5;f.hp=Math.max(1,f.hp-10)}
  const reduction=(pending.counter==="interrupt"||pending.counter==="pvp015")?.45:pending.counter==="pvp023"?.65:1;
- pvContext={attacker:f,target:def,damage:0,limit:Math.ceil(def.maxHp*.58),reduce:reduction};
+ pvContext={attacker:f,target:def,damage:f.damageTurn||0,limit:Math.ceil(def.maxHp*.58),reduce:reduction};
  const hpF=f.hp;
  let message=apply(c,f,def);
+ f.damageTurn=pvContext.damage;
  pvContext=null;
  // DoT buildup limited per attack: upgraded combos remain powerful but counterable.
  for(const k of ["poison","burn","bleed"]){
