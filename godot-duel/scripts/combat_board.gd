@@ -183,7 +183,7 @@ func _draw_figure(center:Vector2,kind:String,scale:float)->void:
  if kind=="oracle" or kind=="mage" or kind=="cultist":cape=Color("#805997")
  if kind=="hunter" or kind=="hound" or kind=="slime":cape=Color("#567c63")
  if kind=="boss" or kind=="bandit":cape=Color("#9a555b")
- var sway=sinf(tick*1.5+center.x*.015)*2.0
+ var sway=sin(tick*1.5+center.x*.015)*2.0
  var p=center+Vector2(0,sway)
  draw_circle(p+Vector2(0,41*scale),50*scale,Color(0,0,0,.13))
  draw_colored_polygon(PackedVector2Array([p+Vector2(-29,-25)*scale,p+Vector2(28,-28)*scale,p+Vector2(49,51)*scale,p+Vector2(-49,51)*scale]),cape.darkened(.5))
