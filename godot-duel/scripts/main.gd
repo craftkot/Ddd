@@ -3,6 +3,7 @@ extends Control
 const RULES = preload("res://scripts/game_state.gd")
 const ACTOR = preload("res://scripts/actor.gd")
 const ROUTE = preload("res://scripts/route_board.gd")
+const COMBAT_BOARD = preload("res://scripts/combat_board.gd")
 const INK = Color("#10151f")
 const PANEL = Color("#242938")
 const PANEL_ALT = Color("#302d3b")
@@ -99,6 +100,12 @@ func render_ui() -> void:
  var version=make_text("GODOT  •  ALPHA 0.8",11,QUIET)
  version.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
  top_row.add_child(version)
+ if game.screen=="fight":
+  var battle=COMBAT_BOARD.new()
+  battle.game=game
+  battle.transition_requested.connect(_combat_updated)
+  root.add_child(battle)
+  return
  scroll=ScrollContainer.new()
  scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL
  scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
@@ -127,6 +134,10 @@ func render_ui() -> void:
   "final": show_final()
   "lost": show_lost()
   _: show_lobby()
+
+func _combat_updated()->void:
+ game.save_game()
+ render_ui()
 
 func show_lobby() -> void:
  page.add_child(title("ПЕПЕЛ И КАРТЫ"))
