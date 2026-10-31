@@ -23,10 +23,17 @@ func _check() -> void:
  battle.queue_redraw()
  if not battle._needs_target(app.game.make_card("strike")):_fail("attack needs a target");return
  if battle._needs_target(app.game.make_card("guard")):_fail("block card should not require enemy");return
- var hand_before=app.game.fight["hand"].size()
- battle._press(Vector2(310,1020))
- battle._release(Vector2(310,1020))
- if app.game.fight["hand"].size()>hand_before:_fail("touch interaction produced cards");return
+ app.game.fight["hand"]=[app.game.make_card("strike")]
+ app.game.fight["energy"]=3
+ app.game.fight["enemies"]=[app.game.create_enemy(false)]
+ battle.hand_areas=[Rect2(240,790,165,240)]
+ battle.hit_areas=[{"index":0,"rect":Rect2(410,210,120,170)}]
+ var hp_before=int(app.game.fight["enemies"][0]["hp"])
+ battle._press(Vector2(285,850))
+ battle._move(Vector2(470,280))
+ battle._release(Vector2(470,280))
+ if int(app.game.fight["enemies"][0]["hp"])>=hp_before:_fail("dragging an attack to an enemy dealt no damage");return
+
  app.game.screen="reward"
  app.game.reward_cards=app.game.offer_cards()
  app.render_ui()
