@@ -12,12 +12,12 @@ func _check() -> void:
  app.render_ui()
  await process_frame
  if app.game.screen!="map":_fail("map state");return
- var route=app.get_node_or_null("BattleCanvas")
+ var route=app.find_child("BattleCanvas",true,false)
  if route!=null:_fail("battle canvas must not overlay map");return
  app.game.start_fight(false)
  app.render_ui()
  await process_frame
- var battle=app.get_node_or_null("BattleCanvas")
+ var battle=app.find_child("BattleCanvas",true,false)
  if battle==null:_fail("native combat canvas missing");return
  battle.size=Vector2(720,1180)
  battle.queue_redraw()
