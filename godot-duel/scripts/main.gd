@@ -2,6 +2,7 @@ extends Control
 ## Fully native Android/Godot user interface. No embedded web page.
 const RULES = preload("res://scripts/game_state.gd")
 const ACTOR = preload("res://scripts/actor.gd")
+const ROUTE = preload("res://scripts/route_board.gd")
 const INK = Color("#10151f")
 const PANEL = Color("#242938")
 const PANEL_ALT = Color("#302d3b")
@@ -181,27 +182,19 @@ func show_map() -> void:
  for id in allowed:
   var typ=str(game.map_rows[game.floor][id]["type"])
   row.add_child(make_button(symbol(typ)+"  "+type_name(typ),_choose_node.bind(id)))
- # Readable tree preview: every floor has three to five native nodes.
- var map_panel=framed()
- map_panel.add_child(make_text("Карта: нижние этажи уже пройдены, верхние впереди.",14,QUIET))
- for f in range(game.map_rows.size()-1,-1,-1):
-  var line=HBoxContainer.new()
-  line.alignment=BoxContainer.ALIGNMENT_CENTER
-  line.add_theme_constant_override("separation",5)
-  map_panel.add_child(line)
-  for item in game.map_rows[f]:
-   var button=Button.new()
-   var id=int(item["index"])
-   var reached=allowed.has(id) and f==game.floor
-   var visited=game.history.has([f,id])
-   button.text=symbol(str(item["type"]))+"\n"+type_name(str(item["type"]))
-   button.custom_minimum_size=Vector2(96,58)
-   button.add_theme_font_size_override("font_size",11)
-   button.add_theme_stylebox_override("normal",panel_style(Color("#79523e") if reached else Color("#2a473e") if visited else PANEL, GOLD if reached else Color("#567164"),8))
-   button.disabled=not reached
-   button.pressed.connect(_choose_node.bind(id))
-   line.add_child(button)
-   # Nodes are grouped per floor; route constraints enforced in core.
+ # A real Godot canvas with curved, connected paths and touchable nodes.
+ var route_scroll=ScrollContainer.new()
+ route_scroll.custom_minimum_size=Vector2(0,535)
+ route_scroll.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+ route_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+ page.add_child(route_scroll)
+ var route_view=ROUTE.new()
+ route_view.setup(game)
+ route_view.node_chosen.connect(_choose_node)
+ route_scroll.add_child(route_view)
+ # Pan the graph to the player's current floor; choices above remain fixed.
+ route_scroll.call_deferred("set", "scroll_vertical", maxi(0,int(route_view.y_for(game.floor)-250.0)))
+
 func _choose_node(i:int)->void:
  if game.select_node(i):render_ui()
 
