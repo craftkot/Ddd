@@ -320,7 +320,7 @@ function pointerUp(e){
  if(d.ghost?.remove)d.ghost.remove();
  clearLine();
  if(!d.moved)return;
- UI.skipTap=true;
+ UI.skipTap=true;UI.skipTapAt=Date.now();
  let node=document.elementFromPoint?.(e.clientX,e.clientY);
  const unit=node?.closest?.(".etch-person.enemy");
  const card=indexCard(d.action,d.i);
@@ -340,7 +340,8 @@ document.addEventListener("click",e=>{
  const card=e.target.closest?.(".etch-card[data-cast-action]");
  if(card){
   e.preventDefault();e.stopImmediatePropagation();
-  if(UI.skipTap){UI.skipTap=false;return}
+  if(UI.skipTap&&Date.now()-UI.skipTapAt<450){UI.skipTap=false;return}
+  UI.skipTap=false;
   clickCard(card);return
  }
  const foe=e.target.closest?.(".etch-person.enemy[data-foe-index]");
