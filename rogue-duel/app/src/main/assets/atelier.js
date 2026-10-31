@@ -178,7 +178,7 @@ function mapView(){
  '<div class="etch-next-panel"><div class="eyebrow">ДОСТУПНЫЕ ПУТИ</div><p class="small">Можно выбрать только узел, соединённый с твоим последним шагом. У каждого игрока своё дерево.</p>'+
  '<div class="etch-next-choices">'+choices.map(node=>'<button type="button" class="etch-btn etch-next-button" data-a="node" data-x="'+node.index+'">'+emblem(node.type)+' '+esc(LABEL[node.type][1])+'</button>').join("")+'</div>'+
  (G.lastRouteWarning?'<p class="dangertext">'+esc(G.lastRouteWarning)+'</p>':'')+'</div>'+
- '<div class="etch-worldmap etch-tree-map" style="height:'+h+'px"><svg class="etch-tree-links" viewBox="0 0 1000 '+h+'" preserveAspectRatio="none" aria-hidden="true">'+paths+'</svg>'+nodes+'</div>'+
+ '<div class="etch-tree-viewport"><div class="etch-worldmap etch-tree-map" style="height:'+h+'px"><svg class="etch-tree-links" viewBox="0 0 1000 '+h+'" preserveAspectRatio="none" aria-hidden="true">'+paths+'</svg>'+nodes+'</div></div>'+
  '<p class="etch-hint">Дерево строится снизу вверх. Золотые узлы доступны. Зелёные — пройденный путь. Серые — ещё закрыты.</p>'+
  '<div class="etch-map-legend">⚔ Бой · ☠ Элита · ◆ Магазин · ◇ Сокровище · ✧ Событие · ♨ Привал</div>'+
  '<div class="etch-actions"><button data-a="inventory" class="etch-btn plain">Посмотреть свою сборку</button></div>'
@@ -254,7 +254,7 @@ render=window.render=function(){
  if(view===null)oldRender();
  else{$app().innerHTML=view;setNet()}
  if(UI.lastScreen!==G.screen){UI.select=null;UI.lastScreen=G.screen}
- /* Route choices are placed above the tree: never scroll the user to a disabled floor on Android. */
+ if(G.screen==="map"){const viewport=document.querySelector(".etch-tree-viewport");const first=viewport?.querySelector(".etch-route-node.reachable");if(viewport&&first)viewport.scrollTop=Math.max(0,first.offsetTop-viewport.clientHeight*.56)}
 };
 const oldOpenNode=openNode;
 openNode=window.openNode=function(i){if(G.map?.[G.stage])UI.history[G.stage]=G.map[G.stage][i];return oldOpenNode(i)};
