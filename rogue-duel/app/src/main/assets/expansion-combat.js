@@ -185,7 +185,7 @@ createFight=window.createFight=function(elite){
  if(qty>1)enemies.forEach(e=>{e.maxHp=Math.round(e.maxHp/(.65+qty*.18));e.hp=e.maxHp});
  G.combat={player:p,enemies,target:0,elite,round:1};
  G.log=["Вражеский отряд: "+enemies.map(x=>x.name).join(", ")+"."];ash.killSet=new WeakSet();
- beginEffects(p,enemies[0]);startTurn(p);render()
+ beginEffects(p,enemies[0]);startTurn(p);G.screen="fight";render()
 };
 playSolo=window.playSolo=function(index){
  const c=G.combat;if(!c||!c.enemies)return;
