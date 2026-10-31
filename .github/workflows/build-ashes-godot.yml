@@ -76,5 +76,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Concurrent pushes must never let an older APK overwrite the latest build.
+          CURRENT_SHA="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/feature/card-roguelike-pvp" --jq '.object.sha')"
+          if [ "$CURRENT_SHA" != "$GITHUB_SHA" ]; then
+            echo "Skipping outdated build $GITHUB_SHA; branch is now $CURRENT_SHA"
+            exit 0
+          fi
           gh release delete ashes-godot-v0.10.0-alpha --yes --cleanup-tag || true
           gh release create ashes-godot-v0.10.0-alpha godot-duel/build/AshesGodot-v0.10-debug.apk#AshesGodot-v0.10-debug.apk --target "$GITHUB_SHA" --title "Пепел и карты · Godot v0.10 alpha" --notes "Original AI-generated illustrated atlas, heroes, enemies, illustrated cards, blood-moon arena. Offline Godot PvE. Online PvP remains in the earlier APK."
