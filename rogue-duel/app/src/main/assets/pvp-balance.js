@@ -273,9 +273,12 @@ function pvOfferReaction(d,by,c){
 }
 function pvAction(cmd,by){
  const d=G.duel;if(!d||d.winner||!d.fighters||!cmd)return;
+ // Host-authoritative optimistic concurrency: repeated clicks or delayed packets
+ // cannot silently play the next card. Gambit picks can arrive simultaneously.
+ if(cmd.action!=="pick"&&Number.isInteger(cmd.revision)&&cmd.revision!==d.revision)return;
  if(d.phase==="gambit"){
   if(cmd.action!=="pick"||d.picks[by]||!d.offers.some(x=>x.id===cmd.id))return;
-  d.picks[by]=cmd.id;pvFinishGambit(d);broadcastDuel();return
+  d.picks[by]=cmd.id;pvFinishGambit(d);d.revision++;broadcastDuel();return
  }
  if(d.phase==="reaction"){
   const defender=d.pending.by==="host"?"guest":"host";
@@ -290,7 +293,7 @@ function pvAction(cmd,by){
    }
    f.focus--;d.pending.counter=reaction
   }
-  pvResolveCard(d);broadcastDuel();return
+  pvResolveCard(d);d.revision++;broadcastDuel();return
  }
  if(d.phase!=="play"||d.turn!==by)return;
  const f=d.fighters[by],foe=d.fighters[by==="host"?"guest":"host"];
@@ -308,14 +311,14 @@ function pvAction(cmd,by){
   if(d.actions%5===0)pvBeginGambit(d);
   else pvNext(d);
  }else return;
- pvCheckDeaths(d);broadcastDuel()
+ pvCheckDeaths(d);d.revision++;broadcastDuel()
 }
 function pvStartDuel(){
  if(G.role!=="host"||!G.done||!G.other||G.duel)return;
  const own=runnerSummary();
  const fighters={host:pvMakeFighter(own),guest:pvMakeFighter(G.other)};
  const first=Math.floor(Math.random()*2)?"host":"guest";
- const d={fighters,turn:null,phase:"play",clock:0,actions:0,round:1,tieNext:first,
+ const d={fighters,turn:null,phase:"play",clock:0,actions:0,round:1,revision:0,tieNext:first,
   previousTurn:null,streak:0,log:["Последняя дуэль началась. Начальный ход определяется AV."],
   winner:"",pending:null,offers:[],picks:{host:null,guest:null},sudden:0};
  G.duel=d;
@@ -328,6 +331,11 @@ function pvStartDuel(){
 }
 checkDuel=window.checkDuel=pvStartDuel;
 applyDuel=window.applyDuel=function(cmd,by){pvAction(cmd,by)};
+const pvSendCommand=commandDuel;
+commandDuel=window.commandDuel=function(cmd){
+ const revision=G.duel&&Number.isInteger(G.duel.revision)?G.duel.revision:0;
+ return pvSendCommand({...cmd,revision})
+};
 function pvCardCost(c){return art(c.id).c}
 function pvStatus(f){
  const current=f.speed||100,av=pvAV(f);
