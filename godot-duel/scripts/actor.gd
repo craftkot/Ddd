@@ -22,7 +22,7 @@ func _draw() -> void:
  if kind=="hunter" or kind=="slime" or kind=="hound":cloth=Color("#598d76");trim=Color("#bfd5ac")
  if kind=="boss" or kind=="bandit":cloth=Color("#a65757");trim=Color("#f2a77c")
  draw_set_transform(Vector2.ZERO)
- draw_ellipse(Vector2(cx,h*.94),Vector2(w*.33,7),Color(0,0,0,.5))
+ draw_rect(Rect2(cx-w*.33,h*.93,w*.66,7),Color(0,0,0,.5),true)
  # Shrouded body, cape and shoulders.
  var y=wave
  draw_colored_polygon(PackedVector2Array([Vector2(cx-22,h*.30+y),Vector2(cx+21,h*.3+y),Vector2(cx+49,h*.87+y),Vector2(cx-44,h*.87+y)]),shadow)
