@@ -61,7 +61,7 @@ h1,h2,h3,p{margin:0}h1{font-size:clamp(30px,9vw,53px);line-height:1.08;font-weig
 </style>
 <link rel="stylesheet" href="expansion.css">
 </head>
-<body><div id="shell"><header><div class="logo">✦ ПЕПЕЛ И КАРТЫ <small>ДУЭЛЬ ДВУХ СУДЕБ</small></div><div class="net" id="net">Ожидание комнаты</div></header><main id="app"></main><div class="footer">Авторские карты и мир · Ранняя версия 0.2</div></div>
+<body><div id="shell"><header><div class="logo">✦ ПЕПЕЛ И КАРТЫ <small>ДУЭЛЬ ДВУХ СУДЕБ</small></div><div class="net" id="net">Ожидание комнаты</div></header><main id="app"></main><div class="footer">Авторские карты и мир · Ранняя версия 0.3</div></div>
 <script>
 "use strict";
 const CARDS={
@@ -270,4 +270,4 @@ render()}
 document.addEventListener("click",e=>{let b=e.target.closest("button[data-a]");if(b&&!b.disabled){dispatch(b.dataset.a,b.dataset.x).catch(err=>{alert("Ошибка: "+err.message)})}});
 window.goBack=()=>{if(G.screen==="lobby")return; if(G.screen==="hero"||G.screen==="done"||G.screen==="lost"||G.screen==="duelEnd"){location.reload();return}alert("Бой и забег нельзя прерывать. Заверши текущую встречу.")};
 render();
-</script><script src="expansion-data.js"></script><script src="expansion-relics.js"></script><script src="expansion-combat.js"></script><script src="expansion-visual.js"></script></body></html>
+</script><script src="expansion-data.js"></script><script src="expansion-relics.js"></script><script src="expansion-combat.js"></script><script src="expansion-visual.js"></script><script src="pvp-balance.js"></script></body></html>
