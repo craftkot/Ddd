@@ -71,3 +71,64 @@ check([
 'if(hp-f.hp!==11)throw Error("dot tick mismatch: "+(hp-f.hp));'
 ].join('\n'));
 console.log("PASS: 112 cards apply; 4 targets; DoT explosion; relic events; status tick.");
+
+/* PvP 0.3 rules: predictable AV, counters, simultaneous gambits, OTK guard. */
+vm.runInContext(fs.readFileSync(base+"pvp-balance.js","utf8"),context,{timeout:5000});
+const stats=check("window.EXPANSION_STATS");
+assert.strictEqual(check("Object.keys(CARDS).length"),161);
+assert.strictEqual(check("RELICS.length"),136);
+assert.strictEqual(check("PVP_BALANCE_DEBUG.pvAV({gauge:10000,speed:125})"),80);
+check([
+'G.role="host";G.done=true;G.other={...newRun("oracle"),hp:73};',
+'G.runner=newRun("guard");G.duel=null;pvStartDuel();',
+'if(!["host","guest"].includes(G.duel.turn))throw Error("missing initial AV turn");',
+'if(G.duel.fighters.host.focus<2||G.duel.fighters.guest.focus<2)throw Error("missing counter energy");',
+'if(G.duel.phase!=="play")throw Error("wrong phase");',
+'if(G.duel.fighters.host.speed!==100||G.duel.fighters.guest.speed!==100)throw Error("base speed");',
+'if(G.duel.fighters.host.gauge<0||G.duel.fighters.guest.gauge<0)throw Error("negative gauge");',
+'if(Math.min(G.duel.fighters.host.ward,G.duel.fighters.guest.ward)!==0)throw Error("expected asymmetric opening protection");'
+].join('\n'));
+check([
+'var duel=G.duel;var starter=duel.turn;var target=starter==="host"?"guest":"host";',
+'duel.fighters[starter].hand=[inst("forge035")];duel.fighters[starter].energy=10;',
+'pvAction({action:"play",index:0},starter);',
+'if(duel.phase!=="reaction")throw Error("no counter window");',
+'if(duel.pending.by!==starter)throw Error("bad pending attacker");',
+'pvAction({action:"counter",kind:"guard"},target);',
+'if(duel.phase!=="play"||duel.pending)throw Error("counter not resolved");',
+'if(duel.fighters[target].focus>2)throw Error("counter was free");'
+].join('\n'));
+check([
+'var duel=G.duel,starter=duel.turn,target=starter==="host"?"guest":"host";',
+'duel.fighters[starter].hand=[inst("pvp003")];duel.fighters[starter].energy=10;',
+'var startSpeed=duel.fighters[starter].speed;',
+'pvAction({action:"play",index:0},starter);',
+'if(duel.fighters[starter].speed!==startSpeed+10)throw Error("speed card failed");',
+'if(!duel.fighters[starter].exhaust.some(c=>c.id==="pvp003"))throw Error("permanent powers must be exhausted");'
+].join('\n'));
+check([
+'var duel=G.duel;duel.fighters.host.poison=0;duel.fighters.guest.poison=0;',
+'for(let i=0;i<5;i++){',
+' if(duel.phase!=="play")throw Error("unexpected pause during AV");',
+' pvAction({action:"end"},duel.turn);',
+'}',
+'if(duel.phase!=="gambit"||duel.actions!==5||duel.offers.length!==3)throw Error("gambit not triggered on 5th action");',
+'if(new Set(duel.offers.map(x=>x.type)).size!==3)throw Error("gambit must offer risk, buff, and counterplay");',
+'pvAction({action:"pick",id:duel.offers[0].id},"host");',
+'if(duel.phase!=="gambit")throw Error("must wait for both players");',
+'pvAction({action:"pick",id:duel.offers[1].id},"guest");',
+'if(duel.phase!=="play"||!duel.turn)throw Error("gambit failed to resume");'
+].join('\n'));
+check([
+'var duel=G.duel; var actor=duel.turn;var enemy=actor==="host"?"guest":"host";',
+'duel.fighters[actor].str=70;duel.fighters[actor].energy=30;',
+'duel.fighters[actor].hand=Array.from({length:6},()=>inst("rift"));',
+'duel.fighters[enemy].block=0;duel.fighters[enemy].ward=0;duel.fighters[enemy].focus=2;',
+'var before=duel.fighters[enemy].hp,cap=Math.ceil(duel.fighters[enemy].maxHp*.58);',
+'for(let i=0;i<6&&duel.fighters[actor].hand.length;i++){',
+'pvAction({action:"play",index:0},actor);',
+'if(duel.phase==="reaction")pvAction({action:"counter",kind:"pass"},enemy);',
+'}',
+'if(before-duel.fighters[enemy].hp>cap)throw Error("single-turn cap bypassed: "+(before-duel.fighters[enemy].hp)+" > "+cap);'
+].join('\n'));
+console.log("PASS: AV speed, role-independent initiative, counter windows, action-5 simultaneous gambit, one-shot protection.");
