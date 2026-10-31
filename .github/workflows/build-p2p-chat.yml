@@ -1,0 +1,46 @@
+name: Build P2P Chat APK
+on:
+  push:
+    branches:
+      - feature/p2p-chat
+    paths:
+      - 'p2p-chat/**'
+      - '.github/workflows/build-p2p-chat.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: p2p-chat
+    steps:
+      - uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Prepare Android SDK
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Compile APK
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+      - name: Verify APK archive and signing
+        run: |
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          unzip -tq app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify app/build/outputs/apk/debug/app-debug.apk
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: EHTID-P2P-Chat-debug-APK
+          path: p2p-chat/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
