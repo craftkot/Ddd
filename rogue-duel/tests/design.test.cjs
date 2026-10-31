@@ -16,6 +16,8 @@ const run=s=>vm.runInContext(s,vmctx,{timeout:6000});
  assert(stats.events>=9);assert(stats.potions>=5);
  const rarity=run("(function(){const r=newRun('oracle'),all=[];for(let i=0;i<150;i++){const offer=ASH_RUN.rewards(r);if(new Set(offer.map(c=>c.id)).size!==3)throw Error('duplicate reward');all.push(...offer.map(c=>CARDS[c.id].rarity))}return new Set(all).size})()");
  assert(rarity>=3,"all rarity tiers must appear");
+ const repeat=run("(function(){G.rngState=0x18cfe21;const a=ASH_RUN.rewards(newRun('oracle')).map(x=>x.id);G.rngState=0x18cfe21;const b=ASH_RUN.rewards(newRun('oracle')).map(x=>x.id);return JSON.stringify(a)===JSON.stringify(b)})()");
+ assert(repeat,"same seed did not reproduce card reward");
  run("G.demo=true;G.role='host';G.runner=newRun('oracle');G.code='';makeMap();G.screen='map';render()");
  assert.strictEqual(run("G.runner.potions.length"),1,"starter potion");
  assert(run("ASH_SAVES.capture()"),"map checkpoint");
