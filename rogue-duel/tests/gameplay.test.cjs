@@ -71,6 +71,7 @@ check([
 'if(hp-f.hp!==11)throw Error("dot tick mismatch: "+(hp-f.hp));'
 ].join('\n'));
 console.log("PASS: 112 cards apply; 4 targets; DoT explosion; relic events; status tick.");
+check("G.screen=\'lobby\'"); // reset test-only combat state before loading graphical overlays
 
 /* PvP 0.3 rules: predictable AV, counters, simultaneous gambits, OTK guard. */
 vm.runInContext(fs.readFileSync(base+"pvp-balance.js","utf8"),context,{timeout:5000});
