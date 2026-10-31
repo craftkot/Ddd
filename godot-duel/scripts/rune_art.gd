@@ -1,26 +1,20 @@
 extends Control
-## Original generated artwork for card/relic vignettes, with an etched Art Nouveau frame.
-const ART = preload("res://scripts/painted_assets.gd")
-var code: String = "forge001"
-var school: String = ""
-var mode: String = "skill"
-var phase: float = 0.0
+## Pixel-drawn card illustrations, never resizing the source pixels with blending.
+const PX=preload("res://scripts/pixel_forge.gd")
+var code:String="strike"
+var school:String=""
+var mode:String="skill"
 func _ready()->void:
  mouse_filter=Control.MOUSE_FILTER_IGNORE
  size_flags_horizontal=Control.SIZE_EXPAND_FILL
  custom_minimum_size=Vector2(0,108)
+ texture_filter=CanvasItem.TEXTURE_FILTER_NEAREST
  queue_redraw()
 func _draw()->void:
- if size.x<2 or size.y<2:return
- var r=Rect2(Vector2.ZERO,size)
- var tint=Color("#8bc7e5") if mode=="skill" else Color("#d88b74") if mode=="attack" else Color("#c9a1df")
- draw_rect(r,Color("#0f1520"))
- var idx=ART.card_index(code,school,mode)
- draw_texture_rect_region(ART.ATLAS,r,ART.card_region(idx),Color.WHITE)
- draw_rect(r.grow(-1),Color("#d7ba8c",.60),false,2)
- draw_line(Vector2(5,5),Vector2(21,5),tint,2)
- draw_line(Vector2(5,5),Vector2(5,20),tint,2)
- draw_line(Vector2(size.x-5,5),Vector2(size.x-21,5),tint,2)
- draw_line(Vector2(size.x-5,5),Vector2(size.x-5,20),tint,2)
- draw_line(Vector2(5,size.y-5),Vector2(21,size.y-5),tint,2)
- draw_line(Vector2(size.x-5,size.y-5),Vector2(size.x-21,size.y-5),tint,2)
+ if size.x<48 or size.y<32:return
+ var zoom=maxi(1,mini(int(size.x/48.0),int(size.y/32.0)))
+ var dims=Vector2(48*zoom,32*zoom)
+ var pos=Vector2(floor((size.x-dims.x)*.5),floor((size.y-dims.y)*.5))
+ draw_rect(Rect2(Vector2.ZERO,size),Color("#151b29"))
+ draw_texture_rect(PX.card_art(code,school,mode),Rect2(pos,dims),false)
+ draw_rect(Rect2(pos,dims),Color("#9b7b63"),false,2.0)
