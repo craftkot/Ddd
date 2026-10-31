@@ -47,3 +47,20 @@ for(const [school,emoji,defs] of ASH_FAMILIES)for(const [name,cost,type,fx] of d
 CLASSES.guard.deck.splice(-2,0,"forge022","forge023");
 CLASSES.oracle.deck.splice(-2,0,"forge003","forge004");
 CLASSES.hunter.deck.splice(-2,0,"forge095","forge096");
+
+/* Act II: more decisions and rewards before the final PvP showdown. */
+STAGES.push(
+ ["fight","event"],["fight","shop"],["elite","event"],
+ ["shop","treasure"],["rest","fight"],["fight","elite"],
+ ["event","treasure"],["elite","rest"]
+);
+function ashAffinityCards(r,n=3){
+ const counts={};
+ if(r&&r.deck)for(const c of r.deck){const s=art(c.id).school;if(s)counts[s]=(counts[s]||0)+1}
+ const weighted=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,3);
+ const preferred=weighted.length?weighted[0][0]:choose(ASH_FAMILIES)[0];
+ const pool=ASH_CARD_IDS.filter(id=>art(id).school===preferred);
+ const first=unique(pool,Math.max(1,n-1));
+ const second=unique(COMMON.filter(id=>!first.includes(id)),n-first.length);
+ return [...first,...second].map(inst)
+}
