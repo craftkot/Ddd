@@ -90,6 +90,7 @@ func _draw() -> void:
  label("ЗДОРОВЬЕ %d/%d" % [game.hp,game.max_hp],Vector2(22,57),19,WHITE)
  label("ЭНЕРГИЯ %d" % game.fight["energy"],Vector2(w-185,35),19,SKY)
  label("БРОНЯ %d" % game.fight["block"],Vector2(w-185,58),17,GREEN)
+ label("ЦЕПЬ %d/3" % mini(3,int(game.fight.get("combo",0))),Vector2(w*.47,57),13,GOLD)
  # Battles must show predicted intent before choice.
  var foe_count=0
  var foes=game.fight["enemies"]
@@ -215,11 +216,7 @@ func _card(entry:Dictionary,r:Rect2,selected:bool=false,floating:bool=false)->vo
  draw_rect(artwork,frame,false,1.0)
  var body=Rect2(r.position.x+9,art.end.y+6,r.size.x-18,r.end.y-art.end.y-29)
  plate(body,Color("#171b26"),frame.darkened(.25))
- var desc=str(definition.get("d",""))
- if desc=="" and definition.has("effects"):
-  var fragments=[]
-  for fx in definition["effects"]:fragments.append(str(fx["key"])+" "+str(fx["value"]))
-  desc=" · ".join(fragments)
+ var desc=game.card_description(entry)
  var row=word_line(desc,body.size.x-9,11,4)
  for i in range(row.size()):
   label(str(row[i]),body.position+Vector2(6,14+i*15),11,WHITE)
