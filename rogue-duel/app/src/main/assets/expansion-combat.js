@@ -51,7 +51,7 @@ function ashHook(event,owner,target,ctx={}){
   }
  }finally{ash.triggering=false}
 }
-makeFighter=window.makeFighter=function(r){const f=ashExtra(ashOld.makeFighter(r));f.hero=r.hero;return f};
+makeFighter=window.makeFighter=function(r){const f=ashExtra(ashOld.makeFighter(r));f.hero=r.hero;f.exhaust=[];return f};
 startTurn=window.startTurn=function(f){
  ashExtra(f);
  const previous=f.rounds||0;
@@ -191,7 +191,8 @@ playSolo=window.playSolo=function(index){
  const c=G.combat;if(!c||!c.enemies)return;
  const p=c.player,e=c.enemies[c.target],k=p.hand[index];
  if(!k||art(k.id).c>p.energy)return;
- p.energy-=art(k.id).c;p.hand.splice(index,1);p.discard.push(k);
+ p.energy-=art(k.id).c;p.hand.splice(index,1);
+ if(art(k.id).t==="power"||art(k.id).t==="reaction")(p.exhaust||(p.exhaust=[])).push(k);else p.discard.push(k);
  logLine("Ты: "+apply(k,p,e));
  if(p.hp<=0){die();return}
  if(c.enemies.every(x=>x.hp<=0)){winFight();return}
