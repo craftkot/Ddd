@@ -44,3 +44,17 @@ header{border-color:#ae6c5573}
 .catalog-card .flex{align-items:flex-start}
 .filterbar .btn{flex:none;white-space:nowrap;font:11px system-ui}
 @media(min-width:600px){.catalog-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* PvP v0.3 — AV order, response windows and simultaneous fifth-action choices */
+.pvp-meter{margin:8px 0;padding:11px 13px;border-color:#9f7d54}
+.pvp-tempo{display:grid;grid-template-columns:1fr 1fr;gap:7px 9px;font:700 11px system-ui;color:#e9d4a8}
+.pvp-tempo span{border:1px solid #685d5b70;border-radius:9px;padding:7px 8px;background:#161d2c;color:#ecd4a8}
+.pvp-order{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:9px 0}
+.pvp-order .pill{color:#dcd3b6;border-color:#877461}
+.node[data-a="pvpPick"]{min-height:105px}
+.node[data-a="pvpPick"] .eyebrow{margin-bottom:9px;display:block}
+.node[data-a="pvpPick"]:active,.node[data-a="pvpCounter"]:active{transform:scale(.985)}
+.node[data-a="pvpCounter"]{min-height:110px}
+.node[data-a="pvpCounter"] strong{color:#b2d7f8}
+.btn[data-a="pvpCounter"]{background:#303f50;border-color:#8195ad}
+.playcard:disabled{opacity:.52}
