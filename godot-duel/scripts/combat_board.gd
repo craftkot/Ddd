@@ -1,5 +1,6 @@
 extends Control
-## Original tactile battle HUD for portrait mobile: no WebView, no external textures.
+## Native touch battle with original generated 2D painting atlases.
+const ART = preload("res://scripts/painted_assets.gd")
 signal transition_requested
 var game: RefCounted
 var chosen: int = -1
@@ -74,18 +75,16 @@ func _draw() -> void:
  potion_areas.clear()
  var dusk=Color("#101522")
  draw_rect(Rect2(Vector2.ZERO,size),dusk)
- # Distinctly original dark-fantasy arena: vertical architectural silhouettes.
- for i in range(10):
-  var t=float(i)/10.0
-  draw_rect(Rect2(0,h*.08+i*h*.048,w,h*.053),Color("#1e2434").lerp(Color("#46363b"),t),true)
- var moon=Vector2(w*.77,h*.19)
- draw_circle(moon,minf(w*.13,75.0),Color("#a35e5c",.70))
- draw_arc(moon,minf(w*.13,75.0),0.0,TAU,38,GOLD.darkened(.6),1.5)
- for i in range(4):
-  var x=w*float(i)/3.0-15
-  draw_rect(Rect2(x,h*.23,21,h*.31),Color("#161924",.86),true)
-  draw_colored_polygon(PackedVector2Array([Vector2(x-15,h*.23),Vector2(x+11,h*.15),Vector2(x+36,h*.23)]),Color("#161924",.86))
- draw_rect(Rect2(0,h*.49,w,h*.075),Color("#27232c",.83))
+ # Moonlit ruined cathedral: original generated painting embedded in Godot APK.
+ var scene_rect=Rect2(0,h*.06,w,h*.53)
+ draw_texture_rect_region(ART.ATLAS,scene_rect,ART.arena_region(),Color(1,1,1,.92))
+ draw_rect(Rect2(0,h*.46,w,h*.14),Color("#101420",.42))
+ draw_line(Vector2(0,h*.52),Vector2(w,h*.52),Color("#6f483f",.72),2.0)
+ # Film-grain scratches and scrolling embers; texture itself remains still.
+ for i in range(9):
+  var fx=fmod(float(i*97)+tick*float((i%3)+1)*3.6,w)
+  var fy=h*.10+fmod(float(i*59)-tick*11.0,h*.44)
+  draw_circle(Vector2(fx,fy),1.2+float(i%2),Color("#e7a477",.29))
  # Status and resources.
  plate(Rect2(9,9,w-18,69),Color("#202432",.98),Color("#96775f"))
  label("ЭТАЖ %d  /  ХОД %d" % [game.floor+1,game.fight["round"]],Vector2(22,32),15,GOLD)
@@ -179,21 +178,14 @@ func _draw() -> void:
   label("−"+str(last_damage),Vector2(w*.58,h*.18-hit_flash*22),29,RED)
 
 func _draw_figure(center:Vector2,kind:String,scale:float)->void:
- var cape=Color("#5d748d")
- if kind=="oracle" or kind=="mage" or kind=="cultist":cape=Color("#805997")
- if kind=="hunter" or kind=="hound" or kind=="slime":cape=Color("#567c63")
- if kind=="boss" or kind=="bandit":cape=Color("#9a555b")
- var sway=sin(tick*1.5+center.x*.015)*2.0
- var p=center+Vector2(0,sway)
- draw_circle(p+Vector2(0,41*scale),50*scale,Color(0,0,0,.13))
- draw_colored_polygon(PackedVector2Array([p+Vector2(-29,-25)*scale,p+Vector2(28,-28)*scale,p+Vector2(49,51)*scale,p+Vector2(-49,51)*scale]),cape.darkened(.5))
- draw_colored_polygon(PackedVector2Array([p+Vector2(-24,-30)*scale,p+Vector2(23,-29)*scale,p+Vector2(29,42)*scale,p+Vector2(-26,42)*scale]),cape)
- draw_circle(p+Vector2(0,-45)*scale,22*scale,Color("#c9a389"))
- draw_colored_polygon(PackedVector2Array([p+Vector2(-29,-47)*scale,p+Vector2(-22,-73)*scale,p+Vector2(3,-84)*scale,p+Vector2(25,-67)*scale,p+Vector2(28,-41)*scale,p+Vector2(7,-52)*scale,p+Vector2(-9,-49)*scale]),Color("#101620"))
- draw_line(p+Vector2(-13,-42)*scale,p+Vector2(-5,-42)*scale,GOLD,3)
- draw_line(p+Vector2(6,-42)*scale,p+Vector2(14,-42)*scale,GOLD,3)
- draw_line(p+Vector2(31,-20)*scale,p+Vector2(51,-83)*scale,GOLD,5)
- draw_line(p+Vector2(25,-18)*scale,p+Vector2(53,-18)*scale,GOLD,4)
+ # Nine hand-painted character poses are cropped from the generated sprite sheet.
+ var sway=sin(tick*1.5+center.x*.015)*2.5
+ var src=ART.character_region(kind)
+ var dest=Rect2(center.x-63*scale,center.y-109*scale+sway,126*scale,200*scale)
+ draw_circle(center+Vector2(0,42*scale),40*scale,Color("#17111b",.28))
+ draw_texture_rect_region(ART.ATLAS,dest,src,Color.WHITE)
+ if kind=="boss":
+  draw_arc(center+Vector2(0,-53*scale),40*scale,0,TAU,40,Color("#d58963",.73),2.0)
 
 func _card(entry:Dictionary,r:Rect2,selected:bool=false,floating:bool=false)->void:
  var definition:Dictionary=game.card(str(entry["id"]))
@@ -214,26 +206,10 @@ func _card(entry:Dictionary,r:Rect2,selected:bool=false,floating:bool=false)->vo
   label(str(cap[i]),r.position+Vector2(46,18+i*19),15,WHITE)
  var art=Rect2(r.position+Vector2(9,58),Vector2(r.size.x-18,r.size.y*.36))
  plate(art,Color("#1d2331"),frame.darkened(.35))
- # Five original glyph motifs seeded by the card title, not copied illustrations.
- var motif=int(abs(hash(str(entry["id"]))))%5
- var c=art.get_center()
- draw_circle(c,art.size.y*.31,primary.darkened(.45))
- draw_arc(c,art.size.y*.32,0,TAU,40,frame,2)
- match motif:
-  0:
-   draw_line(c+Vector2(-24,25),c+Vector2(25,-27),GOLD,7)
-   draw_line(c+Vector2(4,-29),c+Vector2(29,-18),WHITE,3)
-  1:
-   draw_colored_polygon(PackedVector2Array([c+Vector2(0,-31),c+Vector2(24,-7),c+Vector2(12,23),c+Vector2(-17,24),c+Vector2(-25,-9)]),frame)
-  2:
-   for j in range(3):
-    draw_arc(c,12+j*11,PI*.7,PI*2.2,28,primary.lightened(.25),3)
-  3:
-   draw_circle(c,15,GOLD)
-   draw_line(c+Vector2(-33,0),c+Vector2(33,0),frame,4)
-   draw_line(c+Vector2(0,-33),c+Vector2(0,33),frame,4)
-  _:
-   draw_colored_polygon(PackedVector2Array([c+Vector2(-23,-17),c+Vector2(0,-29),c+Vector2(23,-17),c+Vector2(18,15),c+Vector2(0,30),c+Vector2(-19,15)]),GOLD)
+ # Draw actual painted card artwork, not a procedural placeholder glyph.
+ var card_index=ART.card_index(str(entry["id"]),str(definition.get("school","")),kind)
+ draw_texture_rect_region(ART.ATLAS,art.grow(-2),ART.card_region(card_index),Color.WHITE)
+ draw_rect(art.grow(-2),Color("#efc78d",.45),false,1.0)
  var body=Rect2(r.position.x+9,art.end.y+6,r.size.x-18,r.end.y-art.end.y-29)
  plate(body,Color("#171b26"),frame.darkened(.25))
  var desc=str(definition.get("d",""))
