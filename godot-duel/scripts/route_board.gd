@@ -60,13 +60,16 @@ func _build_nodes()->void:
    style.set_corner_radius_all(15)
    button.add_theme_stylebox_override("normal",style)
    button.add_theme_stylebox_override("disabled",style)
-   if available:button.pressed.connect(func():node_chosen.emit(index))
+   if available:button.pressed.connect(_emit_choice.bind(index))
    add_child(button)
    node_buttons.append(button)
  _reposition()
 
+func _emit_choice(index:int)->void:
+ node_chosen.emit(index)
+
 func _reposition()->void:
- if state==null:return
+ if state==null or node_buttons.is_empty():return
  var idx=0
  for row in range(state.map_rows.size()):
   for item in state.map_rows[row]:
