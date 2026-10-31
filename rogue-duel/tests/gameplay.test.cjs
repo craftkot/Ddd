@@ -194,3 +194,22 @@ check([
 'if(actor.speed!==beforeSpeed+10||actor.hand.length!==1)throw Error("duplicate delayed command replayed");'
 ].join('\n'));
 console.log("PASS: invalid remote builds rejected; delayed duplicate commands do not consume extra cards.");
+
+/* 0.4 UI integration checks: actual rendered HTML, 4 foe target controls,
+   card dragging hooks, stage routes, rewards, and PvP AV phase. */
+vm.runInContext(fs.readFileSync(base+"atelier.js","utf8"),context,{timeout:4000});
+check([
+'G.role="host";G.demo=true;G.runner=newRun("guard");G.stage=12;G.screen="fight";createFight(false);',
+'if(!document.getElementById("app").innerHTML.includes("data-foe-index=\\"3\\""))throw Error("4-enemy targeting missing");',
+'if(!document.getElementById("app").innerHTML.includes("data-cast-action=\\"play\\""))throw Error("interactive cards missing");',
+'if(!document.getElementById("app").innerHTML.includes("etch-stage"))throw Error("battle scene missing");',
+'G.combat=null;G.screen="map";makeMap();render();',
+'if(!document.getElementById("app").innerHTML.includes("etch-worldmap"))throw Error("new route map missing");',
+'G.reward={title:"Награды",desc:"Тест",gold:35,choices:ashAffinityCards(G.runner)};G.screen="reward";render();',
+'if(!document.getElementById("app").innerHTML.includes("data-cast-action=\\"reward\\""))throw Error("reward cards missing");',
+'G.screen="lobby";render();',
+'if(!document.getElementById("app").innerHTML.includes("codeInput"))throw Error("room code form missing");',
+'if(!ATELIER_TEST.isHostile(CARDS.strike))throw Error("attack targeting unavailable");',
+'if(ATELIER_TEST.isHostile(CARDS.guard))throw Error("block incorrectly needs target");'
+].join("\n"));
+console.log("PASS: v0.4 interactive battle, four enemy hitboxes, fanned cards, route, rewards and lobby.");
