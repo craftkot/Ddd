@@ -149,3 +149,35 @@ header .net{font-size:10px}
 }
 .etch-card.held{animation:none!important;clip-path:none!important}
 @media(prefers-reduced-motion:reduce){.etch-hand .etch-card{animation:none!important}}
+
+/* v0.5: connected branching map, with a dedicated scrollable parchment. */
+.etch-next-panel{max-width:670px;margin:12px auto;padding:13px 15px;border:1px solid #ad875d;border-radius:9px;background:linear-gradient(145deg,#34313b,#171e29);box-shadow:0 7px 17px #0007}
+.etch-next-panel .eyebrow{margin:0 0 5px;color:#f0c893}
+.etch-next-panel .small{margin-bottom:10px}
+.etch-next-choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:7px}
+.etch-next-button{min-height:51px;font-size:13px;border-color:#e7c18b;background:linear-gradient(180deg,#815b3a,#54342d 55%,#2d242a);box-shadow:0 0 10px #d39a5442}
+.etch-next-button:active{background:#9c6640}
+.etch-tree-viewport{position:relative;width:100%;max-width:670px;height:clamp(360px,57vh,610px);overflow-y:auto;overflow-x:hidden;margin:12px auto;border:3px ridge #866a52;border-radius:12px;overscroll-behavior:contain;scrollbar-color:#916f56 #1b202c}
+.etch-worldmap.etch-tree-map{width:100%;max-width:none;min-height:0;margin:0;padding:0;border:0;box-shadow:inset 0 0 75px #090b16ad;border-radius:0;background:radial-gradient(ellipse at 50% 40%,#43394782,transparent 70%),repeating-linear-gradient(102deg,#242832 0 37px,#27232d 38px 41px,#20232e 45px 87px)}
+.etch-worldmap.etch-tree-map:before{z-index:0;pointer-events:none;opacity:.5}
+.etch-tree-links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+.etch-tree-links path{fill:none;stroke-width:6;stroke-linecap:round}
+.etch-tree-links path.untravelled{stroke:#777a8078;stroke-dasharray:9 10;stroke-width:4}
+.etch-tree-links path.travelled{stroke:#80bfa9;stroke-width:8;filter:drop-shadow(0 0 4px #70ba8b)}
+.etch-tree-links path.reachable{stroke:#f1c484;stroke-width:7;filter:drop-shadow(0 0 5px #c58d5f)}
+.etch-route-node{position:absolute;z-index:3;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;justify-content:center;width:clamp(62px,14vw,86px);min-height:67px;padding:6px 3px;border-radius:12px;border:2px solid #68727b;background:radial-gradient(ellipse at 35% 23%,#3e4650,#1a1e2c);color:#d8c0a0;touch-action:manipulation;box-shadow:inset 0 1px 1px #bfb8af30,0 4px 9px #0009;user-select:none}
+.etch-route-node .route-symbol{font-size:26px;line-height:1.05}
+.etch-route-node .route-kind{font:700 9px/1.2 system-ui;color:inherit;margin-top:4px;text-align:center}
+.etch-route-node.untravelled{opacity:.61;filter:grayscale(1)}
+.etch-route-node.travelled{border-color:#87c8aa;background:radial-gradient(#365c4b,#20382f);color:#dcf4dd;opacity:.92}
+.etch-route-node.reachable{background:radial-gradient(#a2683f,#6b3d34 63%,#33232c);border-color:#ffcd8a;color:#fff1c9;box-shadow:0 0 21px #e7a96a9c,inset 0 0 10px #cf855b70;animation:etch-tree-glow 1.7s ease-in-out infinite}
+.etch-route-node.reachable:active{transform:translate(-50%,-50%) scale(.94);filter:brightness(1.35)}
+@keyframes etch-tree-glow{0%,100%{box-shadow:0 0 15px #d5975b8c}50%{box-shadow:0 0 29px #e7b97fc4}}
+@media(max-width:520px){
+ .etch-tree-viewport{height:49vh;min-height:340px}
+ .etch-next-choices{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .etch-next-button{font-size:12px;padding:8px 5px}
+ .etch-route-node{width:62px;min-height:62px}
+ .etch-route-node .route-symbol{font-size:21px}
+}
+@media(prefers-reduced-motion:reduce){.etch-route-node.reachable{animation:none}}
