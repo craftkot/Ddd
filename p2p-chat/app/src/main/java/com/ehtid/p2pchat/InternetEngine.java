@@ -63,6 +63,7 @@ public final class InternetEngine {
     private final Map<String, JSONObject> waitingAcks = new ConcurrentHashMap<>();
     private final Map<String, Fragments> pieces = new HashMap<>();
     private final List<IceCandidate> queuedIce = new ArrayList<>();
+    private final Map<String, List<IceCandidate>> earlyIce = new HashMap<>();
     private volatile boolean stopped, relayOnline, hostMode, guestMode;
     private volatile String remoteId, lastRelayId, lastHelloFrom;
     private volatile long lastSyncAt;
@@ -281,7 +282,7 @@ public final class InternetEngine {
                         setAnswer(packet.optString("sdp"));
                     break;
                 case "ice":
-                    if (from.equals(remoteId)) addIce(packet);
+                    addIce(packet, from);
                     break;
                 case "msg":
                     append(packet.optJSONObject("m"));
@@ -437,6 +438,10 @@ public final class InternetEngine {
         if (rtc != null && from.equals(remoteId)) return;
         resetRtc();
         remoteId = from;
+        synchronized (queuedIce) {
+            List<IceCandidate> early = earlyIce.remove(from);
+            if (early != null) queuedIce.addAll(early);
+        }
         PeerConnection pc = newPeer();
         if (pc == null) return;
         rtc = pc;
@@ -492,6 +497,12 @@ public final class InternetEngine {
                 if (state == PeerConnection.IceConnectionState.FAILED ||
                         state == PeerConnection.IceConnectionState.DISCONNECTED) {
                     if (!direct()) status("Прямой канал недоступен • работает шифрованное реле");
+                    if (state == PeerConnection.IceConnectionState.FAILED) {
+                        // Permit the host to retry after the next guest presence packet.
+                        clock.schedule(() -> {
+                            if (!stopped && !direct()) resetRtc();
+                        }, 2, TimeUnit.SECONDS);
+                    }
                 }
             }
             @Override public void onIceConnectionReceivingChange(boolean state) {}
@@ -516,15 +527,27 @@ public final class InternetEngine {
         return result;
     }
 
-    private void addIce(JSONObject packet) {
+    private void addIce(JSONObject packet, String from) {
         IceCandidate candidate = new IceCandidate(packet.optString("sdpMid"),
                 packet.optInt("index"), packet.optString("candidate"));
         if (candidate.sdp.isEmpty()) return;
         synchronized (queuedIce) {
             PeerConnection peer = rtc;
-            if (peer == null) return;
+            if (peer == null || !from.equals(remoteId)) {
+                // ICE candidates may arrive before SDP due to asynchronous HTTP signaling.
+                if (!hostMode) {
+                    List<IceCandidate> batch = earlyIce.get(from);
+                    if (batch == null) {
+                        batch = new ArrayList<>();
+                        if (earlyIce.size() > 8) earlyIce.clear();
+                        earlyIce.put(from, batch);
+                    }
+                    if (batch.size() < 64) batch.add(candidate);
+                }
+                return;
+            }
             if (remoteDescription) peer.addIceCandidate(candidate);
-            else queuedIce.add(candidate);
+            else if (queuedIce.size() < 64) queuedIce.add(candidate);
         }
     }
 
