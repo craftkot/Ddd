@@ -74,6 +74,7 @@ func framed(vertical:bool=true,shade:Color=PANEL) -> Container:
  return c
 
 func render_ui() -> void:
+ game.save_game()
  selected_card=-1
  enemy_controls.clear()
  for child in get_children():
@@ -134,10 +135,15 @@ func show_lobby() -> void:
  intro.add_child(make_text("15 этажей • разветвлённая карта • 161 карта • 136 реликвий",19,GOLD))
  intro.add_child(make_text("Три класса, комбинации эффектов, отряды врагов, магазины и выбор наград. Касайся карт и выбирай цели.",16))
  intro.add_child(make_button("Начать одиночное приключение",_open_class))
+ if game.has_save():
+  intro.add_child(make_button("▶ Продолжить сохранённый забег",_resume_run,true))
 
 func _open_class()->void:
  game.screen="class"
  render_ui()
+
+func _resume_run()->void:
+ if game.load_game():render_ui()
  var notice=framed()
  notice.add_child(make_text("Переход на новый движок",20,GOLD))
  notice.add_child(make_text("Это первый нативный порт. Финальный PvP по интернету и AV-контрприёмы пока остаются в старой Android-версии. В этой APK проверяется новый бой и интерфейс.",15,QUIET))
@@ -389,4 +395,6 @@ func show_lost()->void:
  page.add_child(make_text("Герой не добрался до конца пути.",20))
  page.add_child(make_button("Попробовать снова",_restart))
 func _restart()->void:
- game.screen="lobby";render_ui()
+ game.delete_save()
+ game.screen="lobby"
+ render_ui()
