@@ -49,7 +49,7 @@ jobs:
           Path('/tmp/ashes-duel-syntax.js').write_text(js[0])
           PY
           node --check /tmp/ashes-duel-syntax.js
-          for file in app/src/main/assets/expansion-{data,relics,combat,visual}.js; do node --check "$file"; done
+          for file in app/src/main/assets/expansion-{data,relics,combat,visual}.js app/src/main/assets/pvp-balance.js; do node --check "$file"; done
       - name: Test deck engine and relic interactions
         run: node tests/gameplay.test.cjs
       - name: Build installable debug APK
@@ -59,7 +59,7 @@ jobs:
           test -s app/build/outputs/apk/debug/app-debug.apk
           unzip -tq app/build/outputs/apk/debug/app-debug.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify app/build/outputs/apk/debug/app-debug.apk
-          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/AshesDuel-v0.2-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/AshesDuel-v0.3-debug.apk
       - uses: actions/upload-artifact@v4
         with:
           name: Pepel-i-Karty-Android-APK
@@ -72,5 +72,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete ashes-duel-v0.2.0 --yes --cleanup-tag || true
-          gh release create ashes-duel-v0.2.0 app/build/outputs/apk/debug/AshesDuel-v0.2-debug.apk#AshesDuel-v0.2-debug.apk --target "$GITHUB_SHA" --title "Пепел и карты v0.2 — Android" --notes "Открытая тестовая версия карточного рогалика на двух игроков. APK подписан отладочным ключом. Интернет-PvP не проверен на реальных телефонах."
+          gh release delete ashes-duel-v0.3.0 --yes --cleanup-tag || true
+          gh release create ashes-duel-v0.2.0 app/build/outputs/apk/debug/AshesDuel-v0.2-debug.apk#AshesDuel-v0.2-debug.apk --target "$GITHUB_SHA" --title "Пепел и карты v0.3 — Android" --notes "Открытая тестовая версия карточного рогалика на двух игроков. APK подписан отладочным ключом. Интернет-PvP не проверен на реальных телефонах."
