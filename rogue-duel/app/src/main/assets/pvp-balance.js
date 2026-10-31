@@ -318,8 +318,16 @@ function pvAction(cmd,by){
  }else return;
  pvCheckDeaths(d);d.revision++;broadcastDuel()
 }
+function pvValidBuild(b){
+ return !!b&&typeof b.name==="string"&&b.name.length<100&&
+ typeof b.maxHp==="number"&&b.maxHp>=30&&b.maxHp<=240&&
+ Array.isArray(b.deck)&&b.deck.length>=6&&b.deck.length<=85&&
+ b.deck.every(c=>c&&typeof c.id==="string"&&CARDS[c.id]&&Number.isInteger(c.up)&&c.up>=0&&c.up<=5)&&
+ Array.isArray(b.relics)&&b.relics.length<=35&&b.relics.every(id=>RELICS.some(x=>x.id===id))
+}
 function pvStartDuel(){
  if(G.role!=="host"||!G.done||!G.other||G.duel)return;
+ if(!pvValidBuild(G.other)){statusMessageNow("Соперник прислал некорректную колоду.");return}
  const own=runnerSummary();
  const fighters={host:pvMakeFighter(own),guest:pvMakeFighter(G.other)};
  const first=Math.floor(Math.random()*2)?"host":"guest";
