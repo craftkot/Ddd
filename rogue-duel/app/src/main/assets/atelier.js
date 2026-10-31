@@ -72,7 +72,7 @@ function cardVisual(c){
  return '<svg viewBox="0 0 150 115" preserveAspectRatio="xMidYMid slice" aria-hidden="true">'+base+rays+forms[choice]+'</svg>'
 }
 function playcard(c,act,i,disabled=false){
- const a=art(c.id),t=toneOf(a),rarity=(a.c>=3||a.t==="power")?"rare":a.c===2?"uncommon":"common";
+ const a=art(c.id),t=toneOf(a),rarity=a.rarity||"common";
  return '<button type="button" style="--deal:'+i+'" class="etch-card '+t+' '+rarity+'" data-cast-action="'+act+'" data-cast-index="'+i+'" aria-label="'+esc(a.n)+'"'+(disabled?" disabled":"")+'><span class="card-etched"></span><span class="cost">'+a.c+'</span><div class="card-title">'+esc(a.n)+upgraded(c)+'</div><div class="card-art">'+cardVisual(c)+'</div><div class="card-desc">'+esc(desc(c))+'</div><div class="card-type">'+longType(a.t)+'</div></button>'
 }
 function eventHead(title,subtitle){return '<div class="etch-head"><p class="eyebrow">✦ ПЕПЕЛ И КАРТЫ ✦</p><h2>'+esc(title)+'</h2><p class="sub">'+esc(subtitle||"")+'</p></div>'}
@@ -108,7 +108,7 @@ function hand(f,action,disabled){
 function fightView(){
  const c=G.combat,p=c.player;
  return hud(p,'<span class="coin">◈ '+G.runner.gold+'</span>')+
- stage({...p,hero:G.runner.hero},c.enemies,c.target,true)+
+ stage({...p,hero:G.runner.hero},c.enemies,c.target,true)+ASH_RUN.potionBar()+
  '<div class="etch-hint">Перетащи атакующую карту на врага или нажми карту и выбери цель.</div>'+
  hand(p,"play",false)+
  '<div class="etch-actions"><button class="etch-btn cta" data-a="endTurn">Завершить ход</button></div>'+
@@ -174,7 +174,7 @@ function mapView(){
  }).join("")).join("");
  const choices=tree.floors[floor].filter(node=>active.includes(node.index));
  return '<div class="etch-map-caption"><div class="eyebrow">КАРТА ПУТИ · '+(G.role==="guest"?"ГОСТЬ":G.demo?"ОДИНОЧНАЯ ИГРА":"ХОЗЯИН")+'</div><div class="etch-title">Этаж '+(floor+1)+' / '+n+'</div>'+
- '<p class="small">❤ '+r.hp+'/'+r.maxHp+' · ◈ '+r.gold+' · '+r.deck.length+' карт · '+r.relics.length+' реликвий</p></div>'+
+ '<p class="small">❤ '+r.hp+'/'+r.maxHp+' · ◈ '+r.gold+' · '+r.deck.length+' карт · '+r.relics.length+' реликвий · 🧪 '+(r.potions||[]).length+'/3</p></div>'+
  '<div class="etch-next-panel"><div class="eyebrow">ДОСТУПНЫЕ ПУТИ</div><p class="small">Можно выбрать только узел, соединённый с твоим последним шагом. У каждого игрока своё дерево.</p>'+
  '<div class="etch-next-choices">'+choices.map(node=>'<button type="button" class="etch-btn etch-next-button" data-a="node" data-x="'+node.index+'">'+emblem(node.type)+' '+esc(LABEL[node.type][1])+'</button>').join("")+'</div>'+
  (G.lastRouteWarning?'<p class="dangertext">'+esc(G.lastRouteWarning)+'</p>':'')+'</div>'+
@@ -189,9 +189,9 @@ function rewardView(){
 function shopView(){
  let s=G.shop;
  return eventHead("Лавка под пеплом","Торговец принимает золото. Купленные карты остаются в колоде.")+
- '<div class="etch-catalog">'+s.cards.map((c,i)=>c?'<div>'+playcard(c,"buyCard",i,G.runner.gold<55)+'<div class="center money">◈ 55</div></div>':'<div class="etch-offer">Продано</div>').join("")+'</div>'+
+ '<div class="etch-catalog">'+s.cards.map((c,i)=>c?'<div>'+playcard(c,"buyCard",i,G.runner.gold<(s.prices?.[i]??55))+'<div class="center money">'+ASH_RUN.RARITY_LABEL[art(c.id).rarity]+' · ◈ '+(s.prices?.[i]??55)+'</div></div>':'<div class="etch-offer">Продано</div>').join("")+'</div>'+
  '<div class="etch-catalog">'+s.relics.map(id=>{let r=RELICS.find(x=>x.id===id);return'<div class="etch-offer"><span class="offer-art">'+r.e+'</span><strong>'+esc(r.n)+'</strong><p>'+esc(r.d)+'</p><button data-a="buyRelic" data-x="'+id+'" class="etch-btn" '+(G.runner.gold<115?'disabled':'')+'>◈ 115 · Купить</button></div>'}).join("")+'</div>'+
- '<div class="etch-actions"><button data-a="buyHeal" class="etch-btn cool" '+(G.runner.gold<40?'disabled':'')+'>Лечение +20 · ◈ 40</button><button data-a="buyRemove" class="etch-btn" '+(G.runner.gold<75?'disabled':'')+'>Удалить карту · ◈ 75</button></div>'+
+ '<div class="etch-catalog">'+ASH_RUN.shopPotion()+'</div>'+ '<div class="etch-actions"><button data-a="buyHeal" class="etch-btn cool" '+(G.runner.gold<40?'disabled':'')+'>Лечение +20 · ◈ 40</button><button data-a="buyRemove" class="etch-btn" '+(G.runner.gold<75?'disabled':'')+'>Удалить карту · ◈ 75</button></div>'+
  '<div class="etch-actions"><button data-a="next" class="etch-btn cta">Покинуть магазин</button></div>'
 }
 function eventView(){
