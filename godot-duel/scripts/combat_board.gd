@@ -77,7 +77,7 @@ func _draw() -> void:
  draw_rect(Rect2(Vector2.ZERO,size),dusk)
  # Moonlit ruined cathedral: original generated painting embedded in Godot APK.
  var scene_rect=Rect2(0,h*.06,w,h*.53)
- draw_texture_rect_region(ART.ATLAS,scene_rect,ART.arena_region(),Color(1,1,1,.92))
+ draw_texture_rect(ART.BACKGROUND,scene_rect,false,Color(1,1,1,.92))
  draw_rect(Rect2(0,h*.46,w,h*.14),Color("#101420",.42))
  draw_line(Vector2(0,h*.52),Vector2(w,h*.52),Color("#6f483f",.72),2.0)
  # Film-grain scratches and scrolling embers; texture itself remains still.
