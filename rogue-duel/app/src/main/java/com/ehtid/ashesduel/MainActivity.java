@@ -37,7 +37,7 @@ public class MainActivity extends Activity {
                 if ("game.ehtid".equals(u.getHost()) && "https".equals(u.getScheme())) {
                     String filename = u.getPath().replaceFirst("^/", "");
                     if (filename.isEmpty()) filename = "index.html";
-                    if (!filename.matches("index\\.html|expansion-data\\.js|expansion-relics\\.js|expansion-combat\\.js|expansion-visual\\.js|pvp-balance\\.js|atelier\\.js|atelier\\.css|expansion\\.css")) return null;
+                    if (!filename.matches("index\\.html|expansion-data\\.js|expansion-relics\\.js|expansion-combat\\.js|expansion-visual\\.js|pvp-balance\\.js|atelier\\.js|route-tree\\.js|atelier\\.css|expansion\\.css")) return null;
                     String mime = filename.endsWith(".js") ? "application/javascript" : filename.endsWith(".css") ? "text/css" : "text/html";
                     try {
                         return new WebResourceResponse(mime, "UTF-8", getAssets().open(filename));
