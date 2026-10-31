@@ -39,6 +39,7 @@ async function check(){
  assert(html.includes('data-map-stage="0"'),"first stage missing");
  let guestMap=run("G.map.map(x=>x.join(':')).join('|')");
  await run("dispatch('node','0')");
+ console.log("GUEST ROUTE DIAG",JSON.stringify(run("({role:G.role,stage:G.stage,screen:G.screen,warning:G.lastRouteWarning,position:G.routeTree.position,reachable:ASH_TREE.reachable(0),first:G.map[0],visited:G.routeTree.visited})")));
  assert.strictEqual(run("G.screen"),"fight","guest cannot enter combat");
  assert.strictEqual(run("G.routeTree.visited.length"),1);
  assert.strictEqual(run("G.routeTree.position.index"),0);
