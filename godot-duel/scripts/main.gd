@@ -436,6 +436,13 @@ func show_shop()->void:
   options.add_child(make_button("Удалить карту из колоды · 75 золота",_open_remove,true))
  page.add_child(make_button("Уйти с рынка",_leave_shop))
 
+func _buy_card(index:int)->void:
+ game.buy_card(index)
+ render_ui()
+func _buy_relic(index:int)->void:
+ game.buy_relic(index)
+ render_ui()
+
 func _buy_potion()->void:
  game.buy_potion()
  render_ui()
