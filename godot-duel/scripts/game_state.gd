@@ -221,7 +221,7 @@ func start_fight(elite: bool) -> void:
  fight = {"enemies":enemies,"elite":elite,"energy":3,"block":0,"str":0,"poison":0,"bleed":0,"burn":0,"weak":0,
  "vuln":0,"mark":0,"ward":0,"thorns":0,"regen":0,"speed":100,"focus":2,
  "library":deck.duplicate(true),"discard":[],"exhaust":[],"hand":[],"round":0,
- "target":0,"limit":0,"next_av":0,"combo":0,"combo_used":false
+ "target":0,"limit":0,"next_av":0,"combo":0,"combo_used":false}
  fight["library"].shuffle()
  for id in relics:
   var r = relic(str(id))
