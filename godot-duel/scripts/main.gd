@@ -365,7 +365,7 @@ func build_card(entry:Dictionary,index:int,mode:String)->PanelContainer:
  rune.mode=kind
  art.add_child(rune)
  stack.add_child(art)
- var description=str(c.get("d",""))
+ var description=game.card_description(entry)
  if description.is_empty() and c.has("effects"):
   var elements=[]
   for fx in c["effects"]:
