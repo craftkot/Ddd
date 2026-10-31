@@ -46,6 +46,22 @@ func _initialize() -> void:
  g.position=-1
  if not g.reachable().has(0):_fail("new fork");return
  g.new_run("guard")
+ g.screen="rest"
+ g.rest(false)
+ if g.screen!="upgrade":_fail("upgrade choice not offered");return
+ if not g.upgrade_card(0):_fail("selected upgrade not applied");return
+ if int(g.deck[0]["up"])<1 or g.floor!=1:_fail("campfire upgrade failed");return
+ g.screen="shop"
+ g.gold=700
+ g.setup_shop()
+ var before_potions=g.potions.size()
+ if not g.buy_potion():_fail("potion purchase");return
+ if g.potions.size()!=before_potions+1:_fail("potion inventory");return
+ g.screen="remove"
+ var before_deck=g.deck.size()
+ if not g.remove_card(1):_fail("card removal");return
+ if g.deck.size()!=before_deck-1 or g.gold>=700:_fail("shop removal economics");return
+ g.new_run("guard")
  g.hp=42
  if not g.save_game():_fail("Godot save path");return
  g.hp=3
