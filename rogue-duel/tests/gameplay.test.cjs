@@ -133,7 +133,7 @@ check([
 ].join('\n'));
 console.log("PASS: AV speed, role-independent initiative, counter windows, action-5 simultaneous gambit, one-shot protection.");
 
-/* Stress test 270 bot-vs-bot duels (all 9 class matchups, varying draft archetypes).
+/* Stress test 810 bot-vs-bot duels (all 9 class matchups, varying draft archetypes).
    This is a stability / first-mover smoke test, not proof of competitive parity. */
 const simulated=check([
 'var reports={host:0,guest:0,draw:0,unresolved:0,firstWins:0,firstTotal:0,actions:[],matrix:{}};',
@@ -146,7 +146,7 @@ const simulated=check([
 ' return r;',
 '}',
 'for(const c1 of ["guard","oracle","hunter"])for(const c2 of ["guard","oracle","hunter"]){',
-' for(let game=0;game<30;game++){',
+' for(let game=0;game<90;game++){',
 '  G.role="host";G.done=true;G.otherDead=false;G.runner=drafted(c1,choose(archetypes));G.other=drafted(c2,choose(archetypes));G.duel=null;',
 '  pvStartDuel();const d=G.duel;const first=d.turn;let count=0;let plays=0;',
 '  while(!d.winner&&count++<1000){',
@@ -177,5 +177,5 @@ const simulated=check([
 'reports'
 ].join('\n'));
 console.log("PvP automated combat matrix:",JSON.stringify(simulated));
-assert.strictEqual(simulated.unresolved,0,"PvP must never softlock in 270 consecutive simulations");
+assert.strictEqual(simulated.unresolved,0,"PvP must never softlock in 810 consecutive simulations");
 assert(simulated.avgActions>3&&simulated.avgActions<65,"duel duration must be finite");
