@@ -179,3 +179,18 @@ const simulated=check([
 console.log("PvP automated combat matrix:",JSON.stringify(simulated));
 assert.strictEqual(simulated.unresolved,0,"PvP must never softlock in 810 consecutive simulations");
 assert(simulated.avgActions>3&&simulated.avgActions<65,"duel duration must be finite");
+
+check([
+'G.role="host";G.done=true;G.runner=newRun("guard");G.other=newRun("oracle");G.duel=null;',
+'G.other.deck[0]={id:"madeup_untrusted_card",up:0};',
+'pvStartDuel();if(G.duel!==null)throw Error("invalid opponent deck was accepted");',
+'G.other=newRun("oracle");pvStartDuel();if(!G.duel)throw Error("valid opponent deck was rejected");',
+'var dd=G.duel,side=dd.turn,actor=dd.fighters[side];',
+'actor.hand=[inst("pvp003"),inst("pvp003")];actor.energy=12;',
+'var rev=dd.revision,beforeSpeed=actor.speed;',
+'pvAction({action:"play",index:0,revision:rev},side);',
+'if(dd.revision!==rev+1||actor.speed!==beforeSpeed+10)throw Error("first command was not accepted");',
+'pvAction({action:"play",index:0,revision:rev},side);',
+'if(actor.speed!==beforeSpeed+10||actor.hand.length!==1)throw Error("duplicate delayed command replayed");'
+].join('\n'));
+console.log("PASS: invalid remote builds rejected; delayed duplicate commands do not consume extra cards.");
