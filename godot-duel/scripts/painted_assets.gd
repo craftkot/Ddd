@@ -3,6 +3,7 @@ extends RefCounted
 ## 3 heroes, 6 enemies, 12 card/relic illustrations, moonlit arena.
 ## Atlas size 200x558; coordinates are calculated from the packed source grid.
 const ATLAS: Texture2D = preload("res://assets/generated/ashes_painted_atlas.webp")
+const BACKGROUND: Texture2D = preload("res://assets/generated/ashes_bloodmoon_arena.webp")
 const SPRITE_SCALE = 200.0 / 510.0
 const BACKGROUND_SCALE = 200.0 / 340.0
 
