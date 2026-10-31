@@ -24,8 +24,12 @@ static func _line(img:Image,x0:int,y0:int,x1:int,y1:int,col:Color,thick:int=1)->
   _rect(img,x0,y0,thick,thick,col)
   if x0==x1 and y0==y1:break
   var next=2*err
-  if next>=dy:err+=dy;x0+=step_x
-  if next<=dx:err+=dx;y0+=step_y
+  if next>=dy:
+   err+=dy
+   x0+=step_x
+  if next<=dx:
+   err+=dx
+   y0+=step_y
 
 static func _texture(img:Image)->ImageTexture:
  return ImageTexture.create_from_image(img)
@@ -189,11 +193,12 @@ static func scene()->Texture2D:
  for y in range(128):
   for x in range(192):
    var noisy=posmod(x*73+y*37+(x*y)%19,29)
+   var base:Color
    if y<93:
-    var base=Color("#202a3a") if y<56 else Color("#303343")
+    base=Color("#202a3a") if y<56 else Color("#303343")
     if noisy<4:base=base.lightened(.09)
    else:
-    var base=Color("#3e3941") if noisy<14 else Color("#41333e")
+    base=Color("#3e3941") if noisy<14 else Color("#41333e")
    _dot(im,x,y,base)
  # Blood moon with hard edge and sparse 1px dithering.
  for y in range(12,57):
