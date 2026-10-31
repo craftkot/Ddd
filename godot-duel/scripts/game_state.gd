@@ -101,7 +101,8 @@ func build_map() -> void:
   var width = 3 if y==0 or y==count-1 else rng.randi_range(3,5)
   for x in range(width):
    var klass = str(roll(types))
-   if x < 2 and y < count:
+   if y == count-1:klass="elite"
+   elif x < 2 and y < count:
     klass = str(data["stages"][y][x])
    row.append({"type":klass,"x":(float(x+1)/float(width+1)),"floor":y,"index":x})
   map_rows.append(row)
@@ -183,11 +184,11 @@ func create_enemy(elite: bool) -> Dictionary:
  var def = ARCHETYPES[rng.randi_range(0,ARCHETYPES.size()-1)]
  var hp_max = 33 + floor*4
  if elite:
-  hp_max += 35
+  hp_max += 35 + (40 if floor>=14 else 0)
  return {"name":("Судья из пепла" if elite else def["name"]),"kind":("boss" if elite else def["kind"]),
  "moves":(["charge","sever","hex","rampage"] if elite else def["moves"]),
  "hp":hp_max,"max_hp":hp_max,"block":0,"str":(2 if elite else 0),
- "poison":0,"bleed":0,"burn":0,"weak":0,"vuln":0,"mark":0,"thorns":0,"intent":0,"stun":0}
+ "poison":0,"bleed":0,"burn":0,"weak":0,"vuln":0,"mark":0,"thorns":0,"intent":0,"stun":0,"phase2":false}
 
 func enemy_plan(enemy: Dictionary) -> Dictionary:
  var moves: Array = enemy["moves"]
@@ -220,7 +221,7 @@ func start_fight(elite: bool) -> void:
  fight = {"enemies":enemies,"elite":elite,"energy":3,"block":0,"str":0,"poison":0,"bleed":0,"burn":0,"weak":0,
  "vuln":0,"mark":0,"ward":0,"thorns":0,"regen":0,"speed":100,"focus":2,
  "library":deck.duplicate(true),"discard":[],"exhaust":[],"hand":[],"round":0,
- "target":0,"limit":0,"next_av":0}
+ "target":0,"limit":0,"next_av":0,"combo":0,"combo_used":false
  fight["library"].shuffle()
  for id in relics:
   var r = relic(str(id))
@@ -248,7 +249,9 @@ func draw_cards(n: int) -> void:
 
 func start_turn() -> void:
  fight["round"] += 1
- fight["block"] = 0 if int(fight["round"])>1 else int(fight["block"])
+ fight["combo"]=0
+ fight["combo_used"]=false
+ if int(fight["round"])>1 and int(fight.get("armorcarry",0))==0:fight["block"]=0
  fight["energy"] = 3 + (1 if int(fight["round"])==1 and relics.has("spark") else 0)
  if fight["regen"] > 0:
   hp = mini(max_hp,hp+int(fight["regen"]))
@@ -271,7 +274,7 @@ func _damage_enemy(target: int, points: int, piercing: bool=false) -> int:
  e["block"] -= armor
  d -= armor
  e["hp"] = maxi(0,int(e["hp"])-d)
- if e.get("thorns",0)>0 and d>0:hp -= int(e["thorns"])
+ if e.get("thorns",0)>0 and d>0:hp=maxi(0,hp-int(e["thorns"]))
  for id in relics:
   var r=relic(str(id))
   if r.get("event","")=="attack":relic_effect(r,target)
@@ -308,7 +311,7 @@ func effect(key:String, value:int, target:int, upgrade:int) -> void:
    for i in alive:fight["enemies"][i][field]+=v
   "block":fight["block"]+=v
   "heal":hp=mini(max_hp,hp+v)
-  "draw":draw_cards(v)
+  "draw":draw_cards(v+(1 if upgrade>0 else 0))
   "energy":fight["energy"]=mini(20,int(fight["energy"])+v)
   "str":fight["str"]+=v
   "weak","vuln","mark":e[key]+=v
@@ -390,6 +393,12 @@ func play_card(index:int,target:int) -> bool:
  else:
   fight["discard"].append(c)
  logs.append("%s разыграна" % cd["n"])
+ fight["combo"]=int(fight.get("combo",0))+1
+ if int(fight["combo"])>=3 and not bool(fight.get("combo_used",false)):
+  fight["combo_used"]=true
+  fight["energy"]=mini(20,int(fight["energy"])+1)
+  draw_cards(1)
+  logs.append("ЦЕПНАЯ РЕАКЦИЯ: +1 энергия, +1 карта")
  if fight["enemies"].all(func(enemy):return int(enemy["hp"])<=0):
   win_fight()
  elif hp<=0:screen="lost"
@@ -404,40 +413,88 @@ func _tick_status(x:Dictionary)->void:
 
 func end_turn() -> void:
  if screen!="fight":return
- var status={"hp":hp,"poison":fight["poison"],"burn":fight["burn"],"bleed":fight["bleed"]}
- _tick_status(status)
- hp=int(status["hp"])
- for k in ["poison","bleed","burn"]:fight[k]=int(status[k])
+ # Ward intercepts damage-over-time before HP; status stacks decay each round.
+ var damage=int(fight["poison"])+int(fight["bleed"])+2*int(fight["burn"])
+ var absorbed=mini(int(fight.get("ward",0)),damage)
+ fight["ward"]=int(fight.get("ward",0))-absorbed
+ hp=maxi(0,hp-damage+absorbed)
+ fight["poison"]=maxi(0,int(fight["poison"])-1)
+ fight["bleed"]=maxi(0,int(fight["bleed"])-2)
+ fight["burn"]=maxi(0,int(fight["burn"])-1)
  if hp<=0:screen="lost";return
  fight["discard"].append_array(fight["hand"])
  fight["hand"].clear()
  for e in fight["enemies"]:
-  if e["hp"]<=0:continue
-  var p=enemy_plan(e)
+  if int(e["hp"])<=0:continue
+  # Lethal DoTs prevent an enemy's attack instead of resolving afterward.
+  _tick_status(e)
+  if int(e["hp"])<=0:continue
+  var plan=enemy_plan(e)
   e["block"]=0
-  if e["stun"]>0:e["stun"]-=1
+  if int(e["stun"])>0:
+   e["stun"]-=1
+   logs.append(str(e["name"])+" оглушён")
   else:
-   if p.has("block"):e["block"]+=int(p["block"])
-   if p.has("strength"):e["str"]+=int(p["strength"])
+   if plan.has("block"):e["block"]+=int(plan["block"])
+   if plan.has("strength"):e["str"]+=int(plan["strength"])
    for key in ["poison","bleed","weak","vuln"]:
-    if p.has(key):fight[key]=int(fight.get(key,0))+int(p[key])
-   if p.has("heal"):e["hp"]=mini(int(e["max_hp"]),int(e["hp"])+int(p["heal"]))
-   for j in range(int(p.get("hits",1))):
-    var dmg=int(p.get("damage",0))
+    if plan.has(key):fight[key]=int(fight.get(key,0))+int(plan[key])
+   if plan.has("heal"):e["hp"]=mini(int(e["max_hp"]),int(e["hp"])+int(plan["heal"]))
+   for j in range(int(plan.get("hits",1))):
+    var dmg=int(plan.get("damage",0))
     if dmg>0 and hp>0:
+     # Weak and vulnerable affect raw attack; armor absorbs the final amount.
+     if int(e.get("weak",0))>0:dmg=int(floor(float(dmg)*.75))
+     if int(fight["vuln"])>0:dmg=int(ceil(float(dmg)*1.5))
+     if int(fight.get("dodge",0))>0:
+      fight["dodge"]-=1
+      dmg=0
+      logs.append("УКЛОНЕНИЕ")
      var blocked=mini(int(fight["block"]),dmg)
      fight["block"]-=blocked
      dmg-=blocked
-     if fight["vuln"]>0:dmg=int(ceil(dmg*1.5))
      hp=maxi(0,hp-dmg)
-     if dmg>0 and fight["thorns"]>0:e["hp"]=maxi(0,int(e["hp"])-int(fight["thorns"]))
+     if dmg>0 and int(fight["thorns"])>0:
+      e["hp"]=maxi(0,int(e["hp"])-int(fight["thorns"]))
+     if dmg>0:logs.append(str(e["name"])+": −"+str(dmg)+" HP")
   e["intent"]+=1
-  _tick_status(e)
+  e["weak"]=maxi(0,int(e["weak"])-1)
+  e["vuln"]=maxi(0,int(e["vuln"])-1)
   if hp<=0:screen="lost";return
  if fight["enemies"].all(func(enemy):return int(enemy["hp"])<=0):win_fight();return
  fight["weak"]=maxi(0,int(fight["weak"])-1)
  fight["vuln"]=maxi(0,int(fight["vuln"])-1)
  start_turn()
+
+func card_description(entry:Dictionary)->String:
+ var cd=card(str(entry.get("id","")))
+ if cd.is_empty():return ""
+ var upgrade=int(entry.get("up",0))
+ var d=str(cd.get("d",""))
+ var names={
+  "hit":"Урон","aoe":"Все враги","block":"Броня","poison":"Яд",
+  "burn":"Горение","bleed":"Кровь","aoepoison":"Яд всем",
+  "aoeburn":"Горение всем","aoebleed":"Кровь всем","heal":"Лечение",
+  "draw":"Добор","energy":"Энергия","str":"Сила","weak":"Слабость",
+  "vuln":"Уязвимость","multihit":"Удар ×3","pierce":"Игнор брони",
+  "regen":"Регенерация","thorns":"Шипы","speed":"Скорость","stun":"Оглушение",
+  "detonate":"Подрыв статусов","ward":"Барьер","purify":"Очищение",
+  "lifesteal":"Кража жизни","armorcarry":"Сохранять броню"
+ }
+ if cd.has("effects"):
+  var chunks=[]
+  for fx in cd["effects"]:
+   var key=str(fx.get("key",""))
+   var value=int(fx.get("value",0))
+   if upgrade>0 and key in ["hit","aoe","block","poison","burn","bleed","heal","multihit","pierce"]:value+=2
+   if upgrade>0 and key=="draw":value+=1
+   chunks.append(str(names.get(key,key))+" "+str(value))
+  return " · ".join(chunks)
+ if d.contains("{n}"):
+  var val=int(cd.get("v",0))
+  if upgrade>0:val+=3
+  return d.replace("{n}",str(val))
+ return d
 
 func relic_effect(r:Dictionary,target:int)->void:
  var key=str(r.get("power",""))
