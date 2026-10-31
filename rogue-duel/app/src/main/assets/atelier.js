@@ -73,7 +73,7 @@ function cardVisual(c){
 }
 function playcard(c,act,i,disabled=false){
  const a=art(c.id),t=toneOf(a),rarity=(a.c>=3||a.t==="power")?"rare":a.c===2?"uncommon":"common";
- return '<button type="button" class="etch-card '+t+' '+rarity+'" data-cast-action="'+act+'" data-cast-index="'+i+'" aria-label="'+esc(a.n)+'"'+(disabled?" disabled":"")+'><span class="card-etched"></span><span class="cost">'+a.c+'</span><div class="card-title">'+esc(a.n)+upgraded(c)+'</div><div class="card-art">'+cardVisual(c)+'</div><div class="card-desc">'+esc(desc(c))+'</div><div class="card-type">'+longType(a.t)+'</div></button>'
+ return '<button type="button" style="--deal:'+i+'" class="etch-card '+t+' '+rarity+'" data-cast-action="'+act+'" data-cast-index="'+i+'" aria-label="'+esc(a.n)+'"'+(disabled?" disabled":"")+'><span class="card-etched"></span><span class="cost">'+a.c+'</span><div class="card-title">'+esc(a.n)+upgraded(c)+'</div><div class="card-art">'+cardVisual(c)+'</div><div class="card-desc">'+esc(desc(c))+'</div><div class="card-type">'+longType(a.t)+'</div></button>'
 }
 function eventHead(title,subtitle){return '<div class="etch-head"><p class="eyebrow">✦ ПЕПЕЛ И КАРТЫ ✦</p><h2>'+esc(title)+'</h2><p class="sub">'+esc(subtitle||"")+'</p></div>'}
 function health(f){return '<span class="fig-hp">❤ '+trim(f.hp)+'/'+trim(f.maxHp)+'</span><span class="fig-track"><span style="width:'+pct(f.hp,f.maxHp)+'%"></span></span>'}
@@ -125,7 +125,7 @@ function duelView(){
  if(!m||!foe)return'<div class="etch-panel">Синхронизация состояния…</div>';
  const mine=d.turn===G.role;
  let out=hud(m,'<span>AV '+pvAV(m)+' · Щит ДоТ '+(m.ward||0)+' · Контрресурс '+(m.focus||0)+'</span>')+
- timeline(d)+stage({...m,hero:G.runner?.hero||m.hero},[{...foe,kind:foe.hero||"boss",intentText:"AV "+pvAV(foe)}],0,false);
+ timeline(d)+stage({...m,hero:G.runner?.hero||m.hero},[{...foe,kind:foe.hero||"boss",intentText:"AV "+pvAV(foe)}],0,true);
  if(d.phase==="gambit"){
   out+=eventHead("Перелом судьбы","Каждые пять действий игроки независимо выбирают модификатор. Решение раскрывается, когда оба выбрали.");
   out+=d.picks[G.role]?'<div class="etch-panel">Решение принято. Ожидаем второго игрока.</div>':
