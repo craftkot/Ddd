@@ -97,7 +97,7 @@ func _draw()->void:
    var x=lerpf(p1.x,p2.x,t)
    var y=lerpf(p1.y,p2.y,t)
    # Light curved links, visually distinguish forks and convergences.
-   x+=sinf(t*PI)*((p1.x-p2.x)*.13)
+   x+=sin(t*PI)*((p1.x-p2.x)*.13)
    points.append(Vector2(x,y))
   var chosen=false
   for i in range(1,state.history.size()):
