@@ -573,3 +573,49 @@ func use_potion(index:int)->bool:
     fight["enemies"][i]["burn"]+=7
  potions.remove_at(index)
  return true
+
+const SAVE_PATH = "user://ashes_godot_solo_v08.json"
+
+func has_save()->bool:
+ return FileAccess.file_exists(SAVE_PATH)
+
+func delete_save()->void:
+ if FileAccess.file_exists(SAVE_PATH):
+  DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
+
+func save_game()->bool:
+ if hero=="" or screen in ["lobby","class","lost","final"]:
+  return false
+ var content = {
+  "version":8,
+  "hero":hero,"hp":hp,"max_hp":max_hp,"gold":gold,
+  "deck":deck,"relics":relics,"potions":potions,"floor":floor,
+  "map_rows":map_rows,"map_edges":map_edges,"position":position,
+  "history":history,"fight":fight,"reward_cards":reward_cards,
+  "shop_cards":shop_cards,"shop_relics":shop_relics,
+  "active_event":active_event,"logs":logs,"screen":screen,
+  "random_state":rng.state
+ }
+ var file=FileAccess.open(SAVE_PATH,FileAccess.WRITE)
+ if file==null:return false
+ file.store_string(JSON.stringify(content))
+ return true
+
+func load_game()->bool:
+ if not has_save():return false
+ var raw=FileAccess.get_file_as_string(SAVE_PATH)
+ var doc=JSON.parse_string(raw)
+ if typeof(doc)!=TYPE_DICTIONARY or int(doc.get("version",0))!=8:return false
+ if not data["classes"].has(doc.get("hero","")):return false
+ if not (doc.get("map_rows",[]) is Array) or doc["map_rows"].size()!=15:return false
+ if str(doc.get("screen","")) not in ["map","fight","reward","shop","event","rest","treasure"]:return false
+ hero=str(doc["hero"]);hp=int(doc.get("hp",0));max_hp=int(doc.get("max_hp",0));gold=int(doc.get("gold",0))
+ deck=doc.get("deck",[]);relics=doc.get("relics",[]);potions=doc.get("potions",[])
+ floor=int(doc.get("floor",0));map_rows=doc["map_rows"];map_edges=doc.get("map_edges",[])
+ position=int(doc.get("position",-1));history=doc.get("history",[])
+ fight=doc.get("fight",{});reward_cards=doc.get("reward_cards",[])
+ shop_cards=doc.get("shop_cards",[]);shop_relics=doc.get("shop_relics",[])
+ active_event=doc.get("active_event",{});logs=doc.get("logs",[])
+ screen=str(doc["screen"])
+ rng.state=int(doc.get("random_state",rng.state))
+ return true
