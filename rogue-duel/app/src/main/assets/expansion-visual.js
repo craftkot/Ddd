@@ -63,9 +63,37 @@ function ashArena(p,enemies,selected,clickable){
  return '<div class="battlefield"><div class="stage-fog"></div>'+ally+'<div class="enemy-party count-'+enemies.length+'">'+units+'</div></div>'
 }
 const ashOldRender=render;
+function ashCatalog(){
+ const isCard=G.catalogMode!=="relics";
+ const t='<div class="eyebrow">БИБЛИОТЕКА ПЕПЛА</div><h2>Коллекция</h2><p class="sub">'+Object.keys(CARDS).length+' карт · '+RELICS.length+' реликвии. Каждая находка влияет на билд.</p>';
+ const tabs='<div class="actions">'+btn("Карты ("+Object.keys(CARDS).length+")","catalogCards","",""+(isCard?"":"secondary"))+btn("Реликвии ("+RELICS.length+")","catalogRelics","",""+(!isCard?"":"secondary"))+'</div>';
+ const filter='<div class="scrollline filterbar">'+["Все",...ASH_FAMILIES.map(x=>x[0])].map(x=>btn(x,"catalogFilter",x,"tiny "+(G.catalogFilter===x?"":"ghost"))).join("")+'</div>';
+ let contents="";
+ if(isCard){
+  const entries=Object.entries(CARDS).filter(([id,c])=>G.catalogFilter==="Все"||c.school===G.catalogFilter);
+  contents='<div class="catalog-grid">'+entries.map(([id,c])=>'<div class="panel catalog-card"><div class="flex"><strong>'+c.e+' '+esc(c.n)+'</strong><span class="pill">⚡'+c.c+'</span></div><p class="small">'+(c.t==="attack"?"Атака":c.t==="skill"?"Навык":"Усиление")+(c.school?" · "+c.school:" · Основа")+'</p><p class="sub">'+esc(c.d)+'</p></div>').join("")+'</div>'
+ }else{
+  contents='<div class="catalog-grid">'+RELICS.map(r=>'<div class="panel catalog-card"><h3>'+r.e+' '+esc(r.n)+'</h3><p class="sub">'+esc(r.d)+'</p></div>').join("")+'</div>'
+ }
+ return t+tabs+(isCard?filter:"")+contents+btn("Назад","catalogBack","","full")
+}
+function ashInventory(){
+ if(!G.runner)return "";
+ return topstats()+'<h2>Твоя сборка</h2><div class="eyebrow">КОЛОДА · '+G.runner.deck.length+' КАРТ</div>'+
+ '<div class="catalog-grid">'+G.runner.deck.map(c=>'<div class="panel catalog-card"><strong>'+art(c.id).e+' '+esc(art(c.id).n)+upgraded(c)+'</strong><p class="sub">'+esc(desc(c))+'</p></div>').join("")+'</div>'+
+ '<div class="eyebrow">РЕЛИКВИИ · '+G.runner.relics.length+'</div>'+
+ '<div class="catalog-grid">'+G.runner.relics.map(id=>{let r=RELICS.find(x=>x.id===id);return r?'<div class="panel catalog-card"><strong>'+r.e+' '+esc(r.n)+'</strong><p class="sub">'+esc(r.d)+'</p></div>':""}).join("")+'</div>'+
+ btn("Назад к маршруту","inventoryBack","","full")
+}
 render=window.render=function(){
+ if(G.screen==="catalog"){app.innerHTML=ashCatalog();setNet();return}
+ if(G.screen==="inventory"){app.innerHTML=ashInventory();setNet();return}
  ashOldRender();
- if(G.screen==="lobby")app.insertAdjacentHTML("beforeend",'<p class="small center">✦ '+Object.keys(CARDS).length+' карт · '+RELICS.length+' реликвии · 1–4 противника</p>')
+ if(G.screen==="lobby"){
+  app.insertAdjacentHTML("beforeend",'<p class="small center">✦ '+Object.keys(CARDS).length+' карт · '+RELICS.length+' реликвии · 1–4 противника</p>');
+  app.insertAdjacentHTML("beforeend",'<div class="actions">'+btn("📚 Коллекция карт и реликвий","catalog","","ghost")+'</div>')
+ }
+ if(G.screen==="map")app.insertAdjacentHTML("beforeend",'<div class="actions">'+btn("🃏 Посмотреть свою сборку","inventory","","ghost")+'</div>')
 };
 renderFight=window.renderFight=function(){
  const c=G.combat;if(!c||!c.enemies)return ashOld.renderFight();
@@ -94,6 +122,13 @@ const ashOldOpenNode=openNode;
 openNode=window.openNode=function(i){ashOldOpenNode(i);if(G.screen==="shop"&&G.shop){G.shop.cards=ashAffinityCards(G.runner,3);render()}};
 const ashOldDispatch=dispatch;
 dispatch=window.dispatch=async function(action,x){
+ if(action==="catalog"){G.catalogMode="cards";G.catalogFilter="Все";G.catalogReturn=G.screen;G.screen="catalog";render();return}
+ if(action==="catalogCards"){G.catalogMode="cards";G.catalogFilter="Все";render();return}
+ if(action==="catalogRelics"){G.catalogMode="relics";render();return}
+ if(action==="catalogFilter"){G.catalogFilter=x;render();return}
+ if(action==="catalogBack"){G.screen=G.catalogReturn||"lobby";render();return}
+ if(action==="inventory"){G.screen="inventory";render();return}
+ if(action==="inventoryBack"){G.screen="map";render();return}
  if(action==="target"){if(G.combat&&G.combat.enemies[Number(x)]&&G.combat.enemies[Number(x)].hp>0)G.combat.target=Number(x);render();return}
  await ashOldDispatch(action,x);
  if(action==="play"||action==="duelPlay"){
