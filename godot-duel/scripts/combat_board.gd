@@ -131,7 +131,7 @@ func _draw() -> void:
   if dots!="":label(dots,Vector2(x-65,y+146),12,GOLD)
  _draw_figure(Vector2(w*.23,h*.43),game.hero,1.16)
  label("ТЫ  •  "+game.data["classes"][game.hero]["name"],Vector2(16,h*.54),15,WHITE)
- label("ЯД %d  КРОВЬ %d  ГОРЕНИЕ %d" % [game.fight["poison"],game.fight["bleed"],game.fight["burn"]],Vector2(16,h*.565),13,QUIET)
+ label("ЯД %d  КРОВЬ %d  ГОРЕНИЕ %d" % [game.fight["poison"],game.fight["bleed"],game.fight["burn"]],Vector2(16,h*.565),13,MUTED)
  # Dividing ironwork and compact potions, with large tappable hitboxes.
  draw_line(Vector2(14,h*.585),Vector2(w-14,h*.585),EDGE,2)
  var potx=18.0
@@ -169,7 +169,7 @@ func _draw() -> void:
  # Visible active pile counts and always-available end-turn button.
  var footer=Rect2(0,h-75,w,75)
  plate(footer,Color("#121927"),GOLD)
- label("КОЛОДА %d  ·  СБРОС %d  ·  ИЗГНАНО %d" % [game.fight["library"].size(),game.fight["discard"].size(),game.fight["exhaust"].size()],Vector2(12,h-52),13,QUIET)
+ label("КОЛОДА %d  ·  СБРОС %d  ·  ИЗГНАНО %d" % [game.fight["library"].size(),game.fight["discard"].size(),game.fight["exhaust"].size()],Vector2(12,h-52),13,MUTED)
  label("Коснись карты или перетащи её к цели",Vector2(12,h-24),12,GOLD)
  finish_area=Rect2(w-190,h-70,183,62)
  plate(finish_area,Color("#884034"),GOLD)
