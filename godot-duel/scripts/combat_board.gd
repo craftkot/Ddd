@@ -155,9 +155,12 @@ func _draw() -> void:
   if chosen==i:yy-=38.0
   var cardrect=Rect2(roundi(x),roundi(yy),roundi(card_w),roundi(card_h))
   hand_areas.append(cardrect)
+ # Draw selected card LAST, so it is never hidden under the rest of the fan.
  for i in range(count):
-  if i==held:continue
-  _card(game.fight["hand"][i],hand_areas[i],i==chosen,false)
+  if i==held or i==chosen:continue
+  _card(game.fight["hand"][i],hand_areas[i],false,false)
+ if chosen>=0 and chosen<count and chosen!=held:
+  _card(game.fight["hand"][chosen],hand_areas[chosen],true,false)
  if held>=0 and held<count:
   var held_rect=Rect2(finger.x-card_w*.5,finger.y-card_h*.86,card_w,card_h)
   _card(game.fight["hand"][held],held_rect,true,true)
