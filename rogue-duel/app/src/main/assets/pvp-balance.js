@@ -93,7 +93,11 @@ function pvMakeFighter(build){
  const f=makeFighter({...build,hp:build.maxHp});ashExtra(f);
  f.speed=100;f.gauge=PV.gauge;f.ward=0;f.focus=2;f.maxFocus=4;f.nextAdvance=0;
  f.nextTax=0;f.exhaust=[];f.damageTurn=0;f.healTurn=0;f.dotTurn=0;
- f.block=0;f.hooks={};f.combo=0;f.rounds=0;f.energy=0;f.hand=[];return f
+ f.block=0;f.hooks={};f.combo=0;f.rounds=0;f.energy=0;f.hand=[];
+ // Oracle PvP identity: slower DoT setups need time to survive fast cheap attacks.
+ // No PvE changes, and the effect is visible as HP/armor/focus on the duel HUD.
+ if(build.hero==="oracle"){f.maxHp+=10;f.hp+=10;f.block+=7;f.focus=Math.min(4,f.focus+1)}
+ return f
 }
 function pvAV(f){return Math.max(0,Math.ceil((f.gauge||0)/(f.speed||100)))}
 function pvPreview(d,steps=3){
