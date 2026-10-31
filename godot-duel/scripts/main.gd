@@ -5,7 +5,7 @@ const ACTOR = preload("res://scripts/actor.gd")
 const ROUTE = preload("res://scripts/route_board.gd")
 const COMBAT_BOARD = preload("res://scripts/combat_board.gd")
 const RUNE = preload("res://scripts/rune_art.gd")
-const ART = preload("res://scripts/painted_assets.gd")
+const PX = preload("res://scripts/pixel_forge.gd")
 const INK = Color("#10151f")
 const PANEL = Color("#242938")
 const PANEL_ALT = Color("#302d3b")
@@ -28,9 +28,10 @@ var collection_visible: bool = false
 func _ready() -> void:
  set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
  get_window().content_scale_factor = 1.0
+ texture_filter=CanvasItem.TEXTURE_FILTER_NEAREST
  render_ui()
 
-func panel_style(bg:Color,edge:Color=Color("#8b7058"),radius:int=15) -> StyleBoxFlat:
+func panel_style(bg:Color,edge:Color=Color("#8b7058"),radius:int=0) -> StyleBoxFlat:
  var st=StyleBoxFlat.new()
  st.bg_color=bg
  st.border_color=edge
@@ -92,7 +93,7 @@ func render_ui() -> void:
  if game.screen!="fight":
   var painted=TextureRect.new()
   painted.name="PaintedArenaBackground"
-  painted.texture=ART.BACKGROUND
+  painted.texture=PX.scene()
   painted.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
   painted.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
   painted.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
@@ -108,9 +109,9 @@ func render_ui() -> void:
  root.add_child(top)
  var top_row=HBoxContainer.new()
  top.add_child(top_row)
- var brand=make_text("✦ ПЕПЕЛ И КАРТЫ",21,GOLD)
+ var brand=make_text("◆ ПЕПЕЛ И КАРТЫ",21,GOLD)
  top_row.add_child(brand)
- var version=make_text("GODOT  •  ALPHA 0.10",11,QUIET)
+ var version=make_text("PIXEL  •  ALPHA 0.11",11,QUIET)
  version.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
  top_row.add_child(version)
  if game.screen=="fight":
@@ -422,10 +423,11 @@ func _reward(index:int)->void:
 
 func relic_icon(id:String)->TextureRect:
  var pic=TextureRect.new()
- pic.texture=ART.atlas_region(ART.card_region(int(abs(hash(id)))%12))
+ pic.texture=PX.card_art(id,"","power")
  pic.custom_minimum_size=Vector2(76,76)
  pic.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
- pic.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+ pic.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
+ pic.texture_filter=CanvasItem.TEXTURE_FILTER_NEAREST
  pic.mouse_filter=Control.MOUSE_FILTER_IGNORE
  return pic
 
