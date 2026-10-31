@@ -45,6 +45,13 @@ func _initialize() -> void:
  g.floor=0
  g.position=-1
  if not g.reachable().has(0):_fail("new fork");return
+ g.new_run("guard")
+ g.hp=42
+ if not g.save_game():_fail("Godot save path");return
+ g.hp=3
+ if not g.load_game():_fail("Godot load");return
+ if g.hp!=42:_fail("save did not restore HP");return
+ g.delete_save()
  print("PASS: Godot game.json 161 cards, 136 relics, three classes, 15 floors, cards, enemies, rewards.")
  quit(0)
 func _fail(error:String)->void:
