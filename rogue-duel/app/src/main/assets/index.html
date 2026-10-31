@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Пепел и карты</title>
+<style>
+:root{--bg:#0b1019;--panel:#17202e;--panel2:#202c3d;--stroke:#3a4655;--gold:#eac17a;--text:#eee8db;--muted:#a6afbc;--red:#e97978;--blue:#86bfd7;--green:#85c39e}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:Georgia,"Times New Roman",serif}
+body{background:radial-gradient(ellipse at 50% -20%,#343748 0%,#121923 48%,#090d15 100%);user-select:none;-webkit-user-select:none;overflow-x:hidden}
+button,input{font:inherit}button{cursor:pointer;touch-action:manipulation}button:disabled{opacity:.38;cursor:default}
+#shell{max-width:760px;margin:auto;min-height:100vh;padding:14px 13px 34px}
+header{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:3px 0 15px;padding:5px 3px 15px;border-bottom:1px solid #79604460}
+.logo{color:var(--gold);letter-spacing:2.2px;font-size:16px;font-weight:700}.logo small{display:block;color:#8c94a3;font:9px sans-serif;letter-spacing:3.2px;margin-top:4px}
+.net{font:11px system-ui;color:#a5b5be;text-align:right;max-width:46%;line-height:1.35}
+h1,h2,h3,p{margin:0}h1{font-size:clamp(30px,9vw,53px);line-height:1.08;font-weight:500;letter-spacing:1px}h2{font-size:24px;font-weight:500;margin-bottom:9px;color:#f4dfb8}h3{font-size:16px;color:#edc991;margin-bottom:8px}
+.lead{color:var(--muted);font:14px/1.55 system-ui,sans-serif;margin:12px 0 20px}
+.eyebrow{letter-spacing:3px;text-transform:uppercase;font:10px system-ui;color:#caa46a;margin:4px 0 9px}
+.panel{border:1px solid #4651658c;background:linear-gradient(155deg,#202939e8,#111923ef);border-radius:17px;padding:16px;margin:12px 0;box-shadow:0 9px 27px #0003}
+.panel.gold{border-color:#96784982}.panel.red{border-color:#a451567a}
+.titleline{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid #8f7958;border-radius:10px;padding:12px 16px;background:linear-gradient(180deg,#6d5736,#493823);color:#fff0ce;font-size:14px;font-weight:700;min-height:44px;text-align:center}
+.btn.secondary{background:#293545;border-color:#556172;color:#f0f2ef}.btn.ghost{background:transparent;border-color:#5a6070;color:#bcc8d6}
+.btn.danger{border-color:#9f4f55;background:#562c35}.btn.full{width:100%}.btn.tiny{min-height:34px;padding:7px 10px;font-size:12px}
+.actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:15px}.actions>.btn{flex:1;min-width:120px}
+.input{display:block;width:100%;margin:10px 0;padding:13px 15px;border-radius:11px;border:1px solid #62677a;background:#0e1522;color:#f5ead8;font-size:18px;outline:0;letter-spacing:2px;text-align:center;text-transform:uppercase}
+.sub{color:#aab4c0;font:12px/1.55 system-ui,sans-serif}.small{font:11px/1.4 system-ui,sans-serif;color:#9faabb}
+.highlight{color:var(--gold)}.dangertext{color:var(--red)}.muted{color:var(--muted)}
+.divider{height:1px;background:#57617155;margin:15px 0}.center{text-align:center}
+.hero-art{font-size:67px;line-height:1.45;filter:drop-shadow(0 4px 13px #f9ac5155);text-align:center}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid.one{grid-template-columns:1fr}
+.char{border:1px solid #645b55;border-radius:14px;padding:13px;background:linear-gradient(145deg,#2b3040,#151d2b);text-align:left;min-height:136px;color:var(--text);width:100%}
+.char .emoji{font-size:32px;margin-bottom:7px}.char strong{display:block;color:#eed39b;font-size:18px;margin-bottom:5px}.char .small{display:block}
+.bar{height:9px;border-radius:20px;background:#3b2c31;border:1px solid #695056;overflow:hidden;margin:6px 0}.bar>span{display:block;height:100%;background:linear-gradient(90deg,#a9444b,#e5777a);border-radius:20px}
+.stat{display:flex;justify-content:space-between;gap:8px;font:12px system-ui;margin:4px 0;color:#d6d9d8}
+.flex{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.pill{padding:5px 9px;border:1px solid #5a6070;border-radius:20px;background:#2a3240;font:11px system-ui}
+.path{display:flex;gap:7px;justify-content:space-between;margin:14px 0 19px}.dot{height:6px;border-radius:10px;background:#3e4c5d;flex:1}.dot.done{background:#bf9462}.dot.current{background:#f8d19a;box-shadow:0 0 9px #ebb86d}
+.node{width:100%;min-height:127px;text-align:left;background:linear-gradient(160deg,#34394a,#151f2c);border:1px solid #687182;border-radius:16px;color:#e7e7de;padding:13px}
+.node .symbol{display:block;font-size:32px;margin:6px 0}.node strong{font-size:16px;color:#efd4a1;display:block}
+.node .small{margin-top:7px;display:block}
+.cardgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:13px 0}
+.playcard{position:relative;border:1px solid #aa8056;background:linear-gradient(160deg,#43404a,#242e41 58%,#181e2b);border-radius:12px;padding:9px 10px;min-height:156px;text-align:left;color:#f7ede0;box-shadow:inset 0 0 0 1px #eebc6840}
+.playcard.skill{border-color:#6399a7;background:linear-gradient(160deg,#294e5f,#1d3446 55%,#161f2d)}
+.playcard.power{border-color:#a889c1;background:linear-gradient(160deg,#4c3b58,#29243c 55%,#171c2c)}
+.playcard .mana{border-radius:50%;background:#b09058;border:1px solid #fff2cc77;display:inline-flex;width:26px;height:26px;justify-content:center;align-items:center;font:700 14px system-ui;color:#171820;float:right}
+.playcard .cardicon{font-size:29px;line-height:1.4}.playcard .name{font-size:16px;color:#f1d6a0;margin:5px 0 8px;display:block;font-weight:bold}
+.playcard .desc{font:12px/1.45 system-ui;color:#d2d8de;display:block}.playcard .tag{display:block;color:#a9b3bd;font:10px system-ui;margin-top:8px;letter-spacing:1px;text-transform:uppercase}
+.playcard:disabled{filter:grayscale(.7);opacity:.48}
+.enemy{border:1px solid #7b4d54;border-radius:15px;background:radial-gradient(circle at center,#653a43 0%,#302333 47%,#1c1d2c 100%);padding:16px;margin:13px 0}
+.monster-art{font-size:73px;text-align:center;line-height:1.5;filter:drop-shadow(0 7px 20px #ca4c5782)}
+.ints{font:12px system-ui;background:#17131dbb;border:1px solid #7e5665;border-radius:8px;display:inline-block;padding:7px 12px;margin:8px 0}
+.logs{font:11px/1.5 system-ui;color:#bdc8d3;background:#0e1622;padding:10px 12px;border-radius:10px;max-height:95px;overflow:auto;margin:12px 0;white-space:pre-line}
+.inventory{font:12px/1.7 system-ui;color:#a7b4c3;margin:9px 0}
+.relic{display:flex;align-items:center;gap:10px;background:#202b39;border:1px solid #556071;border-radius:11px;padding:10px;margin:8px 0}.relic .symbol{font-size:27px}.relic strong{color:#eac17a}.relic .small{font-size:11px}
+.money{color:#eec680;font:700 14px system-ui}
+.footer{text-align:center;font:10px system-ui;color:#6e7b89;margin-top:27px}
+.scrollline{overflow-x:auto;display:flex;gap:8px;padding:5px 0 12px;scrollbar-width:none}
+.scrollline .playcard{flex:0 0 152px;min-height:175px}
+.duelstats{display:grid;grid-template-columns:1fr 1fr;gap:9px}.duelstats>.panel{margin:6px 0;padding:11px}
+.emphasis{font-size:40px;text-align:center;margin:18px 0}.message{font:13px/1.6 system-ui;color:#d0d4dc;margin:9px 0}
+@media(min-width:550px){.cardgrid{grid-template-columns:repeat(3,1fr)}.grid{grid-template-columns:repeat(2,1fr)}.scrollline .playcard{flex-basis:170px}}
+</style>
+</head>
+<body><div id="shell"><header><div class="logo">✦ ПЕПЕЛ И КАРТЫ <small>ДУЭЛЬ ДВУХ СУДЕБ</small></div><div class="net" id="net">Ожидание комнаты</div></header><main id="app"></main><div class="footer">Авторские карты и мир · Ранняя версия 0.1</div></div>
+<script>
+"use strict";
+const CARDS={
+strike:{n:"Удар",e:"⚔️",t:"attack",c:1,d:"Нанести {n} урона.",v:6,k:"hit"},
+guard:{n:"Защита",e:"🛡️",t:"skill",c:1,d:"Получить {n} брони.",v:6,k:"block"},
+dash:{n:"Рывок",e:"🌪️",t:"attack",c:1,d:"{n} урона. Взять карту.",v:5,k:"dash"},
+fire:{n:"Угольный шквал",e:"🔥",t:"attack",c:2,d:"{n} урона и 2 яда.",v:13,k:"fire"},
+spikes:{n:"Живые шипы",e:"🌵",t:"skill",c:1,d:"{n} брони и 2 шипа.",v:5,k:"spikes"},
+ritual:{n:"Клятва клинка",e:"🗡️",t:"power",c:1,d:"Увеличить силу на {n}.",v:2,k:"str"},
+bleed:{n:"Кровавый след",e:"🩸",t:"attack",c:1,d:"{n} урона и 2 яда.",v:6,k:"bleed"},
+tonic:{n:"Первая помощь",e:"🌿",t:"skill",c:1,d:"Восстановить {n} здоровья.",v:6,k:"heal"},
+hex:{n:"Нехороший знак",e:"👁️",t:"skill",c:1,d:"Враг получает слабость и уязвимость.",v:1,k:"hex"},
+rift:{n:"Разлом",e:"☄️",t:"attack",c:2,d:"Нанести {n} урона.",v:19,k:"hit"},
+twin:{n:"Два кинжала",e:"🗡️",t:"attack",c:1,d:"Дважды нанести {n} урона.",v:4,k:"twin"},
+breaker:{n:"Контрудар",e:"⚒️",t:"attack",c:2,d:"{n} урона и 8 брони.",v:12,k:"breaker"},
+flow:{n:"Шестое чувство",e:"✨",t:"skill",c:0,d:"Взять {n} карты.",v:2,k:"draw"},
+oath:{n:"Стойкость",e:"🏰",t:"power",c:1,d:"8 брони и {n} силы.",v:1,k:"oath"},
+reaper:{n:"Поглощение",e:"💀",t:"attack",c:2,d:"{n} урона и лечение 4.",v:12,k:"leech"},
+frost:{n:"Ледяной покров",e:"❄️",t:"skill",c:1,d:"{n} брони, слабость врагу.",v:10,k:"frost"},
+storm:{n:"Последний раскат",e:"⚡",t:"attack",c:3,d:"Нанести {n} урона.",v:28,k:"hit"},
+ambush:{n:"Из засады",e:"🏹",t:"attack",c:0,d:"{n} урона, +8 отравленной цели.",v:4,k:"ambush"},
+needles:{n:"Отравленные иглы",e:"🦂",t:"skill",c:1,d:"Наложить {n} яда.",v:3,k:"poison"},
+seal:{n:"Защитная печать",e:"🔮",t:"skill",c:1,d:"{n} брони, взять карту.",v:6,k:"seal"},
+bargain:{n:"Тёмный обмен",e:"🕯️",t:"skill",c:0,d:"Потерять 2 здоровья. +2 энергии. Взять карту.",v:0,k:"bargain"},
+mirror:{n:"Зеркальный доспех",e:"🪞",t:"power",c:1,d:"{n} брони и 2 шипа.",v:9,k:"spikes"},
+axe:{n:"Двойной топор",e:"🪓",t:"attack",c:2,d:"Нанести {n} урона.",v:17,k:"hit"},
+execute:{n:"Приговор",e:"⚰️",t:"attack",c:2,d:"{n} урона. +10, если враг ранен.",v:10,k:"execute"},
+meditate:{n:"Медитация",e:"🪷",t:"skill",c:1,d:"Вылечить {n} и взять карту.",v:4,k:"meditate"}};
+const COMMON=["dash","fire","spikes","ritual","bleed","tonic","hex","rift","twin","breaker","flow","oath","reaper","frost","storm","ambush","needles","seal","bargain","mirror","axe","execute","meditate"];
+const RELICS=[
+{id:"heart",n:"Золотое сердце",e:"💛",d:"+12 к максимальному здоровью и восстановление 12."},
+{id:"sword",n:"Зуб дракона",e:"🦷",d:"+2 силы в каждом бою."},
+{id:"shield",n:"Руна стены",e:"🧿",d:"+8 брони в начале каждого боя."},
+{id:"spark",n:"Искра эфира",e:"💠",d:"+1 энергия в первый ход."},
+{id:"coin",n:"Монета шутника",e:"🪙",d:"Мгновенно получить 65 золота."},
+{id:"sun",n:"Солнечный прах",e:"☀️",d:"После боя восстановить 7 здоровья."},
+{id:"venom",n:"Змеиный глаз",e:"🐍",d:"В начале боя враг получает 3 яда."},
+{id:"rose",n:"Колючая роза",e:"🥀",d:"+2 шипа в начале боя."},
+{id:"scroll",n:"Тайный свиток",e:"📜",d:"Улучшить случайную карту в колоде."},
+{id:"gem",n:"Осколок жизни",e:"💎",d:"+6 к максимуму здоровья и восстановление 6."},
+{id:"chain",n:"Цепь ярости",e:"⛓️",d:"+1 сила в бою и 10 брони в первом ходе."},
+{id:"flask",n:"Красный флакон",e:"🧪",d:"После боя восстановить 12 здоровья."}];
+const CLASSES={
+guard:{name:"Страж",emoji:"🛡️",hp:90,desc:"Живучесть и контратаки. Простая колода для долгих сражений.",deck:["strike","strike","strike","strike","guard","guard","guard","guard","breaker","spikes"]},
+oracle:{name:"Оракул",emoji:"🔮",hp:73,desc:"Яд, проклятия и комбинации. Сложнее в начале, сильнее в затяжном бою.",deck:["strike","strike","strike","guard","guard","guard","needles","hex","fire","flow"]},
+hunter:{name:"Ловчий",emoji:"🏹",hp:77,desc:"Дешёвые карты, добор и атаки по несколько раз за ход.",deck:["strike","strike","strike","guard","guard","guard","dash","twin","ambush","seal"]}};
+const EVENTS=[
+{n:"Глухая часовня",e:"🕯️",d:"На алтаре лежит нож. Каждый порез делает тебя сильнее.",options:[["Принести 9 здоровья в жертву: +1 сила в боях","blood"],["Взять 45 золота","gold"]]},
+{n:"Заброшенная кузница",e:"⚒️",d:"Кузнец исчез, но горн ещё тлеет.",options:[["Улучшить случайную карту","upgrade"],["Забрать припасы: +35 золота","gold"]]},
+{n:"Странствующий лекарь",e:"🩺",d:"Путник предлагает мутную настойку.",options:[["Исцелиться на 20","heal"],["Взять проклятый дар: случайная реликвия, потеря 10 здоровья","relic"]]},
+{n:"Пепельный сон",e:"🌙",d:"Потеряв дорогу, ты видишь отражение будущей дуэли.",options:[["Забрать карту и 15 золота","card"],["Пожертвовать 6 здоровья за 70 золота","risk"]]}];
+const STAGES=[
+["fight","event"],["fight","shop"],["fight","elite"],["shop","event"],["rest","treasure"],["fight","elite"],["rest","treasure"]
+];
+const LABEL={fight:["⚔️","Враг","Обычный бой за золото и карту"],elite:["☠️","Элита","Опасный враг и реликвия"],shop:["🛒","Торговец","Карты, лечение и редкости"],event:["❔","Неизвестность","Выбор со скрытой ценой"],rest:["🔥","Привал","Исцеление или улучшение"],treasure:["💎","Сокровище","Выбор из трёх реликвий"]};
+const $=id=>document.getElementById(id); const app=$("app");
+const G={screen:"lobby",role:"",code:"",topic:"",key:null,runner:null,other:null,hero:"",stage:0,map:[],encounter:null,combat:null,shop:null,reward:null,log:[],demo:false,connected:false,duel:null,done:false};
+let peer=null, channel=null, gotRemote=false, candidates=[], seen=new Set(), pending=new Map(), guestJoinTimer=null, statusMessage="";
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function rnd(n){return Math.floor(Math.random()*n)}
+function choose(a){return a[rnd(a.length)]}
+function shuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){let j=rnd(i+1);[a[i],a[j]]=[a[j],a[i]]}return a}
+function unique(a,n){return shuffle(a).slice(0,n)}
+function inst(id){return {id:id,up:0}}
+function art(id){return CARDS[id]}
+function upgraded(c){return c.up?("+"+c.up):""}
+function val(c){return art(c.id).v+(c.up?(art(c.id).k==="draw"||art(c.id).k==="str"||art(c.id).k==="poison"?1:3):0)}
+function desc(c){return art(c.id).d.replace("{n}",val(c))}
+function btn(label,action,args="",kind="secondary",disabled=false){return '<button class="btn '+kind+'" data-a="'+action+'" data-x="'+esc(args)+'"'+(disabled?" disabled":"")+'>'+label+'</button>'}
+function card(c,action,args="",disabled=false){const a=art(c.id);return '<button class="playcard '+a.t+'" data-a="'+action+'" data-x="'+esc(args)+'"'+(disabled?" disabled":"")+'><span class="mana">'+a.c+'</span><div class="cardicon">'+a.e+'</div><span class="name">'+a.n+upgraded(c)+'</span><span class="desc">'+desc(c)+'</span><span class="tag">'+(a.t==="attack"?"Атака":a.t==="skill"?"Навык":"Усиление")+'</span></button>'}
+function hbar(h,max){return '<div class="bar"><span style="width:'+Math.max(0,Math.min(100,h/max*100))+'%"></span></div>'}
+function header(title,descText){return '<div class="eyebrow">ГЛАВА I · ПУТЬ СКВОЗЬ ПЕПЕЛ</div><h2>'+title+'</h2><p class="sub">'+descText+'</p>'}
+function topstats(){let r=G.runner;if(!r)return "";return '<div class="panel"><div class="stat"><span>❤️ '+r.hp+' / '+r.maxHp+'</span><span class="money">◈ '+r.gold+' золота</span><span>🃏 '+r.deck.length+'</span></div>'+hbar(r.hp,r.maxHp)+'<div class="pills">'+r.relics.map(id=>'<span class="pill">'+RELICS.find(x=>x.id===id).e+'</span>').join("")+'</div></div>'}
+function pathdots(){return '<div class="path">'+STAGES.map((_,i)=>'<div class="dot '+(i<G.stage?"done":i===G.stage?"current":"")+'"></div>').join("")+'</div>'}
+function setNet(){if(G.demo){$("net").textContent="◉ Одиночный тест";return} $("net").textContent=G.code?(channel&&channel.readyState==="open"?"● Прямой P2P":"◉ Зашифрованный релей")+(G.connected?" · соперник на связи":" · ожидание"):"Комната не создана"}
+function render(){setNet();let s=G.screen;let body="";
+if(s==="lobby")body='<div class="center"><div class="hero-art">⚔️</div><div class="eyebrow">КАРТОЧНЫЙ РОГАЛИК НА ДВОИХ</div><h1>Пепел<br><span class="highlight">и карты</span></h1><p class="lead">Два героя. Два разных маршрута. Семь развилок, десятки решений и одна последняя дуэль.</p></div><div class="panel gold"><h3>Создать приключение</h3><p class="sub">Первый игрок открывает комнату. Второй присоединяется по коду.</p><div class="actions">'+btn("Создать комнату","create","","")+'</div></div><div class="panel"><h3>Присоединиться</h3><input class="input" id="codeInput" maxlength="25" placeholder="КОД КОМНАТЫ"><div class="actions">'+btn("Войти к другу","join")+'</div></div><div class="actions">'+btn("Одиночный тест маршрута","demo","","ghost")+'</div><p class="small center" style="margin-top:16px">Для сетевой игры обоим нужен интернет. Код передаётся вне игры.</p>';
+else if(s==="hero")body=header("Выбери свою судьбу","Класс определяет начальную колоду. Дальнейшие карты, награды и встречи случайны.")+'<div class="panel gold"><div class="small">КОМНАТА</div><h2 style="letter-spacing:2px;margin:6px 0">'+(G.demo?"Локальный тест":G.code)+'</h2><p class="sub">'+(G.demo?"В конце пути покажем собранную колоду.":"Отправь код другу. Каждый проходит маршрут самостоятельно.")+'</p></div><div class="grid">'+Object.entries(CLASSES).map(([id,c])=>'<button class="char" data-a="hero" data-x="'+id+'"><div class="emoji">'+c.emoji+'</div><strong>'+c.name+'</strong><span class="small">❤️ '+c.hp+' здоровья</span><span class="small">'+c.desc+'</span></button>').join("")+'</div>';
+else if(s==="map")body=topstats()+pathdots()+header("Перекрёсток "+(G.stage+1)+"/7","Выбирай следующую встречу. У каждого игрока собственный путь и собственная колода.")+'<div class="grid">'+(G.map[G.stage]||[]).map((node,i)=>{const l=LABEL[node];return '<button class="node" data-a="node" data-x="'+i+'"><span class="symbol">'+l[0]+'</span><strong>'+l[1]+'</strong><span class="small">'+l[2]+'</span></button>'}).join("")+'</div><div class="panel"><h3>Цель путешествия</h3><p class="sub">Доживи до конца пути. Купи сильные карты, улучши колоду и найди реликвии — собранная сборка отправится в финальную PvP-дуэль.</p></div>';
+else if(s==="fight")body=renderFight();
+else if(s==="shop")body=renderShop();
+else if(s==="event")body=renderEvent();
+else if(s==="rest")body=topstats()+header("Привал","Огонь греет руки и напоминает о том, что ещё можно выжить.")+'<div class="hero-art">🔥</div><div class="actions">'+btn("Восстановить "+Math.ceil(G.runner.maxHp*.3)+" здоровья","restHeal","","")+btn("Улучшить карту","restUpgrade","","secondary")+'</div>';
+else if(s==="upgrade")body=topstats()+header("Закалка","Выбери карту, эффект которой усилится навсегда.")+'<div class="cardgrid">'+G.runner.deck.map((c,i)=>card(c,"upgrade",i)).join("")+'</div>';
+else if(s==="treasure")body=topstats()+header("Сокровище","Можно взять только одну реликвию.")+'<div class="hero-art">💎</div>'+G.encounter.choices.map(id=>relicButton(id,"takeRelic")).join("");
+else if(s==="reward")body=topstats()+header(G.reward.title,G.reward.desc)+'<div class="money" style="margin:13px 0">◈ +'+G.reward.gold+' золота уже получено</div><div class="cardgrid">'+G.reward.choices.map((c,i)=>card(c,"reward",i)).join("")+'</div><div class="actions">'+btn("Пропустить карту","skipReward","","ghost")+'</div>';
+else if(s==="wait")body=topstats()+header("Врата последней дуэли","Твой путь окончен. Ожидаем, пока соперник закончит свой.")+'<div class="hero-art">⚔️</div><div class="panel gold"><h3>Твой собранный билд</h3><p class="sub">Карт: '+G.runner.deck.length+' · Реликвий: '+G.runner.relics.length+' · Здоровье восстановится перед PvP.</p><div class="pills">'+G.runner.relics.map(id=>'<span class="pill">'+RELICS.find(r=>r.id===id).n+'</span>').join("")+'</div></div><p class="sub center">'+(G.other?"Соперник уже завершил путь. Синхронизация боя...":"Соперник ещё в пути или не подключён.")+'</p>'+btn("Отправить готовность ещё раз","resend","","secondary");
+else if(s==="duel")body=renderDuel();
+else if(s==="done")body=topstats()+'<div class="hero-art">🏆</div>'+header("Испытание пройдено","Маршрут завершён. В одиночном тесте PvP не запускается.")+'<div class="panel"><h3>Твоя колода</h3><div class="inventory">'+G.runner.deck.map(c=>art(c.id).n+upgraded(c)).join(" · ")+'</div><p class="sub">Реликвии: '+G.runner.relics.map(id=>RELICS.find(r=>r.id===id).n).join(", ")+'</p></div>'+btn("Новая игра","restart","","full");
+else if(s==="lost")body='<div class="hero-art">💀</div><h1 class="center dangertext">Путь оборвался</h1><p class="lead center">Герой пал до последней дуэли. В следующем забеге попробуй другой маршрут и колоду.</p>'+btn("Начать заново","restart","","full");
+else if(s==="duelEnd"){let win=G.duel&&G.duel.winner===G.role;body='<div class="hero-art">'+(win?"🏆":"🩸")+'</div><h1 class="center">'+(win?"Победа!":"Поражение")+'</h1><p class="lead center">'+(win?"Твоя колода пережила финальную дуэль.":"Соперник собрал более удачный билд или лучше сыграл свои карты.")+'</p><div class="panel"><h3>Итог дуэли</h3><p class="sub">'+(G.duel?esc(G.duel.log.slice(-5).join(" · ")):"Игра завершена")+'</p></div>'+btn("Новая игра","restart","","full");}
+app.innerHTML=body;
+}
+function newRun(id){const c=CLASSES[id];return {name:c.name,hero:id,hp:c.hp,maxHp:c.hp,gold:75,deck:c.deck.map(inst),relics:[],boon:0}}
+function addRelic(id){let r=G.runner;if(r.relics.includes(id)){r.gold+=55;return}r.relics.push(id);if(id==="heart"){r.maxHp+=12;r.hp+=12}if(id==="gem"){r.maxHp+=6;r.hp+=6}if(id==="coin")r.gold+=65;if(id==="scroll"){let c=choose(r.deck);if(c)c.up++}}
+function relicButton(id,action,extra=""){const r=RELICS.find(x=>x.id===id);return '<div class="relic"><div class="symbol">'+r.e+'</div><div style="flex:1"><strong>'+r.n+'</strong><div class="small">'+r.d+'</div></div>'+btn(extra||"Взять",action,id,"tiny")+'</div>'}
+function makeFighter(r){return {name:r.name,hp:r.hp,maxHp:r.maxHp,block:0,energy:0,str:r.boon||0,poison:0,weak:0,vuln:0,thorns:0,deck:shuffle(r.deck.map(c=>({...c}))),discard:[],hand:[],relics:[...r.relics],rounds:0}}
+function draw(f,n){for(let i=0;i<n;i++){if(!f.deck.length){if(!f.discard.length)return;f.deck=shuffle(f.discard);f.discard=[]}if(f.hand.length>=10)return;f.hand.push(f.deck.pop())}}
+function startTurn(f){f.block=0;f.rounds++;f.energy=3+((f.rounds===1&&f.relics.includes("spark"))?1:0);if(f.rounds===1&&f.relics.includes("chain"))f.block+=10;draw(f,5)}
+function beginEffects(f,enemy){if(f.relics.includes("sword"))f.str+=2;if(f.relics.includes("chain"))f.str++;if(f.relics.includes("shield"))f.block+=8;if(f.relics.includes("rose"))f.thorns+=2;if(f.relics.includes("venom"))enemy.poison+=3}
+function hit(a,b,damage){let d=Math.max(0,damage+a.str);if(a.weak>0)d=Math.floor(d*.75);if(b.vuln>0)d=Math.ceil(d*1.5);let absorbed=Math.min(b.block,d);b.block-=absorbed;let dealt=d-absorbed;b.hp=Math.max(0,b.hp-dealt);if(dealt&&b.thorns){a.hp=Math.max(0,a.hp-b.thorns)}return dealt}
+function heal(f,n){f.hp=Math.min(f.maxHp,f.hp+n)}
+function apply(c,a,b){let x=val(c),k=art(c.id).k,dmg=0;switch(k){
+case"hit":dmg=hit(a,b,x);break;
+case"block":a.block+=x;break;
+case"dash":dmg=hit(a,b,x);draw(a,1);break;
+case"fire":dmg=hit(a,b,x);b.poison+=2;break;
+case"spikes":a.block+=x;a.thorns+=2;break;
+case"str":a.str+=x;break;
+case"bleed":dmg=hit(a,b,x);b.poison+=2;break;
+case"heal":heal(a,x);break;
+case"hex":b.weak+=1;b.vuln+=1;break;
+case"twin":dmg=hit(a,b,x);if(b.hp>0)dmg+=hit(a,b,x);break;
+case"breaker":dmg=hit(a,b,x);a.block+=8+(c.up?3:0);break;
+case"draw":draw(a,x);break;
+case"oath":a.block+=8;a.str+=x;break;
+case"leech":dmg=hit(a,b,x);heal(a,4);break;
+case"frost":a.block+=x;b.weak+=1;break;
+case"ambush":dmg=hit(a,b,x+(b.poison>0?8:0));break;
+case"poison":b.poison+=x;break;
+case"seal":a.block+=x;draw(a,1);break;
+case"bargain":a.hp=Math.max(1,a.hp-2);a.energy+=2;draw(a,1);break;
+case"execute":dmg=hit(a,b,x+(b.hp<b.maxHp/2?10:0));break;
+case"meditate":heal(a,x);draw(a,1);break;
+}return art(c.id).n+(dmg?" → "+dmg+" урона":"")}
+function endTurnStatuses(f){if(f.poison){f.hp=Math.max(0,f.hp-f.poison);f.poison=Math.max(0,f.poison-1)}f.weak=Math.max(0,f.weak-1);f.vuln=Math.max(0,f.vuln-1);f.discard.push(...f.hand);f.hand=[]}
+function fighterInfo(f){if(!f)return "";return '<div class="stat"><strong>❤️ '+f.hp+'/'+f.maxHp+'</strong><span>🛡️ '+f.block+' &nbsp; ⚡ '+f.energy+'</span></div>'+hbar(f.hp,f.maxHp)+'<div class="pills">'+(f.str?'<span class="pill">⚔ Сила '+f.str+'</span>':"")+(f.poison?'<span class="pill">☠ Яд '+f.poison+'</span>':"")+(f.thorns?'<span class="pill">🌵 Шипы '+f.thorns+'</span>':"")+(f.weak?'<span class="pill">🕸 Слабость '+f.weak+'</span>':"")+(f.vuln?'<span class="pill">💥 Уязвимость '+f.vuln+'</span>':"")+'</div>'}
+function logLine(msg){G.log.push(msg);if(G.log.length>28)G.log.shift()}
+function logs(){return '<div class="logs">'+G.log.slice(-5).map(esc).join("\n")+'</div>'}
+function monsterName(elite){return elite?choose(["Пепельный рыцарь","Безликий страж","Хранитель разлома"]):choose(["Теневой мародёр","Слепой культист","Болотный охотник","Собиратель костей"])}
+function createMonster(elite){let hp=elite?54+G.stage*5:29+G.stage*5;return {name:monsterName(elite),art:elite?"👹":choose(["👺","🧟","🦂","🐺"]),hp,maxHp:hp,block:0,energy:0,str:elite?2:0,poison:0,weak:0,vuln:0,thorns:0,rounds:0,intent:0}}
+function intentLabel(){let m=G.combat.monster;let r=m.intent%3;return r===0?"⚔️ Атака "+(7+G.stage*2+(m.str||0)):r===1?"🛡️ Защита 6 · атака 5":"☠️ Накладывает яд · атака 7"}
+function renderFight(){const f=G.combat.player,m=G.combat.monster;return topstats()+pathdots()+header("Бой: "+m.name,"Разыграй карты, затем заверши ход. Броня сбрасывается в начале следующего хода.")+'<div class="enemy"><div class="monster-art">'+m.art+'</div><h3 class="center">'+m.name+'</h3>'+fighterInfo(m)+'<div class="center"><span class="ints">'+intentLabel()+'</span></div></div><div class="panel"><h3>'+G.runner.name+' · ⚡ '+f.energy+' энергии</h3>'+fighterInfo(f)+'</div>'+logs()+'<div class="eyebrow">ТВОЯ РУКА</div><div class="cardgrid">'+f.hand.map((c,i)=>card(c,"play",i,art(c.id).c>f.energy)).join("")+'</div>'+btn("Завершить ход","endTurn","","full")+'<p class="small center" style="margin-top:10px">Колода '+f.deck.length+' · Сброс '+f.discard.length+'</p>'}
+function createFight(elite){let p=makeFighter(G.runner),m=createMonster(elite);beginEffects(p,m);startTurn(p);G.combat={player:p,monster:m,elite};G.log=["Тебе противостоит "+m.name+"."];G.screen="fight";render()}
+function playSolo(index){let b=G.combat,p=b.player,m=b.monster,c=p.hand[index];if(!c||art(c.id).c>p.energy)return;p.energy-=art(c.id).c;p.hand.splice(index,1);p.discard.push(c);logLine("Ты: "+apply(c,p,m));if(m.hp<=0){winFight();return}if(p.hp<=0){die();return}render()}
+function soloEnd(){let b=G.combat,p=b.player,m=b.monster;endTurnStatuses(p);if(p.hp<=0){die();return}m.block=0;let mode=m.intent%3;let d=0;if(mode===0)d=hit(m,p,7+G.stage*2);if(mode===1){m.block+=6;d=hit(m,p,5)}if(mode===2){p.poison+=2;d=hit(m,p,7)}logLine(m.name+": "+(d?d+" урона":"действие")+"; яд "+p.poison);m.intent++;if(p.hp<=0){die();return}if(m.hp<=0){winFight();return}startTurn(p);render()}
+function winFight(){let b=G.combat;G.runner.hp=Math.max(1,b.player.hp);if(G.runner.relics.includes("sun"))heal(G.runner,7);if(G.runner.relics.includes("flask"))heal(G.runner,12);let gold=b.elite?75:30+G.stage*6;G.runner.gold+=gold;let relic=b.elite?choose(RELICS.filter(x=>!G.runner.relics.includes(x.id)).map(x=>x.id)):null;if(relic)addRelic(relic);G.reward={title:"Победа над врагом",desc:(relic?"Получена реликвия: "+RELICS.find(x=>x.id===relic).n+". ":"")+"Выбери одну карту в колоду.",gold,choices:unique(COMMON,3).map(inst)};G.combat=null;G.screen="reward";render()}
+function die(){G.runner.hp=0;G.screen="lost";if(!G.demo)send({type:"death"});render()}
+function nextStage(){G.encounter=null;G.shop=null;G.reward=null;G.stage++;if(G.stage>=STAGES.length){finishRun();return}G.screen="map";render()}
+function openNode(i){let type=G.map[G.stage][i];G.encounter={type};switch(type){
+case"fight":createFight(false);return;case"elite":createFight(true);return;
+case"shop":G.shop={cards:unique(COMMON,3).map(inst),relics:unique(RELICS.filter(r=>!G.runner.relics.includes(r.id)).map(r=>r.id),1)};G.screen="shop";break;
+case"event":G.encounter.event=choose(EVENTS);G.screen="event";break;
+case"rest":G.screen="rest";break;
+case"treasure":G.encounter.choices=unique(RELICS.filter(r=>!G.runner.relics.includes(r.id)).map(r=>r.id),3);G.screen="treasure";break;}render()}
+function renderShop(){let s=G.shop;return topstats()+header("Лавка на краю мира","Магазин доступен только на этом перекрёстке. Купленное остаётся с тобой до конца пути.")+'<div class="eyebrow">КАРТЫ</div><div class="cardgrid">'+s.cards.map((c,i)=>'<div>'+card(c,"buyCard",i,G.runner.gold<55||s.cards[i]===null)+'<div class="center money">◈ 55</div></div>').join("")+'</div><div class="eyebrow">РЕЛИКВИЯ</div>'+s.relics.map(id=>relicButton(id,"buyRelic","◈ 115")).join("")+'<div class="actions">'+btn("Лечение 20 HP · ◈ 40","buyHeal","", "secondary",G.runner.gold<40||G.runner.hp===G.runner.maxHp)+btn("Удалить карту · ◈ 75","buyRemove","", "secondary",G.runner.gold<75||G.runner.deck.length<=6)+'</div>'+btn("Покинуть лавку","next","","full") }
+function renderEvent(){let e=G.encounter.event;return topstats()+header(e.n,e.d)+'<div class="hero-art">'+e.e+'</div><div class="panel">'+e.options.map((o,i)=>'<div style="margin:7px 0">'+btn(o[0],"event",i,"secondary")+'</div>').join("")+'</div>'}
+function doEvent(i){let type=G.encounter.event.options[i][1],r=G.runner;if(type==="blood"){r.hp=Math.max(1,r.hp-9);r.boon++}if(type==="gold")r.gold+=i?35:45;if(type==="upgrade")choose(r.deck).up++;if(type==="heal")heal(r,20);if(type==="relic"){r.hp=Math.max(1,r.hp-10);let ids=RELICS.filter(x=>!r.relics.includes(x.id));if(ids.length)addRelic(choose(ids).id)}if(type==="card"){r.deck.push(inst(choose(COMMON)));r.gold+=15}if(type==="risk"){r.hp=Math.max(1,r.hp-6);r.gold+=70}nextStage()}
+function runnerSummary(){return {name:G.runner.name,hero:G.runner.hero,maxHp:G.runner.maxHp,deck:G.runner.deck,relics:G.runner.relics,boon:G.runner.boon}}
+function finishRun(){G.runner.hp=G.runner.maxHp;if(G.demo){G.screen="done";render();return}G.screen="wait";G.done=true;send({type:"ready",build:runnerSummary()});render();checkDuel()}
+function checkDuel(){if(G.role!=="host"||!G.done||!G.other||G.duel)return;const own=runnerSummary();const b={host:makeFighter({...own,hp:own.maxHp}),guest:makeFighter({...G.other,hp:G.other.maxHp})};beginEffects(b.host,b.guest);beginEffects(b.guest,b.host);startTurn(b.host);G.duel={fighters:b,turn:"host",round:1,log:["Последняя дуэль началась!"],winner:""};G.screen="duel";broadcastDuel()}
+function broadcastDuel(){send({type:"state",state:G.duel});render()}
+function renderDuel(){let d=G.duel;if(!d)return "<p>Загрузка дуэли...</p>";const me=d.fighters[G.role],them=d.fighters[G.role==="host"?"guest":"host"],mine=d.turn===G.role;return '<div class="eyebrow">ФИНАЛ · РАУНД '+d.round+'</div><h2>Последняя дуэль</h2><p class="sub">'+(mine?"Твой ход. Сыграй карты и заверши ход.":"Ход соперника. Ожидаем его действия.")+'</p><div class="duelstats"><div class="panel red"><h3>⚔ Соперник</h3><div class="small">'+esc(them.name)+'</div>'+fighterInfo(them)+'<div class="small">🃏 '+them.hand.length+' карт в руке</div></div><div class="panel gold"><h3>🛡 Ты</h3><div class="small">'+esc(me.name)+'</div>'+fighterInfo(me)+'<div class="small">🃏 '+me.hand.length+' карт в руке</div></div></div><div class="emphasis">⚔️</div><div class="logs">'+d.log.slice(-5).map(esc).join("\n")+'</div><div class="eyebrow">ТВОЯ РУКА · ⚡ '+me.energy+'</div><div class="cardgrid">'+me.hand.map((c,i)=>card(c,"duelPlay",i,!mine||art(c.id).c>me.energy)).join("")+'</div>'+btn(mine?"Завершить ход":"Ход противника","duelEndTurn","","full",!mine)+'<p class="small center" style="margin-top:10px">Выбранные карты разыгрываются сразу. Противник видит их эффект.</p>'}
+function commandDuel(cmd){if(G.role!=="host"){send({type:"command",cmd});return}applyDuel(cmd,"host")}
+function applyDuel(cmd,by){let d=G.duel;if(!d||d.winner||d.turn!==by)return;let f=d.fighters[by],foe=d.fighters[by==="host"?"guest":"host"];if(cmd.action==="play"){const index=Number(cmd.index);if(!Number.isInteger(index)||index<0||index>=f.hand.length)return;const c=f.hand[index];if(art(c.id).c>f.energy)return;f.energy-=art(c.id).c;f.hand.splice(index,1);f.discard.push(c);d.log.push(f.name+": "+apply(c,f,foe));}else if(cmd.action==="end"){endTurnStatuses(f);d.log.push(f.name+" завершил ход.");if(f.hp>0&&foe.hp>0){d.turn=by==="host"?"guest":"host";if(d.turn==="host")d.round++;startTurn(foe)}}else return;
+if(f.hp<=0||foe.hp<=0){d.winner=f.hp>0?by:(by==="host"?"guest":"host");d.log.push("Победа: "+d.fighters[d.winner].name);G.screen="duelEnd"}broadcastDuel()}
+function statusMessageNow(msg){statusMessage=msg;setNet()}
+const encoder=new TextEncoder();const decoder=new TextDecoder();
+function base64(bytes){let str="";bytes.forEach(x=>str+=String.fromCharCode(x));return btoa(str)}
+function unbase64(x){return Uint8Array.from(atob(x),c=>c.charCodeAt(0))}
+async function setRoom(code,role){G.code=code.toUpperCase();G.role=role;const secret=encoder.encode(G.code);const digest=new Uint8Array(await crypto.subtle.digest("SHA-256",secret));const topicHash=Array.from(digest).map(x=>x.toString(16).padStart(2,"0")).join("").slice(0,30);G.topic="ehtid-duel-"+topicHash;const material=await crypto.subtle.importKey("raw",secret,"PBKDF2",false,["deriveKey"]);G.key=await crypto.subtle.deriveKey({name:"PBKDF2",salt:encoder.encode("EHTID Ashes Duel v1"),iterations:55000,hash:"SHA-256"},material,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);AndroidNet.listen(G.topic);try{setupRTC()}catch(e){}if(role==="guest"){send({type:"join"});guestJoinTimer=setInterval(()=>{if(!G.connected)send({type:"join"});else clearInterval(guestJoinTimer)},5000)}else{setInterval(()=>{if(G.topic&&!G.connected)send({type:"hello"})},7000)}setNet()}
+async function encrypt(obj){const iv=crypto.getRandomValues(new Uint8Array(12));const ct=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv},G.key,encoder.encode(JSON.stringify(obj))));return base64(iv)+"."+base64(ct)}
+async function decrypt(payload){const spl=payload.split(".");if(spl.length!==2)return null;const bytes=await crypto.subtle.decrypt({name:"AES-GCM",iv:unbase64(spl[0])},G.key,unbase64(spl[1]));return JSON.parse(decoder.decode(bytes))}
+function toRelay(data){try{AndroidNet.post(G.topic,data)}catch(e){transportWarning("Сетевая отправка недоступна")}}
+async function send(msg){if(!G.key||G.demo)return;let id=Array.from(crypto.getRandomValues(new Uint8Array(8))).map(x=>x.toString(16).padStart(2,"0")).join("");let value=await encrypt({...msg,id,from:G.role,v:1});const force=msg.type==="signal"||msg.type==="join"||msg.type==="welcome"||msg.type==="hello";if(!force&&channel&&channel.readyState==="open"){try{channel.send(value);let timer=setTimeout(()=>{toRelay(value);pending.delete(id)},1800);pending.set(id,timer);return}catch(e){}}toRelay(value)}
+async function receive(payload,via){if(payload.startsWith("ack:")){const id=payload.slice(4);if(pending.has(id)){clearTimeout(pending.get(id));pending.delete(id)}return}let m;try{m=await decrypt(payload)}catch(e){return}if(!m||m.v!==1||m.from===G.role||!m.id)return;if(via==="direct"&&channel&&channel.readyState==="open"){try{channel.send("ack:"+m.id)}catch(e){}}if(seen.has(m.id))return;seen.add(m.id);if(seen.size>1500)seen.clear();handleMessage(m)}
+window.onWire=function(s){receive(s,"relay")};
+window.transportWarning=function(s){statusMessageNow(s)};
+function setupRTC(){if(!window.RTCPeerConnection)return;peer=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun.cloudflare.com:3478"}]});peer.onicecandidate=e=>{if(e.candidate)send({type:"signal",signal:"ice",data:e.candidate.toJSON()})};peer.ondatachannel=e=>attachChannel(e.channel)}
+function attachChannel(c){channel=c;channel.onopen=()=>{G.connected=true;setNet()};channel.onclose=()=>setNet();channel.onmessage=e=>receive(String(e.data),"direct")}
+async function offerRTC(){if(!peer||peer.signalingState!=="stable")return;try{attachChannel(peer.createDataChannel("duel",{}));await peer.setLocalDescription(await peer.createOffer());send({type:"signal",signal:"offer",data:peer.localDescription.toJSON()})}catch(e){}}
+async function signaling(m){if(!peer)return;try{if(m.signal==="offer"&&G.role==="guest"){await peer.setRemoteDescription(m.data);gotRemote=true;for(let ice of candidates)await peer.addIceCandidate(ice);candidates=[];await peer.setLocalDescription(await peer.createAnswer());send({type:"signal",signal:"answer",data:peer.localDescription.toJSON()})}else if(m.signal==="answer"&&G.role==="host"){await peer.setRemoteDescription(m.data);gotRemote=true;for(let ice of candidates)await peer.addIceCandidate(ice);candidates=[]}else if(m.signal==="ice"){if(gotRemote)await peer.addIceCandidate(m.data);else candidates.push(m.data)}}catch(e){}}
+function handleMessage(m){if(m.type==="join"&&G.role==="host"){G.connected=true;send({type:"welcome"});offerRTC();setNet()}
+else if((m.type==="welcome"||m.type==="hello")&&G.role==="guest"){G.connected=true;setNet();if(m.type==="hello")send({type:"join"})}
+else if(m.type==="signal"){signaling(m)}
+else if(m.type==="ready"){if(!m.build||!Array.isArray(m.build.deck)||m.build.deck.length>200||m.build.maxHp>500)return;G.other=m.build;if(G.role==="host")checkDuel();else if(G.done)send({type:"ready",build:runnerSummary()});if(G.screen==="wait")render()}
+else if(m.type==="state"&&G.role==="guest"&&m.state&&m.state.fighters&&m.state.turn){G.duel=m.state;G.screen=m.state.winner?"duelEnd":"duel";render()}
+else if(m.type==="command"&&G.role==="host"&&m.cmd){applyDuel(m.cmd,"guest")}
+else if(m.type==="death"){G.otherDead=true;if(G.done){G.screen="done";render()}}
+}
+function makeMap(){G.map=STAGES.map((s,i)=>{let arr=[...s];if((i+(G.role==="guest"?1:0)+rnd(3))%2)arr.reverse();return arr})}
+async function dispatch(action,x){if(action==="create"){let arr=new Uint8Array(20);crypto.getRandomValues(arr);let alphabet="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";let code=Array.from(arr,v=>alphabet[v%alphabet.length]).join("");await setRoom(code,"host");G.screen="hero"}
+if(action==="join"){const field=$("codeInput");let code=field?field.value.trim().toUpperCase().replace(/[\s-]/g,""):"";if(!/^[A-HJ-NP-Z2-9]{20}$/.test(code)){alert("Нужен 20-символьный код комнаты.");return}await setRoom(code,"guest");G.screen="hero"}
+if(action==="demo"){G.demo=true;G.role="host";G.screen="hero"}
+if(action==="hero"){G.hero=x;G.runner=newRun(x);makeMap();G.screen="map";if(!G.demo)send({type:"hello"})}
+if(action==="node")openNode(Number(x));
+if(action==="play")playSolo(Number(x));
+if(action==="endTurn")soloEnd();
+if(action==="reward"){G.runner.deck.push(G.reward.choices[Number(x)]);nextStage()}
+if(action==="skipReward")nextStage();
+if(action==="next")nextStage();
+if(action==="buyCard"){let i=Number(x),c=G.shop.cards[i];if(c&&G.runner.gold>=55){G.runner.gold-=55;G.runner.deck.push(c);G.shop.cards[i]=null}}
+if(action==="buyRelic"){if(G.runner.gold>=115&&G.shop.relics.includes(x)){G.runner.gold-=115;addRelic(x);G.shop.relics=G.shop.relics.filter(a=>a!==x)}}
+if(action==="buyHeal"){if(G.runner.gold>=40){G.runner.gold-=40;heal(G.runner,20)}}
+if(action==="buyRemove"){if(G.runner.gold>=75&&G.runner.deck.length>6){G.runner.gold-=75;let i=G.runner.deck.findIndex(c=>c.id==="strike");G.runner.deck.splice(i<0?0:i,1)}}
+if(action==="event")doEvent(Number(x));
+if(action==="restHeal"){heal(G.runner,Math.ceil(G.runner.maxHp*.3));nextStage()}
+if(action==="restUpgrade")G.screen="upgrade";
+if(action==="upgrade"){G.runner.deck[Number(x)].up++;nextStage()}
+if(action==="takeRelic"){addRelic(x);nextStage()}
+if(action==="resend")send({type:"ready",build:runnerSummary()});
+if(action==="duelPlay")commandDuel({action:"play",index:Number(x)});
+if(action==="duelEndTurn")commandDuel({action:"end"});
+if(action==="restart"){location.reload();return}
+render()}
+document.addEventListener("click",e=>{let b=e.target.closest("button[data-a]");if(b&&!b.disabled){dispatch(b.dataset.a,b.dataset.x).catch(err=>{alert("Ошибка: "+err.message)})}});
+window.goBack=()=>{if(G.screen==="lobby")return; if(G.screen==="hero"||G.screen==="done"||G.screen==="lost"||G.screen==="duelEnd"){location.reload();return}alert("Бой и забег нельзя прерывать. Заверши текущую встречу.")};
+render();
+</script></body></html>
