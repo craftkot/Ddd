@@ -182,6 +182,12 @@ function pvCheckDeaths(d){
  }return false
 }
 const pvBaseHit=hit,pvBaseTrueDamage=ashTrueDamage,pvBaseEffect=ashEffect;
+const pvBaseHook=ashHook;
+ashHook=function(event,owner,target,ctx){
+ const b=G.duel&&G.duel.fighters;
+ if(!target&&b){if(owner===b.host)target=b.guest;else if(owner===b.guest)target=b.host}
+ return pvBaseHook(event,owner,target,ctx)
+};
 let pvContext=null;
 ashTrueDamage=function(f,n){
  if(!pvContext||pvContext.target!==f){
@@ -209,7 +215,7 @@ hit=window.hit=function(a,b,n){
  const oldBlock=b.block;
  const blockUsed=Math.min(oldBlock,predicted);
  const allowed=Math.max(0,pvContext.limit-pvContext.damage);
- const extraBlock=Math.max(0,predicted-blockUsed-allowed);
+ const extraBlock=(b.dodge||0)?0:Math.max(0,predicted-blockUsed-allowed);
  b.block+=extraBlock;
  const dealt=pvBaseHit(a,b,adjusted);
  pvContext.damage+=dealt;
@@ -317,7 +323,7 @@ function pvStartDuel(){
  for(const s of ["host","guest"])pvRelic(fighters[s],"start",fighters[s==="host"?"guest":"host"]);
  const actor=pvPreview(d,1)[0],later=actor==="host"?"guest":"host";
  // Fairness: reactive shield for player who acts later, not locked to role.
- fighters[later].block+=8;fighters[later].ward+=10;fighters[later].focus=Math.min(4,fighters[later].focus+1);
+ fighters[later].block+=4;fighters[later].ward+=5;
  pvNext(d);G.screen="duel";broadcastDuel()
 }
 checkDuel=window.checkDuel=pvStartDuel;
