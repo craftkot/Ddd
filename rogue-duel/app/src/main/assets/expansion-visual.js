@@ -90,6 +90,8 @@ renderDuel=window.renderDuel=function(){
  '<div class="eyebrow">РУКА · '+me.hand.length+' КАРТ</div><div class="scrollline">'+me.hand.map((c,i)=>card(c,"duelPlay",i,!mine||art(c.id).c>me.energy)).join("")+'</div>'+
  btn(mine?"Завершить ход":"Ход соперника","duelEndTurn","","full",!mine)
 };
+const ashOldOpenNode=openNode;
+openNode=window.openNode=function(i){ashOldOpenNode(i);if(G.screen==="shop"&&G.shop){G.shop.cards=ashAffinityCards(G.runner,3);render()}};
 const ashOldDispatch=dispatch;
 dispatch=window.dispatch=async function(action,x){
  if(action==="target"){if(G.combat&&G.combat.enemies[Number(x)]&&G.combat.enemies[Number(x)].hp>0)G.combat.target=Number(x);render();return}
