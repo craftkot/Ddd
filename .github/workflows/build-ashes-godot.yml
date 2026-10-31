@@ -72,8 +72,9 @@ jobs:
           if-no-files-found: error
       - name: Publish separate Godot alpha
         if: github.event_name == 'push'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete ashes-godot-v0.9.0-alpha --yes --cleanup-tag || true
-          gh release create ashes-godot-v0.9.0-alpha godot-duel/build/AshesGodot-v0.9-debug.apk#AshesGodot-v0.9-debug.apk --target "$GITHUB_SHA" --title "Пепел и карты · Godot v0.8 alpha" --notes "Native Godot 4 solo port, 161 cards and 136 relics. Online PvP stays in WebView v0.7."
+          gh release create ashes-godot-v0.9.0-alpha godot-duel/build/AshesGodot-v0.9-debug.apk#AshesGodot-v0.9-debug.apk --target "$GITHUB_SHA" --title "Пепел и карты · Godot v0.9 alpha" --notes "Native Godot 4 solo port, 161 cards and 136 relics. Online PvP stays in WebView v0.7."
