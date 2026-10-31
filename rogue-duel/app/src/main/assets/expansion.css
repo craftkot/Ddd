@@ -35,3 +35,12 @@ header{border-color:#ae6c5573}
 .unit.striking .unit-sprite{animation:ash-strike .3s ease-out}
 .unit.impact .unit-sprite{animation:ash-impact .37s ease-in-out}
 @media(min-width:590px){.battlefield{min-height:365px}.unit.hostile .unit-sprite{width:105px;height:137px}.unit.ally .unit-sprite{width:145px;height:190px}.unit-name{font-size:12px}}
+
+.catalog-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:13px 0 19px}
+.catalog-card{margin:0;padding:11px;background:linear-gradient(145deg,#29313d,#151d2a);min-height:98px}
+.catalog-card strong{font-size:13px;line-height:1.4;color:#f3d6a4}
+.catalog-card h3{font-size:13px;margin-bottom:5px}
+.catalog-card .sub{font-size:11px;margin-top:8px;line-height:1.48;overflow-wrap:anywhere}
+.catalog-card .flex{align-items:flex-start}
+.filterbar .btn{flex:none;white-space:nowrap;font:11px system-ui}
+@media(min-width:600px){.catalog-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
