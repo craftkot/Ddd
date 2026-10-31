@@ -197,6 +197,7 @@ console.log("PASS: invalid remote builds rejected; delayed duplicate commands do
 
 /* 0.4 UI integration checks: actual rendered HTML, 4 foe target controls,
    card dragging hooks, stage routes, rewards, and PvP AV phase. */
+vm.runInContext(fs.readFileSync(base+"route-tree.js","utf8"),context,{timeout:4000});
 vm.runInContext(fs.readFileSync(base+"atelier.js","utf8"),context,{timeout:4000});
 check([
 'G.role="host";G.demo=true;G.runner=newRun("guard");G.stage=12;G.screen="fight";createFight(false);',
