@@ -63,7 +63,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Pepel-i-Karty-Android-APK
-          path: rogue-duel/app/build/outputs/apk/debug/AshesDuel-v0.2-debug.apk
+          path: rogue-duel/app/build/outputs/apk/debug/AshesDuel-v0.3-debug.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -73,4 +73,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete ashes-duel-v0.3.0 --yes --cleanup-tag || true
-          gh release create ashes-duel-v0.2.0 app/build/outputs/apk/debug/AshesDuel-v0.2-debug.apk#AshesDuel-v0.2-debug.apk --target "$GITHUB_SHA" --title "Пепел и карты v0.3 — Android" --notes "Открытая тестовая версия карточного рогалика на двух игроков. APK подписан отладочным ключом. Интернет-PvP не проверен на реальных телефонах."
+          gh release create ashes-duel-v0.3.0 app/build/outputs/apk/debug/AshesDuel-v0.3-debug.apk#AshesDuel-v0.3-debug.apk --target "$GITHUB_SHA" --title "Пепел и карты v0.3 — Android" --notes "Открытая тестовая версия карточного рогалика на двух игроков. APK подписан отладочным ключом. Интернет-PvP не проверен на реальных телефонах."
