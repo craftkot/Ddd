@@ -253,7 +253,7 @@ if(action==="endTurn")soloEnd();
 if(action==="reward"){G.runner.deck.push(G.reward.choices[Number(x)]);nextStage()}
 if(action==="skipReward")nextStage();
 if(action==="next")nextStage();
-if(action==="buyCard"){let i=Number(x),c=G.shop.cards[i];if(c&&G.runner.gold>=55){G.runner.gold-=55;G.runner.deck.push(c);G.shop.cards[i]=null}}
+if(action==="buyCard"){let i=Number(x),c=G.shop.cards[i];let cost=G.shop.prices?.[i]??55;if(c&&G.runner.gold>=cost){G.runner.gold-=cost;G.runner.deck.push(c);G.shop.cards[i]=null}}
 if(action==="buyRelic"){if(G.runner.gold>=115&&G.shop.relics.includes(x)){G.runner.gold-=115;addRelic(x);G.shop.relics=G.shop.relics.filter(a=>a!==x)}}
 if(action==="buyHeal"){if(G.runner.gold>=40){G.runner.gold-=40;heal(G.runner,20)}}
 if(action==="buyRemove"){if(G.runner.gold>=75&&G.runner.deck.length>6){G.runner.gold-=75;let i=G.runner.deck.findIndex(c=>c.id==="strike");G.runner.deck.splice(i<0?0:i,1)}}
@@ -270,4 +270,4 @@ render()}
 document.addEventListener("click",e=>{let b=e.target.closest("button[data-a]");if(b&&!b.disabled){dispatch(b.dataset.a,b.dataset.x).catch(err=>{alert("Ошибка: "+err.message)})}});
 window.goBack=()=>{if(G.screen==="lobby")return; if(G.screen==="hero"||G.screen==="done"||G.screen==="lost"||G.screen==="duelEnd"){location.reload();return}alert("Бой и забег нельзя прерывать. Заверши текущую встречу.")};
 render();
-</script><script src="expansion-data.js"></script><script src="expansion-relics.js"></script><script src="expansion-combat.js"></script><script src="expansion-visual.js"></script><script src="pvp-balance.js"></script><script src="route-tree.js"></script><script src="atelier.js"></script><script src="connection-ui.js"></script></body></html>
+</script><script src="expansion-data.js"></script><script src="expansion-relics.js"></script><script src="expansion-combat.js"></script><script src="expansion-visual.js"></script><script src="pvp-balance.js"></script><script src="route-tree.js"></script><script src="encounter-director.js"></script><script src="run-economy.js"></script><script src="atelier.js"></script><script src="connection-ui.js"></script></body></html>
