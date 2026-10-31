@@ -99,7 +99,7 @@ func render_ui() -> void:
  top.add_child(top_row)
  var brand=make_text("✦ ПЕПЕЛ И КАРТЫ",21,GOLD)
  top_row.add_child(brand)
- var version=make_text("GODOT  •  ALPHA 0.8",11,QUIET)
+ var version=make_text("GODOT  •  ALPHA 0.9",11,QUIET)
  version.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
  top_row.add_child(version)
  if game.screen=="fight":
