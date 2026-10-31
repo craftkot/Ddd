@@ -151,18 +151,37 @@ function duelView(){
  return out
 }
 function mapView(){
- let r=G.runner;
- const lvl=G.stage;
- let rows=G.map.map((choices,i)=>{
-  let current=i===lvl,past=i<lvl,shown=past?UI.history[i]:null;
-  return '<div class="etch-map-row" data-map-stage="'+i+'">'+choices.map((t,j)=>{
-   const cl=current?"current":past&&shown===t?"past":"future",can=current;
-   return '<button class="etch-map-node '+cl+'" title="'+LABEL[t][1]+'" '+(can?'data-a="node" data-x="'+j+'"':'disabled')+'><span>'+emblem(t)+'</span></button>'
-  }).join("")+'</div>'
- }).reverse().join("");
- return '<div class="etch-map-caption"><div class="eyebrow">ГЛАВА · ПУТЬ ПАДШИХ</div><div class="etch-title">Перекрёсток '+(lvl+1)+' / '+G.map.length+'</div><p class="small">❤ '+r.hp+'/'+r.maxHp+' · ◈ '+r.gold+' · '+r.deck.length+' карт · '+r.relics.length+' реликвий</p></div>'+
- '<div class="etch-worldmap">'+rows+'</div><div class="etch-map-legend">⚔ Бой · ☠ Элита · ◆ Торговец · ◇ Реликвии · ✧ Событие · ♨ Привал</div>'+
- '<div class="etch-actions"><button data-a="inventory" class="etch-btn plain">Посмотреть свою колоду</button></div>'
+ const r=G.runner,tree=G.routeTree;
+ if(!tree)return '<div class="etch-story"><h2>Маршрут не создан</h2><button class="etch-btn" data-a="rebuildRoute">Восстановить маршрут</button></div>';
+ const floor=G.stage,n=tree.floors.length,h=90*n+45;
+ const active=ASH_TREE.reachable(floor),visited=tree.visited;
+ const selected=new Set(visited.map(p=>p.stage+"-"+p.index));
+ const pastEdges=new Set();
+ for(let i=1;i<visited.length;i++){const a=visited[i-1],b=visited[i];if(b.stage===a.stage+1)pastEdges.add(a.stage+"-"+a.index+"-"+b.index)}
+ const yOf=i=>h-64-i*90;
+ const paths=tree.edges.map(([stage,source,target])=>{
+  const from=tree.floors[stage][source],to=tree.floors[stage+1][target];
+  const y1=yOf(stage),y2=yOf(stage+1),mx=(y1+y2)*.5;
+  const travelled=pastEdges.has(stage+"-"+source+"-"+target);
+  const lit=stage===floor-1&&tree.position?.stage===stage&&tree.position.index===source&&active.includes(target);
+  return '<path class="'+(travelled?"travelled":lit?"reachable":"untravelled")+'" d="M'+(from.x*10)+' '+y1+' C'+(from.x*10)+' '+mx+' '+(to.x*10)+' '+mx+' '+(to.x*10)+' '+y2+'"/>';
+ }).join("");
+ const nodes=tree.floors.map((items,i)=>items.map((node,j)=>{
+  const done=selected.has(i+"-"+j),can=i===floor&&active.includes(j);
+  const cl=done?"travelled":can?"reachable":"untravelled";
+  return '<button type="button" data-map-stage="'+i+'" class="etch-route-node '+cl+'" style="left:'+node.x+'%;top:'+yOf(i)+'px" title="'+esc(LABEL[node.type][1])+'" aria-label="Этаж '+(i+1)+': '+esc(LABEL[node.type][1])+(can?', доступен':'')+'"'+(can?' data-a="node" data-x="'+j+'"':' disabled')+'>'+
+    '<span class="route-symbol">'+emblem(node.type)+'</span><span class="route-kind">'+esc(LABEL[node.type][1])+'</span></button>'
+ }).join("")).join("");
+ const choices=tree.floors[floor].filter(node=>active.includes(node.index));
+ return '<div class="etch-map-caption"><div class="eyebrow">КАРТА ПУТИ · '+(G.role==="guest"?"ГОСТЬ":G.demo?"ОДИНОЧНАЯ ИГРА":"ХОЗЯИН")+'</div><div class="etch-title">Этаж '+(floor+1)+' / '+n+'</div>'+
+ '<p class="small">❤ '+r.hp+'/'+r.maxHp+' · ◈ '+r.gold+' · '+r.deck.length+' карт · '+r.relics.length+' реликвий</p></div>'+
+ '<div class="etch-next-panel"><div class="eyebrow">ДОСТУПНЫЕ ПУТИ</div><p class="small">Можно выбрать только узел, соединённый с твоим последним шагом. У каждого игрока своё дерево.</p>'+
+ '<div class="etch-next-choices">'+choices.map(node=>'<button type="button" class="etch-btn etch-next-button" data-a="node" data-x="'+node.index+'">'+emblem(node.type)+' '+esc(LABEL[node.type][1])+'</button>').join("")+'</div>'+
+ (G.lastRouteWarning?'<p class="dangertext">'+esc(G.lastRouteWarning)+'</p>':'')+'</div>'+
+ '<div class="etch-worldmap etch-tree-map" style="height:'+h+'px"><svg class="etch-tree-links" viewBox="0 0 1000 '+h+'" preserveAspectRatio="none" aria-hidden="true">'+paths+'</svg>'+nodes+'</div>'+
+ '<p class="etch-hint">Дерево строится снизу вверх. Золотые узлы доступны. Зелёные — пройденный путь. Серые — ещё закрыты.</p>'+
+ '<div class="etch-map-legend">⚔ Бой · ☠ Элита · ◆ Магазин · ◇ Сокровище · ✧ Событие · ♨ Привал</div>'+
+ '<div class="etch-actions"><button data-a="inventory" class="etch-btn plain">Посмотреть свою сборку</button></div>'
 }
 function rewardView(){
  return eventHead(G.reward.title,G.reward.desc)+'<div class="etch-story"><div class="story-symbol">🏆</div><div class="center money">◈ Получено '+G.reward.gold+' золота</div><div class="etch-catalog">'+G.reward.choices.map((c,i)=>'<div>'+playcard(c,"reward",i)+'</div>').join("")+'</div><div class="etch-actions"><button class="etch-btn plain" data-a="skipReward">Пропустить награду</button></div></div>'
@@ -235,7 +254,7 @@ render=window.render=function(){
  if(view===null)oldRender();
  else{$app().innerHTML=view;setNet()}
  if(UI.lastScreen!==G.screen){UI.select=null;UI.lastScreen=G.screen}
- if(G.screen==="map"){let cur=document.querySelector('[data-map-stage="'+G.stage+'"]');if(cur&&cur.scrollIntoView)cur.scrollIntoView({block:"center",behavior:"auto"})}
+ /* Route choices are placed above the tree: never scroll the user to a disabled floor on Android. */
 };
 const oldOpenNode=openNode;
 openNode=window.openNode=function(i){if(G.map?.[G.stage])UI.history[G.stage]=G.map[G.stage][i];return oldOpenNode(i)};
