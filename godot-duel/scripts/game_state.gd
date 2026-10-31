@@ -545,7 +545,7 @@ func upgrade_card(index:int)->bool:
  return true
 
 func remove_card(index:int)->bool:
- if screen!="shop" or shop_removed or gold<75 or deck.size()<=8:return false
+ if screen not in ["shop","remove"] or shop_removed or gold<75 or deck.size()<=8:return false
  if index<0 or index>=deck.size():return false
  gold-=75
  shop_removed=true
@@ -645,7 +645,7 @@ func load_game()->bool:
  if typeof(doc)!=TYPE_DICTIONARY or int(doc.get("version",0))!=8:return false
  if not data["classes"].has(doc.get("hero","")):return false
  if not (doc.get("map_rows",[]) is Array) or doc["map_rows"].size()!=15:return false
- if str(doc.get("screen","")) not in ["map","fight","reward","shop","event","rest","treasure"]:return false
+ if str(doc.get("screen","")) not in ["map","fight","reward","shop","event","rest","treasure","upgrade","remove"]:return false
  hero=str(doc["hero"]);hp=int(doc.get("hp",0));max_hp=int(doc.get("max_hp",0));gold=int(doc.get("gold",0))
  deck=doc.get("deck",[]);relics=doc.get("relics",[]);potions=doc.get("potions",[])
  floor=int(doc.get("floor",0));map_rows=doc["map_rows"];map_edges=doc.get("map_edges",[])
