@@ -92,7 +92,7 @@ func render_ui() -> void:
  if game.screen!="fight":
   var painted=TextureRect.new()
   painted.name="PaintedArenaBackground"
-  painted.texture=ART.atlas_region(ART.arena_region())
+  painted.texture=ART.BACKGROUND
   painted.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
   painted.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
   painted.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED
