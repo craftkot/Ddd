@@ -25,7 +25,7 @@
   return choose(pool.length?pool:fallback)
  }
  function rollTier(elite=false,shop=false){
-  let p=Math.random();
+  let p=(rnd(1000000)/1000000);
   if(elite)return p<.19?"rare":p<.55?"uncommon":"common";
   if(shop)return p<.12?"rare":p<.51?"uncommon":"common";
   return p<.07?"rare":p<.35?"uncommon":"common"
@@ -39,7 +39,7 @@
   for(let i=0;i<3;i++){
    const rarity=rollTier(elite,false);
    let pool=COMMON.filter(id=>CARDS[id]?.rarity===rarity&&!ids.includes(id));
-   if(i===0&&primary&&Math.random()<.72){
+   if(i===0&&primary&&(rnd(1000000)/1000000)<.72){
     const affinity=pool.filter(id=>CARDS[id].school===primary);
     if(affinity.length)pool=affinity
    }
@@ -62,7 +62,7 @@
   oldWin();
   if(G.reward&&G.runner&&G.screen==="reward"){
    G.reward.choices=rewards(G.runner,elite);
-   if(Math.random()<(elite?.48:.25)&&(G.runner.potions||[]).length<3){
+   if((rnd(1000000)/1000000)<(elite?.48:.25)&&(G.runner.potions||[]).length<3){
     const p=choose(POTIONS);addPotion(p.id);
     G.reward.desc+=" Найден расходуемый предмет: "+p.name+"."
    }
