@@ -26,7 +26,7 @@ public class MainActivity extends Activity {
   LinearLayout body, bar; TextView status; int tab=0; WifiManager wifi; ConnectivityManager cm; ExecutorService jobs=Executors.newSingleThreadExecutor();
   String report=""; volatile boolean busy=false; ArrayList<ScanResult> found=new ArrayList<>();
   String routerStatus="Пока не подключено", hilinkStatus="Не проверено";
-  String session=null; int suggestion=1;
+  String session=null; String openWrtGateway=null; int suggestion=1; int scanned24Count=0; boolean scanned=false;
   @Override public void onCreate(Bundle b){super.onCreate(b);
     getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
     wifi=(WifiManager)getApplicationContext().getSystemService(WIFI_SERVICE);
@@ -57,10 +57,28 @@ public class MainActivity extends Activity {
   String name(){WifiInfo w=info();if(w==null)return "Нет подключения";String s=w.getSSID();return s==null?"Неизвестная сеть":s;}
   int freq(){WifiInfo w=info();return w==null?0:w.getFrequency();}
   int channel(int f){if(f==2484)return 14;if(f>=2412&&f<2484)return (f-2407)/5;if(f>=5000&&f<5925)return (f-5000)/5;if(f>=5955&&f<=7115)return (f-5950)/5;return 0;}
-  String gw(){try{DhcpInfo d=wifi.getDhcpInfo();int n=d.gateway;return (n&255)+"."+((n>>8)&255)+"."+((n>>16)&255)+"."+((n>>24)&255);}catch(Exception ex){return "0.0.0.0";}}
-  Network network(){Network n=cm.getActiveNetwork();if(n==null)return null;NetworkCapabilities cap=cm.getNetworkCapabilities(n);return cap!=null&&cap.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)?n:null;}
+  String gw(){
+    try{
+      Network n=network();if(n==null)return "0.0.0.0";
+      LinkProperties props=cm.getLinkProperties(n);
+      if(props!=null)for(RouteInfo r:props.getRoutes()){
+        InetAddress ip=r.getGateway();
+        if(r.isDefaultRoute()&&ip instanceof Inet4Address&&!ip.isAnyLocalAddress())return ip.getHostAddress();
+      }
+    }catch(Exception ignored){}
+    return "0.0.0.0";
+  }
+  Network network(){
+    Network active=cm.getActiveNetwork();
+    if(active!=null){NetworkCapabilities cap=cm.getNetworkCapabilities(active);if(cap!=null&&cap.hasTransport(NetworkCapabilities.TRANSPORT_WIFI))return active;}
+    for(Network n:cm.getAllNetworks()){NetworkCapabilities cap=cm.getNetworkCapabilities(n);if(cap!=null&&cap.hasTransport(NetworkCapabilities.TRANSPORT_WIFI))return n;}
+    return null;
+  }
   boolean ready(){return network()!=null&&!"0.0.0.0".equals(gw());}
-  String ip(){WifiInfo wi=info();if(wi==null)return "—";int n=wi.getIpAddress();return (n&255)+"."+((n>>8)&255)+"."+((n>>16)&255)+"."+((n>>24)&255);}
+  String ip(){
+    try{Network n=network();if(n!=null){LinkProperties p=cm.getLinkProperties(n);if(p!=null)for(LinkAddress a:p.getLinkAddresses())if(a.getAddress() instanceof Inet4Address)return a.getAddress().getHostAddress();}}catch(Exception ignored){}
+    return "—";
+  }
   boolean hasLoc(){return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED;}
   boolean locationEnabled(){LocationManager l=(LocationManager)getSystemService(LOCATION_SERVICE);return l!=null&&l.isLocationEnabled();}
   void permission(){ArrayList<String> list=new ArrayList<>();if(!hasLoc())list.add(Manifest.permission.ACCESS_FINE_LOCATION);
@@ -68,7 +86,12 @@ public class MainActivity extends Activity {
     if(!list.isEmpty())requestPermissions(list.toArray(new String[0]),80);
     else if(!locationEnabled())new AlertDialog.Builder(this).setMessage("Android требует включить геолокацию для просмотра доступных Wi-Fi сетей. Координаты не собираются.").setPositiveButton("Настройки",(d,w)->startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))).setNegativeButton("Отмена",null).show();
     else scan();}
-  @Override public void onRequestPermissionsResult(int req,String[] perm,int[] grants){super.onRequestPermissionsResult(req,perm,grants);if(req==80&&hasLoc())permission();}
+  @Override public void onRequestPermissionsResult(int req,String[] perm,int[] grants){
+    super.onRequestPermissionsResult(req,perm,grants);
+    if(req!=80)return;
+    boolean all=true;for(int g:grants)if(g!=PackageManager.PERMISSION_GRANTED)all=false;
+    if(all&&hasLoc())permission();else toast("Разрешения не предоставлены; просмотр эфира ограничен");
+  }
   void overview(){page("Состояние подключения");LinearLayout c=card("ТЕКУЩАЯ СЕТЬ");WifiInfo w=info();
     line(c,"SSID:",name());line(c,"RSSI:",w==null?"—":w.getRssi()+" dBm");line(c,"Качество:",w==null?"—":WifiManager.calculateSignalLevel(w.getRssi(),100)+"%");
     line(c,"Частота:",freq()+" МГц");line(c,"Канал:",String.valueOf(channel(freq())));
@@ -82,16 +105,16 @@ public class MainActivity extends Activity {
   void air(){page("Анализ радиоэфира");LinearLayout c=card("СКАНИРОВАНИЕ");
     note(c,"Результаты могут быть кешированными: Android ограничивает частоту сканирования.");
     button(c,"Найти точки Wi-Fi",this::permission);
-    int[] scores={0,0,0};int count=0;for(ScanResult r:found){if(r.frequency<2400||r.frequency>2500)continue;count++;
+    int[] scores={0,0,0};int count=0;for(ScanResult r:found){if(r.frequency<2400||r.frequency>2500)continue;WifiInfo own=info();if(own!=null&&r.BSSID!=null&&r.BSSID.equalsIgnoreCase(own.getBSSID()))continue;count++;
       int ch=channel(r.frequency);int power=Math.max(1,100+r.level);int[] targets={1,6,11};for(int j=0;j<3;j++)scores[j]+=Math.max(0,5-Math.abs(ch-targets[j]))*power;}
-    int m=0;for(int i=1;i<3;i++)if(scores[i]<scores[m])m=i;suggestion=new int[]{1,6,11}[m];
+    int m=0;for(int i=1;i<3;i++)if(scores[i]<scores[m])m=i;suggestion=new int[]{1,6,11}[m];scanned24Count=scanned?count:0;
     LinearLayout rec=card("ОПТИМИЗАЦИЯ 2,4 ГГц");line(rec,"Точек 2,4 ГГц:",String.valueOf(count));
-    line(rec,"Рекомендуемый канал:",count>0?String.valueOf(suggestion):"Не определён");
+    line(rec,"Рекомендуемый канал:",scanned24Count>0?String.valueOf(suggestion):"Не определён");
     line(rec,"Оценка 1 / 6 / 11:",scores[0]+" / "+scores[1]+" / "+scores[2]);
     note(rec,"Это оценка по сигналу соседних точек, а не измерение реальной загрузки спектра.");
     LinearLayout list=card("ДОСТУПНЫЕ СЕТИ: "+found.size());for(int i=0;i<Math.min(60,found.size());i++){ScanResult s=found.get(i);line(list,s.SSID==null||s.SSID.isEmpty()?"<скрытая>":s.SSID,channel(s.frequency)+" ch  · "+s.level+" dBm");}
   }
-  void scan(){try{wifi.startScan();found=new ArrayList<>(wifi.getScanResults());Collections.sort(found,(a,b)->Integer.compare(b.level,a.level));status.setText("Найдено "+found.size()+" сетей");render();
+  void scan(){try{scanned=true;wifi.startScan();found=new ArrayList<>(wifi.getScanResults());Collections.sort(found,(a,b)->Integer.compare(b.level,a.level));status.setText("Найдено "+found.size()+" сетей");render();
     new Handler(Looper.getMainLooper()).postDelayed(()->{try{found=new ArrayList<>(wifi.getScanResults());Collections.sort(found,(a,b)->Integer.compare(b.level,a.level));render();}catch(Exception ignored){}},1800);}
     catch(SecurityException ex){status.setText("Требуется разрешение на поиск Wi-Fi");}}
   void tests(){page("Диагностика сети");LinearLayout a=card("ПОДКЛЮЧЕНИЕ");note(a,"Тест TCP-задержки, DNS, доступа к шлюзу и загрузки тестового файла. Все результаты сохраняются локально.");
@@ -100,11 +123,11 @@ public class MainActivity extends Activity {
   void diagnose(){if(!ready()){toast("Подключитесь к Wi-Fi");return;}if(busy)return;busy=true;status.setText("Проверяем сеть…");render();
     final String base="SIGNALLAB · "+new Date()+"\nSSID: "+name()+"\nRSSI: "+(info()==null?"—":info().getRssi())+" dBm\nIP: "+ip()+"\nGateway: "+gw()+"\n";
     jobs.execute(()->{StringBuilder b=new StringBuilder(base);long[] ms=new long[5];int ok=0;
-      try{InetAddress addr=InetAddress.getByName("example.com");b.append("DNS example.com: ").append(addr.getHostAddress()).append("\n");}catch(Exception e){b.append("DNS: ошибка ").append(e.getMessage()).append("\n");}
+      try{Network net=network();if(net==null)throw new IOException("Wi-Fi отключился");InetAddress[] addr=net.getAllByName("example.com");b.append("DNS example.com: ").append(addr.length>0?addr[0].getHostAddress():"пустой ответ").append("\n");}catch(Exception e){b.append("DNS: ошибка ").append(e.getMessage()).append("\n");}
       for(int i=0;i<5;i++)try{Socket s=network().getSocketFactory().createSocket();long at=System.nanoTime();s.connect(new InetSocketAddress("1.1.1.1",443),2500);ms[ok++]=TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-at);s.close();}catch(Exception ignored){}
       if(ok>0){Arrays.sort(ms,0,ok);b.append("TCP 1.1.1.1:443: ").append(ms[ok/2]).append(" ms (медиана из ").append(ok).append(")\n");}else b.append("TCP: недоступен\n");
       try{URL u=new URL("http://"+gw()+"/");HttpURLConnection h=(HttpURLConnection)network().openConnection(u);h.setConnectTimeout(2300);h.setReadTimeout(2300);h.setInstanceFollowRedirects(false);b.append("Панель роутера HTTP: ").append(h.getResponseCode()).append("\n");h.disconnect();}catch(Exception e){b.append("HTTP шлюза: недоступен\n");}
-      try{HttpURLConnection h=(HttpURLConnection)new URL("https://speed.cloudflare.com/__down?bytes=3000000").openConnection();h.setConnectTimeout(5000);h.setReadTimeout(10000);long start=System.nanoTime();long total=0;try(InputStream in=h.getInputStream()){byte[] buf=new byte[16384];int n;while((n=in.read(buf))>=0)total+=n;}double seconds=(System.nanoTime()-start)/1e9;b.append(String.format(Locale.US,"Скорость HTTP (оценка): %.1f Мбит/с\n",total*8/seconds/1e6));h.disconnect();}catch(Exception e){b.append("Скорость: тест недоступен\n");}
+      try{Network net=network();if(net==null)throw new IOException("Wi-Fi отключился");HttpURLConnection h=(HttpURLConnection)net.openConnection(new URL("https://speed.cloudflare.com/__down?bytes=3000000"));h.setConnectTimeout(5000);h.setReadTimeout(10000);long start=System.nanoTime();long total=0;try(InputStream in=h.getInputStream()){byte[] buf=new byte[16384];int n;while((n=in.read(buf))>=0)total+=n;}double seconds=(System.nanoTime()-start)/1e9;b.append(String.format(Locale.US,"Скорость HTTP (оценка): %.1f Мбит/с\n",total*8/seconds/1e6));h.disconnect();}catch(Exception e){b.append("Скорость: тест недоступен\n");}
       report=b.toString();runOnUiThread(()->{busy=false;status.setText("Диагностика завершена");render();});});
   }
   void save(){if(report.isEmpty()){toast("Сначала выполните проверку");return;}Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("text/plain").putExtra(Intent.EXTRA_TITLE,"SignalLab_Report.txt");startActivityForResult(i,12);}
@@ -114,18 +137,19 @@ public class MainActivity extends Activity {
     LinearLayout o=card("OPENWRT · АВТОНАСТРОЙКА");note(o,routerStatus);note(o,"Подключение к локальному OpenWrt через ubus. Разрешено изменение только канала Wi-Fi 2,4 ГГц 20 МГц после подтверждения. Если связь пропадёт, OpenWrt должен откатить изменение через 60 с. Работает только при разрешённом RPC-доступе.");
     button(o,"Войти в OpenWrt (HTTP в локальной сети)",this::credentials);
   }
-  void routerWeb(){if(!ready()){toast("Шлюз Wi-Fi не определён");return;}Intent i=new Intent(Intent.ACTION_VIEW,Uri.parse("http://"+gw()+"/"));startActivity(i);}
+  void routerWeb(){if(!ready()){toast("Шлюз Wi-Fi не определён");return;}try{Intent i=new Intent(Intent.ACTION_VIEW,Uri.parse("http://"+gw()+"/"));startActivity(i);}catch(Exception e){toast("Не удалось открыть браузер");}}
   void hilink(){if(!ready()){toast("Нет Wi-Fi");return;}busy=true;jobs.execute(()->{String txt;
       try{HttpURLConnection h=(HttpURLConnection)network().openConnection(new URL("http://"+gw()+"/api/device/signal"));h.setConnectTimeout(2500);h.setReadTimeout(3000);try(InputStream in=h.getInputStream()){byte[] b=new byte[12000];int n=in.read(b);txt=n>0?new String(b,0,n,java.nio.charset.StandardCharsets.UTF_8):"Пустой ответ";if(txt.length()>2500)txt=txt.substring(0,2500);}h.disconnect();}catch(Exception e){txt="HiLink не отвечает или требует авторизацию: "+e.getMessage();}
       final String result=txt.replaceAll("(?is)<(password|token|sessionid)>.*?</\\1>","[скрыто]");runOnUiThread(()->{busy=false;hilinkStatus=result;render();});});}
-  void credentials(){if(!ready()){toast("Нет Wi-Fi");return;}LinearLayout c=column();c.setPadding(dp(15),0,dp(15),0);
+  void credentials(){if(!ready()){toast("Нет Wi-Fi");return;}openWrtGateway=gw();session=null;LinearLayout c=column();c.setPadding(dp(15),0,dp(15),0);
     EditText username=new EditText(this);username.setSingleLine(true);username.setText("root");username.setHint("Логин");c.addView(username);
     EditText pw=new EditText(this);pw.setSingleLine(true);pw.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);pw.setHint("Пароль");c.addView(pw);
     new AlertDialog.Builder(this).setTitle("Вход в OpenWrt (HTTP)").setMessage("Пароль будет передан по локальному Wi-Fi без шифрования. Используйте только доверенную сеть. Учётные данные не сохраняются.").setView(c).setNegativeButton("Отмена",null).setPositiveButton("Войти",(d,w)->{String user=username.getText().toString(),pass=pw.getText().toString();if(user.isEmpty()||pass.isEmpty()){toast("Введите учётные данные");return;}login(user,pass);}).show();}
   JSONObject rpc(String sid,String method,String obj,JSONObject params) throws Exception{
     JSONArray arr=new JSONArray().put(sid).put(obj).put(method).put(params);
     JSONObject req=new JSONObject().put("jsonrpc","2.0").put("method","call").put("params",arr).put("id",1);
-    HttpURLConnection h=(HttpURLConnection)network().openConnection(new URL("http://"+gw()+"/ubus"));
+    Network net=network();if(net==null||openWrtGateway==null||!openWrtGateway.equals(gw()))throw new IOException("Wi-Fi/шлюз изменился. Подключение остановлено.");
+    HttpURLConnection h=(HttpURLConnection)net.openConnection(new URL("http://"+openWrtGateway+"/ubus"));
     h.setRequestMethod("POST");h.setConnectTimeout(3500);h.setReadTimeout(4000);h.setDoOutput(true);h.setInstanceFollowRedirects(false);h.setRequestProperty("Content-Type","application/json");
     try{try(OutputStream out=h.getOutputStream()){out.write(req.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));}
       if(h.getResponseCode()!=200)throw new IOException("HTTP "+h.getResponseCode());
@@ -140,9 +164,9 @@ public class MainActivity extends Activity {
       JSONObject r=rpc("00000000000000000000000000000000","login","session",p);
       String sid=r.getString("ubus_rpc_session");if(!sid.matches("[0-9a-fA-F]{32}"))throw new IOException("Некорректная сессия");session=sid;
       String radio=selectedRadio();routerStatus="Вход выполнен. 2,4 ГГц радио: "+(radio.isEmpty()?"не найдено":radio);
-      runOnUiThread(()->{busy=false;render();if(!radio.isEmpty())new AlertDialog.Builder(this).setTitle("Оптимизировать канал?")
+      runOnUiThread(()->{busy=false;render();if(!radio.isEmpty()&&scanned24Count>0)new AlertDialog.Builder(this).setTitle("Оптимизировать канал?")
         .setMessage("Переключить "+radio+" на канал "+suggestion+"? Сеть может пропасть. OpenWrt должен откатить изменение через 60 секунд, если не подтвердить. Убедитесь, что у вас есть резервный доступ к роутеру.")
-        .setPositiveButton("Применить",(d,w)->applyChannel(radio,suggestion)).setNegativeButton("Отмена",null).show();});
+        .setPositiveButton("Применить",(d,w)->applyChannel(radio,suggestion)).setNegativeButton("Отмена",null).show();else if(!radio.isEmpty())toast("Сначала просканируйте соседние Wi-Fi сети");});
       }catch(Exception e){runOnUiThread(()->{busy=false;routerStatus="Ошибка: "+e.getMessage();render();});}});
   }
   void applyChannel(String radio,int ch){if(session==null||!(ch==1||ch==6||ch==11))return;busy=true;status.setText("Применяем изменения…");
