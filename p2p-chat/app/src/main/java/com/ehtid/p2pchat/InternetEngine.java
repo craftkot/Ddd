@@ -47,6 +47,8 @@ public final class InternetEngine {
     public interface Listener {
         void onStatus(String text);
         void onMessages(List<JSONObject> messages);
+        void onParticipants(List<Member> members);
+        void onIncoming(String nickname, String message);
     }
     private static final int MAX_HISTORY = 100;
     private static final String RELAY = "https://ntfy.sh/";
@@ -61,6 +63,21 @@ public final class InternetEngine {
     private final List<JSONObject> messages = new ArrayList<>();
     private final Set<String> seen = Collections.synchronizedSet(new HashSet<>());
     private final Map<String, JSONObject> waitingAcks = new ConcurrentHashMap<>();
+    private final Map<String, Member> members = new ConcurrentHashMap<>();
+    private final Map<String, Long> pingStart = new ConcurrentHashMap<>();
+    private final Map<String, String> pingOwner = new ConcurrentHashMap<>();
+    private volatile String myName;
+    private volatile boolean showPeerPings = true;
+    public static final class Member {
+        public final String id, name;
+        public final long lastSeen;
+        public final int pingMs;
+        public final boolean isMe;
+        public Member(String id, String name, long seen, int ping, boolean me) {
+            this.id = id; this.name = name; this.lastSeen = seen;
+            this.pingMs = ping; this.isMe = me;
+        }
+    }
     private final Map<String, Fragments> pieces = new HashMap<>();
     private final List<IceCandidate> queuedIce = new ArrayList<>();
     private final Map<String, List<IceCandidate>> earlyIce = new HashMap<>();
@@ -84,6 +101,9 @@ public final class InternetEngine {
             prefs.edit().putString("device_id", savedId).apply();
         }
         id = savedId;
+        myName = prefs.getString("nick", "Пользователь");
+        myName = cleanName(myName);
+        members.put(id, new Member(id, myName, System.currentTimeMillis(), 0, true));
         if (join) prefs.edit().putString("role_" + room, "guest").apply();
         String role = prefs.getString("role_" + room, "");
         hostMode = "host".equals(role);
@@ -107,6 +127,70 @@ public final class InternetEngine {
     }
 
     public String myId() { return id; }
+    public String myName() { return myName; }
+    public void setName(String name) {
+        myName = cleanName(name);
+        prefs.edit().putString("nick", myName).apply();
+        members.put(id, new Member(id, myName, System.currentTimeMillis(), 0, true));
+        publishMembers();
+        announcePresence();
+    }
+    public List<Member> snapshotMembers() {
+        long now = System.currentTimeMillis();
+        List<Member> list = new ArrayList<>();
+        for (Member m : members.values()) if (m.isMe || now - m.lastSeen < 55000) list.add(m);
+        list.sort((a,b) -> a.isMe ? -1 : b.isMe ? 1 :
+                a.name.compareToIgnoreCase(b.name));
+        return list;
+    }
+    private static String cleanName(String s) {
+        if (s == null) return "Пользователь";
+        s = s.trim().replaceAll("[\\p{Cntrl}]", "");
+        if (s.length() > 24) s = s.substring(0,24);
+        return s.isEmpty() ? "Пользователь" : s;
+    }
+    private void publishMembers() {
+        List<Member> list = snapshotMembers();
+        ui.post(() -> { if (!stopped) listener.onParticipants(list); });
+    }
+    private void markMember(String peer, String nickname) {
+        if (peer == null || peer.length() == 0 || peer.length() > 80 || peer.equals(id)) return;
+        if (members.size() >= 32 && !members.containsKey(peer)) return;
+        Member prev = members.get(peer);
+        String n = nickname == null || nickname.trim().isEmpty()
+                ? (prev == null ? "Гость" : prev.name) : cleanName(nickname);
+        members.put(peer, new Member(peer,n,System.currentTimeMillis(),
+                prev == null ? -1 : prev.pingMs, false));
+        publishMembers();
+    }
+    private void announcePresence() {
+        if (stopped || !relayOnline) return;
+        JSONObject p = obj("t","presence");
+        put(p,"name",myName);
+        signal(p);
+    }
+    private void sendPings() {
+        if (!showPeerPings || !relayOnline) return;
+        long now = System.currentTimeMillis();
+        for (Member m : snapshotMembers()) {
+            if (m.isMe || now-m.lastSeen > 45000) continue;
+            String nonce = UUID.randomUUID().toString();
+            pingStart.put(nonce,now);
+            pingOwner.put(nonce,m.id);
+            JSONObject p = obj("t","ping");
+            put(p,"to",m.id);
+            put(p,"nonce",nonce);
+            signal(p);
+        }
+        for (String nonce : new ArrayList<>(pingStart.keySet())) {
+            Long sent = pingStart.get(nonce);
+            if (sent != null && now - sent > 40000) {
+                pingStart.remove(nonce); pingOwner.remove(nonce);
+            }
+        }
+        publishMembers();
+    }
+
     public List<JSONObject> snapshot() {
         synchronized (messages) { return new ArrayList<>(messages); }
     }
@@ -120,6 +204,13 @@ public final class InternetEngine {
             status("WebRTC недоступен: будет использоваться интернет-реле");
         }
         io.execute(this::readRelay);
+        publishMembers();
+        clock.scheduleAtFixedRate(() -> {
+            if (!stopped) {
+                announcePresence();
+                sendPings();
+            }
+        }, 1, 12, TimeUnit.SECONDS);
         clock.scheduleAtFixedRate(() -> {
             if (stopped || !relayOnline) return;
             if (guestMode && !direct()) signal(obj("t", "hello"));
@@ -141,6 +232,7 @@ public final class InternetEngine {
         }
         JSONObject msg = obj("id", UUID.randomUUID().toString());
         put(msg, "from", id);
+        put(msg, "name", myName);
         put(msg, "text", text.trim());
         put(msg, "at", System.currentTimeMillis());
         append(msg);
@@ -185,6 +277,7 @@ public final class InternetEngine {
                 status(direct() ? "P2P напрямую • зашифровано" :
                         "Интернет-реле подключено • сообщения шифруются");
                 if (guestMode) signal(obj("t", "hello"));
+                announcePresence();
                 try (BufferedReader br = new BufferedReader(new InputStreamReader(
                         conn.getInputStream(), StandardCharsets.UTF_8))) {
                     String line;
@@ -270,7 +363,30 @@ public final class InternetEngine {
             }
             String to = packet.optString("to");
             if (!to.isEmpty() && !to.equals(id)) return;
+            if (!"ice".equals(type) && !"offer".equals(type) && !"answer".equals(type))
+                markMember(from, packet.optString("name"));
             switch (type) {
+                case "presence":
+                    break;
+                case "ping":
+                    JSONObject pong = obj("t", "pong");
+                    put(pong,"to",from);
+                    put(pong,"nonce",packet.optString("nonce"));
+                    signal(pong);
+                    break;
+                case "pong":
+                    String nonce = packet.optString("nonce");
+                    Long sent = pingStart.remove(nonce);
+                    String who = pingOwner.remove(nonce);
+                    if (sent != null && from.equals(who)) {
+                        int rtt = (int)Math.max(0,Math.min(60000,System.currentTimeMillis()-sent));
+                        Member old = members.get(from);
+                        if (old != null) {
+                            members.put(from,new Member(from,old.name,System.currentTimeMillis(),rtt,false));
+                            publishMembers();
+                        }
+                    }
+                    break;
                 case "hello":
                     if (hostMode) onGuestHello(from);
                     break;
@@ -285,7 +401,8 @@ public final class InternetEngine {
                     addIce(packet, from);
                     break;
                 case "msg":
-                    append(packet.optJSONObject("m"));
+                    JSONObject incoming = packet.optJSONObject("m");
+                    if (append(incoming)) incomingAlert(incoming);
                     break;
                 case "sync":
                     JSONArray data = packet.optJSONArray("data");
@@ -352,6 +469,7 @@ public final class InternetEngine {
         if (stopped) return;
         put(packet, "id", UUID.randomUUID().toString());
         put(packet, "from", id);
+        put(packet, "name", myName);
         put(packet, "ts", System.currentTimeMillis());
         String wire;
         try {
@@ -584,7 +702,7 @@ public final class InternetEngine {
                     if ("msg".equals(type)) {
                         JSONObject msg = packet.optJSONObject("m");
                         if (validMessage(msg)) {
-                            append(msg);
+                            if (append(msg)) incomingAlert(msg);
                             JSONObject ack = obj("t", "ack");
                             put(ack, "messageId", msg.optString("id"));
                             sendDirect(ack);
@@ -656,11 +774,11 @@ public final class InternetEngine {
         remoteId = null;
     }
 
-    private void append(JSONObject item) {
-        if (!validMessage(item) || stopped) return;
+    private boolean append(JSONObject item) {
+        if (!validMessage(item) || stopped) return false;
         synchronized (messages) {
             for (JSONObject old : messages)
-                if (old.optString("id").equals(item.optString("id"))) return;
+                if (old.optString("id").equals(item.optString("id"))) return false;
             messages.add(item);
             while (messages.size() > MAX_HISTORY) messages.remove(0);
             JSONArray store = new JSONArray();
@@ -669,6 +787,15 @@ public final class InternetEngine {
         }
         List<JSONObject> list = snapshot();
         ui.post(() -> { if (!stopped) listener.onMessages(list); });
+        return true;
+    }
+    private void incomingAlert(JSONObject m) {
+        if (m == null || m.optString("from").equals(id)) return;
+        String nickname = cleanName(m.optString("name", "Гость"));
+        markMember(m.optString("from"), nickname);
+        if (Math.abs(System.currentTimeMillis() - m.optLong("at",0)) > 120000) return;
+        String message = m.optString("text");
+        ui.post(() -> { if (!stopped) listener.onIncoming(nickname, message); });
     }
 
     private static boolean validMessage(JSONObject item) {
