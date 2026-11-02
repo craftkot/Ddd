@@ -51,12 +51,14 @@ capture() {
   cp qa_artifacts/window.xml "qa_artifacts/$1.xml"
 }
 assert_text "Состояние подключения"
+assert_text "Разрешить показ SSID/BSSID"
 capture overview
 tap_text "Обновить"
 assert_text "Состояние подключения"
 tap_text "ЭФИР"
 assert_text "Анализ радиоэфира"
 capture radio
+adb shell pm grant "$PKG" android.permission.ACCESS_COARSE_LOCATION || true
 adb shell pm grant "$PKG" android.permission.ACCESS_FINE_LOCATION || true
 adb shell pm grant "$PKG" android.permission.NEARBY_WIFI_DEVICES || true
 adb shell cmd location set-location-enabled true || true
@@ -67,8 +69,9 @@ tap_text "ТЕСТЫ"
 assert_text "Диагностика сети"
 capture diagnostics
 tap_text "Начать проверку"
-sleep 35
+sleep 40
 assert_text "Диагностика сети"
+assert_text "HTTP загрузка:"
 capture diagnostics_after_test
 tap_text "РОУТЕР"
 assert_text "Настройка роутера"
