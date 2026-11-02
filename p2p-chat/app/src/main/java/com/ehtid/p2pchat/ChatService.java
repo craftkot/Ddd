@@ -22,6 +22,7 @@ public final class ChatService extends Service implements InternetEngine.Listene
     public static final String EXTRA_JOIN = "join";
     private static final String CHANNEL_STATUS = "chat_connection";
     private static final String CHANNEL_MESSAGE = "chat_messages";
+    private static final String CHANNEL_SILENT = "chat_messages_silent";
     private final IBinder binder = new LocalBinder();
     private InternetEngine engine;
     private InternetEngine.Listener ui;
@@ -139,8 +140,8 @@ public final class ChatService extends Service implements InternetEngine.Listene
             return;
 
         boolean preview = options.getBoolean("preview", true);
-        Notification.Builder b = builder(CHANNEL_MESSAGE)
-                .setSmallIcon(R.drawable.ic_chat_logo)
+        Notification.Builder b = builder(options.getBoolean("sound", true) ? CHANNEL_MESSAGE : CHANNEL_SILENT)
+                .setSmallIcon(R.drawable.ic_chat_notification)
                 .setContentTitle(preview ? nickname : "Новое сообщение в EHTID")
                 .setContentText(preview ? message : "Откройте приложение, чтобы прочитать")
                 .setContentIntent(openIntent())
@@ -155,7 +156,7 @@ public final class ChatService extends Service implements InternetEngine.Listene
 
     private Notification buildOngoing() {
         return builder(CHANNEL_STATUS)
-                .setSmallIcon(R.drawable.ic_chat_logo)
+                .setSmallIcon(R.drawable.ic_chat_notification)
                 .setContentTitle("EHTID • чат активен")
                 .setContentText("Соединение работает в фоне")
                 .setOngoing(true)
@@ -189,6 +190,11 @@ public final class ChatService extends Service implements InternetEngine.Listene
                 "Сообщения EHTID", NotificationManager.IMPORTANCE_HIGH);
         incoming.setDescription("Уведомления о новых сообщениях");
         nm.createNotificationChannel(incoming);
+        NotificationChannel silent = new NotificationChannel(CHANNEL_SILENT,
+                "Сообщения без звука", NotificationManager.IMPORTANCE_HIGH);
+        silent.setSound(null, null);
+        silent.enableVibration(false);
+        nm.createNotificationChannel(silent);
     }
 
     @Override public void onDestroy() {
