@@ -1,4 +1,4 @@
-# SignalLab v1.0.3
+# SignalLab v1.0.4
 Android Wi-Fi analyzer with RSSI, channel scan, Wi-Fi-specific DNS/TCP and HTTP download diagnostics, gateway TCP latency, router page, Huawei HiLink signal probe, optional OpenWrt ubus channel management.
 Android location access is required for SSID/BSSID and scans. The Wi-Fi permission prompt is on the overview screen. No coordinates are stored.
 5 MB speed test is a rough HTTP download estimate, NOT a guaranteed WAN/Wi-Fi speed measurement. The DNS query result may change with resolver and time.

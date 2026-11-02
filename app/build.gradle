@@ -2,6 +2,6 @@ plugins { id 'com.android.application' }
 android {
     namespace 'com.signallab.wifi'
     compileSdk 36
-    defaultConfig { applicationId 'com.signallab.wifi'; minSdk 28; targetSdk 35; versionCode 3; versionName '1.0.3' }
+    defaultConfig { applicationId 'com.signallab.wifi'; minSdk 28; targetSdk 35; versionCode 4; versionName '1.0.4' }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }

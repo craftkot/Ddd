@@ -164,7 +164,7 @@ public class MainActivity extends Activity {
         URL u=new URL("http://"+gateway+"/");
         HttpURLConnection h=(HttpURLConnection)net.openConnection(u);
         h.setConnectTimeout(2300);h.setReadTimeout(2300);h.setInstanceFollowRedirects(false);
-        try{b.append("Панель роутера HTTP: ").append(h.getResponseCode()).append("\n");}finally{h.disconnect();}
+        try{int httpStatus=h.getResponseCode();b.append("Панель роутера HTTP: ").append(httpStatus).append("\n");}finally{h.disconnect();}
       }catch(Exception e){b.append("HTTP шлюза: недоступен\n");}
       try{
         Network net=network();if(net==null)throw new IOException("Wi-Fi отключился");

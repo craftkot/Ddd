@@ -72,6 +72,7 @@ tap_text "Начать проверку"
 sleep 40
 assert_text "Диагностика сети"
 assert_text "HTTP загрузка:"
+if grep -Fq "Панель роутера HTTP: HTTP шлюза" qa_artifacts/diagnostics_after_test.xml; then echo "Duplicate gateway status label" >&2; exit 1; fi
 capture diagnostics_after_test
 tap_text "РОУТЕР"
 assert_text "Настройка роутера"
