@@ -47,8 +47,8 @@ print('PASSED:',term)
 PY
 }
 capture() {
-  adb exec-out screencap -p > "qa_artifacts/1.png"
-  cp qa_artifacts/window.xml "qa_artifacts/1.xml"
+  adb exec-out screencap -p > "qa_artifacts/$1.png"
+  cp qa_artifacts/window.xml "qa_artifacts/$1.xml"
 }
 assert_text "Состояние подключения"
 capture overview
@@ -57,9 +57,19 @@ assert_text "Состояние подключения"
 tap_text "ЭФИР"
 assert_text "Анализ радиоэфира"
 capture radio
+adb shell pm grant "$PKG" android.permission.ACCESS_FINE_LOCATION || true
+adb shell pm grant "$PKG" android.permission.NEARBY_WIFI_DEVICES || true
+adb shell cmd location set-location-enabled true || true
+tap_text "Найти точки Wi-Fi"
+assert_text "Анализ радиоэфира"
+capture radio_scanned
 tap_text "ТЕСТЫ"
 assert_text "Диагностика сети"
 capture diagnostics
+tap_text "Начать проверку"
+sleep 35
+assert_text "Диагностика сети"
+capture diagnostics_after_test
 tap_text "РОУТЕР"
 assert_text "Настройка роутера"
 capture router
@@ -72,4 +82,4 @@ if grep -E 'FATAL EXCEPTION|Process: com\.signallab\.wifi' qa_artifacts/logcat.t
   exit 2
 fi
 adb shell dumpsys activity activities > qa_artifacts/dumpsys.txt
-echo "PASS: launch, 4 tabs, back to overview, no logged FATAL EXCEPTION" | tee qa_artifacts/summary.txt
+echo "PASS: launch, 4 tabs, Wi-Fi scan requested, diagnostics started, back to overview, no logged FATAL EXCEPTION" | tee qa_artifacts/summary.txt
