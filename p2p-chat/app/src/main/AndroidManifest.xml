@@ -8,7 +8,7 @@
     <application
         android:label="EHTID P2P Chat"
         android:icon="@drawable/ic_chat_logo"
-        android:roundIcon="@mipmap/ic_launcher"
+        android:roundIcon="@drawable/ic_chat_logo"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:allowBackup="false"
         android:usesCleartextTraffic="false">
