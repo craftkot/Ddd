@@ -26,7 +26,7 @@ public class MainActivity extends Activity {
   LinearLayout body, bar; TextView status; int tab=0; WifiManager wifi; ConnectivityManager cm; ExecutorService jobs=Executors.newSingleThreadExecutor();
   String report=""; volatile boolean busy=false; ArrayList<ScanResult> found=new ArrayList<>();
   String routerStatus="Пока не подключено", hilinkStatus="Не проверено";
-  String session=null; String openWrtGateway=null; int suggestion=1; int scanned24Count=0; boolean scanned=false;
+  String session=null; String openWrtGateway=null; int suggestion=1; int scanned24Count=0; boolean scanned=false; boolean scanAfterPermission=true;
   @Override public void onCreate(Bundle b){super.onCreate(b);
     getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
     wifi=(WifiManager)getApplicationContext().getSystemService(WIFI_SERVICE);
@@ -65,7 +65,7 @@ public class MainActivity extends Activity {
   void render(){body.removeAllViews();bar.removeAllViews();String[] tabs={"ОБЗОР","ЭФИР","ТЕСТЫ","РОУТЕР"};for(int i=0;i<4;i++){final int idx=i;TextView b=text(tabs[i],11,tab==i?AQUA:MUTED,true);b.setGravity(Gravity.CENTER);b.setPadding(dp(4),dp(12),dp(4),dp(12));bar.addView(b,new LinearLayout.LayoutParams(0,-2,1));b.setOnClickListener(v->{tab=idx;render();});}
     if(tab==0)overview();else if(tab==1)air();else if(tab==2)tests();else routers();}
   WifiInfo info(){return wifi==null?null:wifi.getConnectionInfo();}
-  String name(){WifiInfo w=info();if(w==null)return "Нет подключения";String s=w.getSSID();return s==null||s.toLowerCase(Locale.ROOT).contains("unknown ssid")?"Скрыт Android (нужна геолокация)":s;}
+  String name(){WifiInfo w=info();if(w==null)return "Нет подключения";String s=w.getSSID();if(s==null||s.toLowerCase(Locale.ROOT).contains("unknown ssid")){if(!hasLoc())return "Скрыто: нет разрешения на геолокацию";if(!locationEnabled())return "Скрыто: геолокация отключена";return "Скрыто системой Android";}return s;}
   int freq(){WifiInfo w=info();return w==null?0:w.getFrequency();}
   int channel(int f){if(f==2484)return 14;if(f>=2412&&f<2484)return (f-2407)/5;if(f>=5000&&f<5925)return (f-5000)/5;if(f>=5955&&f<=7115)return (f-5950)/5;return 0;}
   String gw(){
@@ -92,22 +92,37 @@ public class MainActivity extends Activity {
   }
   boolean hasLoc(){return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED;}
   boolean locationEnabled(){LocationManager l=(LocationManager)getSystemService(LOCATION_SERVICE);return l!=null&&l.isLocationEnabled();}
-  void permission(){ArrayList<String> list=new ArrayList<>();if(!hasLoc())list.add(Manifest.permission.ACCESS_FINE_LOCATION);
-    if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.NEARBY_WIFI_DEVICES)!=PackageManager.PERMISSION_GRANTED)list.add(Manifest.permission.NEARBY_WIFI_DEVICES);
-    if(!list.isEmpty())requestPermissions(list.toArray(new String[0]),80);
-    else if(!locationEnabled())new AlertDialog.Builder(this).setMessage("Android требует включить геолокацию для просмотра доступных Wi-Fi сетей. Координаты не собираются.").setPositiveButton("Настройки",(d,w)->startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))).setNegativeButton("Отмена",null).show();
-    else scan();}
+  void permission(){requestWifiAccess(true);}
+  void requestWifiAccess(boolean scanOnSuccess){
+    scanAfterPermission=scanOnSuccess;
+    ArrayList<String> list=new ArrayList<>();
+    if(!hasLoc()){list.add(Manifest.permission.ACCESS_COARSE_LOCATION);list.add(Manifest.permission.ACCESS_FINE_LOCATION);}
+    if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.NEARBY_WIFI_DEVICES)!=PackageManager.PERMISSION_GRANTED)
+      list.add(Manifest.permission.NEARBY_WIFI_DEVICES);
+    if(!list.isEmpty()){requestPermissions(list.toArray(new String[0]),80);return;}
+    if(!locationEnabled()){
+      new AlertDialog.Builder(this).setTitle("Нужна геолокация Android")
+        .setMessage("Для просмотра SSID/BSSID и списка Wi-Fi Android требует включить геолокацию. Приложение не сохраняет координаты.")
+        .setPositiveButton("Открыть настройки",(d,w)->startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)))
+        .setNegativeButton("Отмена",null).show();
+      return;
+    }
+    if(scanOnSuccess)scan();else render();
+  }
   @Override public void onRequestPermissionsResult(int req,String[] perm,int[] grants){
     super.onRequestPermissionsResult(req,perm,grants);
     if(req!=80)return;
-    boolean all=true;for(int g:grants)if(g!=PackageManager.PERMISSION_GRANTED)all=false;
-    if(all&&hasLoc())permission();else toast("Разрешения не предоставлены; просмотр эфира ограничен");
+    if(hasLoc())requestWifiAccess(scanAfterPermission);
+    else toast("Нужно разрешить точное местоположение в настройках приложения");
   }
+  @Override protected void onResume(){super.onResume();if(body!=null&&bar!=null)render();}
   void overview(){page("Состояние подключения");LinearLayout c=card("ТЕКУЩАЯ СЕТЬ");WifiInfo w=info();
-    line(c,"SSID:",name());line(c,"RSSI:",w==null?"—":w.getRssi()+" dBm");line(c,"Качество:",w==null?"—":WifiManager.calculateSignalLevel(w.getRssi(),100)+"%");
+    line(c,"SSID:",name());line(c,"RSSI:",w==null?"—":w.getRssi()+" dBm");line(c,"Оценка силы сигнала:",w==null?"—":WifiManager.calculateSignalLevel(w.getRssi(),100)+"% (условно)");
     line(c,"Частота:",freq()+" МГц");line(c,"Канал:",String.valueOf(channel(freq())));
     line(c,"Скорость линка:",w==null?"—":w.getLinkSpeed()+" Мбит/с");
-    line(c,"BSSID:",w==null||"02:00:00:00:00:00".equals(w.getBSSID())?"Скрыт Android":w.getBSSID());button(c,"Обновить",this::render);
+    line(c,"BSSID:",w==null||"02:00:00:00:00:00".equals(w.getBSSID())?"Скрыт Android":w.getBSSID());
+    if(!hasLoc()||!locationEnabled()||name().startsWith("Скрыт"))button(c,"Разрешить показ SSID/BSSID",()->requestWifiAccess(false));
+    button(c,"Обновить",this::render);
     LinearLayout n=card("СЕТЕВЫЕ ПАРАМЕТРЫ");line(n,"IPv4:",ip());line(n,"Шлюз:",gw());Network net=network();
     if(net!=null){LinkProperties p=cm.getLinkProperties(net);if(p!=null)for(InetAddress dns:p.getDnsServers())line(n,"DNS:",dns.getHostAddress());NetworkCapabilities caps=cm.getNetworkCapabilities(net);line(n,"Интернет:",caps!=null&&caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)?"Подтверждён":"Не подтверждён");}
     button(n,"Открыть роутер",this::routerWeb);
@@ -125,20 +140,50 @@ public class MainActivity extends Activity {
     note(rec,"Это оценка по сигналу соседних точек, а не измерение реальной загрузки спектра.");
     LinearLayout list=card("ДОСТУПНЫЕ СЕТИ: "+found.size());for(int i=0;i<Math.min(60,found.size());i++){ScanResult s=found.get(i);line(list,s.SSID==null||s.SSID.isEmpty()?"<скрытая>":s.SSID,channel(s.frequency)+" ch  · "+s.level+" dBm");}
   }
-  void scan(){try{scanned=true;wifi.startScan();found=new ArrayList<>(wifi.getScanResults());Collections.sort(found,(a,b)->Integer.compare(b.level,a.level));status.setText("Точек Wi-Fi: "+found.size());render();
+  void scan(){try{scanned=true;boolean scanRequested=wifi.startScan();if(!scanRequested)status.setText("Новый Wi-Fi скан ограничен Android; показан кэш");found=new ArrayList<>(wifi.getScanResults());Collections.sort(found,(a,b)->Integer.compare(b.level,a.level));if(scanRequested)status.setText("Wi-Fi сетей в кэше: "+found.size());render();
     new Handler(Looper.getMainLooper()).postDelayed(()->{try{found=new ArrayList<>(wifi.getScanResults());Collections.sort(found,(a,b)->Integer.compare(b.level,a.level));render();}catch(Exception ignored){}},1800);}
     catch(SecurityException ex){status.setText("Требуется разрешение на поиск Wi-Fi");}}
   void tests(){page("Диагностика сети");LinearLayout a=card("ПОДКЛЮЧЕНИЕ");note(a,"Тест TCP-задержки, DNS, доступа к шлюзу и загрузки тестового файла. Все результаты сохраняются локально.");
     button(a,busy?"Проверка выполняется":"Начать проверку",this::diagnose);
     LinearLayout r=card("ОТЧЁТ");note(r,report.isEmpty()?"Ещё не выполнялось":report);button(r,"Сохранить TXT-отчёт",this::save);}
   void diagnose(){if(!ready()){toast("Подключитесь к Wi-Fi");return;}if(busy)return;busy=true;status.setText("Проверяем сеть…");render();
-    final String base="SIGNALLAB · "+new Date()+"\nSSID: "+name()+"\nRSSI: "+(info()==null?"—":info().getRssi())+" dBm\nIP: "+ip()+"\nGateway: "+gw()+"\n";
+    final String base="SIGNALLAB · "+new Date()+"\nSSID: "+name()+"\nRSSI: "+(info()==null?"—":info().getRssi())+" dBm\nIP: "+ip()+"\nGateway: "+gw()+"\n" + "Wi-Fi band: "+freq()+" MHz / channel "+channel(freq())+"\n";
     jobs.execute(()->{StringBuilder b=new StringBuilder(base);long[] ms=new long[5];int ok=0;
       try{Network net=network();if(net==null)throw new IOException("Wi-Fi отключился");InetAddress[] addr=net.getAllByName("example.com");b.append("DNS example.com: ").append(addr.length>0?addr[0].getHostAddress():"пустой ответ").append("\n");}catch(Exception e){b.append("DNS: ошибка ").append(e.getMessage()).append("\n");}
       for(int i=0;i<5;i++)try{Socket s=network().getSocketFactory().createSocket();long at=System.nanoTime();s.connect(new InetSocketAddress("1.1.1.1",443),2500);ms[ok++]=TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-at);s.close();}catch(Exception ignored){}
-      if(ok>0){Arrays.sort(ms,0,ok);b.append("TCP 1.1.1.1:443: ").append(ms[ok/2]).append(" ms (медиана из ").append(ok).append(")\n");}else b.append("TCP: недоступен\n");
-      try{URL u=new URL("http://"+gw()+"/");HttpURLConnection h=(HttpURLConnection)network().openConnection(u);h.setConnectTimeout(2300);h.setReadTimeout(2300);h.setInstanceFollowRedirects(false);int responseCode=h.getResponseCode();b.append("Панель роутера HTTP: ").append(responseCode).append("\n");h.disconnect();}catch(Exception e){b.append("HTTP шлюза: недоступен\n");}
-      try{Network net=network();if(net==null)throw new IOException("Wi-Fi отключился");HttpURLConnection h=(HttpURLConnection)net.openConnection(new URL("https://speed.cloudflare.com/__down?bytes=3000000"));h.setConnectTimeout(5000);h.setReadTimeout(10000);long start=System.nanoTime();long total=0;try(InputStream in=h.getInputStream()){byte[] buf=new byte[16384];int n;while((n=in.read(buf))>=0)total+=n;}double seconds=(System.nanoTime()-start)/1e9;b.append(String.format(Locale.US,"Скорость HTTP (оценка): %.1f Мбит/с\n",total*8/seconds/1e6));h.disconnect();}catch(Exception e){b.append("Скорость: тест недоступен\n");}
+      if(ok>0){Arrays.sort(ms,0,ok);b.append("TCP Интернет 1.1.1.1:443: ").append(ms[ok/2]).append(" ms (медиана, успех ").append(ok).append("/5)\n");}else b.append("TCP Интернет 1.1.1.1:443: недоступен (0/5)\n");
+      try{
+        Network net=network();if(net==null)throw new IOException("Wi-Fi отключился");
+        String gateway=gw();long[] localMs=new long[3];int localOk=0;
+        for(int i=0;i<3;i++)try(Socket sock=net.getSocketFactory().createSocket()){
+          long start=System.nanoTime();sock.connect(new InetSocketAddress(gateway,80),1800);
+          localMs[localOk++]=TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start);
+        }catch(IOException ignored){}
+        if(localOk>0){Arrays.sort(localMs,0,localOk);b.append("TCP шлюз ").append(gateway).append(":80: ").append(localMs[localOk/2]).append(" ms (успех ").append(localOk).append("/3)\n");}
+        else b.append("TCP шлюз :80 не отвечает (это не обязательно обрыв Wi-Fi)\n");
+        URL u=new URL("http://"+gateway+"/");
+        HttpURLConnection h=(HttpURLConnection)net.openConnection(u);
+        h.setConnectTimeout(2300);h.setReadTimeout(2300);h.setInstanceFollowRedirects(false);
+        try{b.append("Панель роутера HTTP: ").append(h.getResponseCode()).append("\n");}finally{h.disconnect();}
+      }catch(Exception e){b.append("HTTP шлюза: недоступен\n");}
+      try{
+        Network net=network();if(net==null)throw new IOException("Wi-Fi отключился");
+        HttpURLConnection h=(HttpURLConnection)net.openConnection(new URL("https://speed.cloudflare.com/__down?bytes=5000000"));
+        h.setConnectTimeout(6000);h.setReadTimeout(20000);
+        try{
+          int httpStatus=h.getResponseCode();String type=h.getContentType();
+          if(httpStatus!=200)throw new IOException("HTTP "+httpStatus);
+          if(type!=null&&type.toLowerCase(Locale.ROOT).contains("text/html"))throw new IOException("Получена HTML-страница, не тестовые данные");
+          long start=System.nanoTime();long total=0;
+          try(InputStream in=h.getInputStream()){
+            byte[] buf=new byte[16384];int n;while((n=in.read(buf))!=-1)total+=n;
+          }
+          if(total<4000000)throw new IOException("Получено лишь "+total+" байт");
+          double seconds=(System.nanoTime()-start)/1e9;
+          if(seconds<=0)throw new IOException("Некорректное время");
+          b.append(String.format(Locale.US,"HTTP загрузка: %.1f Мбит/с (%.2f МБ за %.1f с, оценка)\n",total*8/seconds/1e6,total/1e6,seconds));
+        }finally{h.disconnect();}
+      }catch(Exception e){b.append("HTTP загрузка: тест не завершён (").append(e.getClass().getSimpleName()).append(")\n");}
       report=b.toString();runOnUiThread(()->{busy=false;status.setText("Диагностика завершена");render();});});
   }
   void save(){if(report.isEmpty()){toast("Сначала выполните проверку");return;}Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("text/plain").putExtra(Intent.EXTRA_TITLE,"SignalLab_Report.txt");startActivityForResult(i,12);}
