@@ -32,6 +32,17 @@ public class MainActivity extends Activity {
     wifi=(WifiManager)getApplicationContext().getSystemService(WIFI_SERVICE);
     cm=(ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE);
     LinearLayout root=column();root.setBackgroundColor(BG);setContentView(root);
+    root.setOnApplyWindowInsetsListener((view,insets)->{
+      int top,bottom;
+      if(Build.VERSION.SDK_INT>=30){
+        android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars());
+        top=bars.top;bottom=bars.bottom;
+      }else{
+        top=insets.getSystemWindowInsetTop();bottom=insets.getSystemWindowInsetBottom();
+      }
+      root.setPadding(0,top,0,bottom);
+      return insets;
+    });
     TextView heading=text("◉  SIGNAL / LAB",23,AQUA,true); heading.setPadding(dp(19),dp(20),0,0);root.addView(heading);
     TextView sub=text("Анализ Wi-Fi · Диагностика · Роутер",12,MUTED,false);sub.setPadding(dp(19),0,0,dp(18));root.addView(sub);
     ScrollView sc=new ScrollView(this);body=column();body.setPadding(dp(16),dp(10),dp(16),dp(20));sc.addView(body);
@@ -54,7 +65,7 @@ public class MainActivity extends Activity {
   void render(){body.removeAllViews();bar.removeAllViews();String[] tabs={"ОБЗОР","ЭФИР","ТЕСТЫ","РОУТЕР"};for(int i=0;i<4;i++){final int idx=i;TextView b=text(tabs[i],11,tab==i?AQUA:MUTED,true);b.setGravity(Gravity.CENTER);b.setPadding(dp(4),dp(12),dp(4),dp(12));bar.addView(b,new LinearLayout.LayoutParams(0,-2,1));b.setOnClickListener(v->{tab=idx;render();});}
     if(tab==0)overview();else if(tab==1)air();else if(tab==2)tests();else routers();}
   WifiInfo info(){return wifi==null?null:wifi.getConnectionInfo();}
-  String name(){WifiInfo w=info();if(w==null)return "Нет подключения";String s=w.getSSID();return s==null?"Неизвестная сеть":s;}
+  String name(){WifiInfo w=info();if(w==null)return "Нет подключения";String s=w.getSSID();return s==null||s.toLowerCase(Locale.ROOT).contains("unknown ssid")?"Скрыт Android (нужна геолокация)":s;}
   int freq(){WifiInfo w=info();return w==null?0:w.getFrequency();}
   int channel(int f){if(f==2484)return 14;if(f>=2412&&f<2484)return (f-2407)/5;if(f>=5000&&f<5925)return (f-5000)/5;if(f>=5955&&f<=7115)return (f-5950)/5;return 0;}
   String gw(){
@@ -96,7 +107,7 @@ public class MainActivity extends Activity {
     line(c,"SSID:",name());line(c,"RSSI:",w==null?"—":w.getRssi()+" dBm");line(c,"Качество:",w==null?"—":WifiManager.calculateSignalLevel(w.getRssi(),100)+"%");
     line(c,"Частота:",freq()+" МГц");line(c,"Канал:",String.valueOf(channel(freq())));
     line(c,"Скорость линка:",w==null?"—":w.getLinkSpeed()+" Мбит/с");
-    line(c,"BSSID:",w==null?"—":w.getBSSID());button(c,"Обновить",this::render);
+    line(c,"BSSID:",w==null||"02:00:00:00:00:00".equals(w.getBSSID())?"Скрыт Android":w.getBSSID());button(c,"Обновить",this::render);
     LinearLayout n=card("СЕТЕВЫЕ ПАРАМЕТРЫ");line(n,"IPv4:",ip());line(n,"Шлюз:",gw());Network net=network();
     if(net!=null){LinkProperties p=cm.getLinkProperties(net);if(p!=null)for(InetAddress dns:p.getDnsServers())line(n,"DNS:",dns.getHostAddress());NetworkCapabilities caps=cm.getNetworkCapabilities(net);line(n,"Интернет:",caps!=null&&caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)?"Подтверждён":"Не подтверждён");}
     button(n,"Открыть роутер",this::routerWeb);
