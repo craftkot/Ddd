@@ -50,6 +50,7 @@ public final class MainActivity extends Activity {
     private ScrollView scroll;
     private ChatService service;
     private boolean bound;
+    private boolean bindRequested;
     private boolean active;
     private String code, myId = "";
     private final List<InternetEngine.Member> currentMembers = new ArrayList<>();
@@ -360,9 +361,9 @@ public final class MainActivity extends Activity {
         } catch (RuntimeException e) {
             status.setText("● Не удалось запустить службу: " + e.getMessage());
         }
-        if (!bound) {
+        if (!bindRequested) {
             try {
-                bindService(new Intent(this,ChatService.class),conn,Context.BIND_AUTO_CREATE);
+                bindRequested = bindService(new Intent(this,ChatService.class),conn,Context.BIND_AUTO_CREATE);
             } catch (RuntimeException e) {
                 status.setText("● Ошибка привязки: " + e.getMessage());
             }
@@ -476,7 +477,7 @@ public final class MainActivity extends Activity {
     @Override protected void onStart() {
         super.onStart();
         active=true;
-        if (profile().getString("nick","").trim().length()>0 && !bound) launchChat(code,false);
+        if (profile().getString("nick","").trim().length()>0 && !bindRequested) launchChat(code,false);
         if(service!=null) service.setVisible(true);
     }
     @Override protected void onStop() {
@@ -485,8 +486,9 @@ public final class MainActivity extends Activity {
             service.setVisible(false);
             service.setUiListener(null);
         }
-        if (bound) {
+        if (bindRequested) {
             unbindService(conn);
+            bindRequested=false;
             bound=false;
             service=null;
         }
