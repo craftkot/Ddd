@@ -429,6 +429,10 @@ public final class InternetEngine {
 
     public void sendMessage(String text) {
         if (stopped || text == null || text.trim().isEmpty() || text.length() > 1000) return;
+        if (!meshMode && relay.isEmpty()) {
+            status("Нет адреса домашнего сервера: сообщение ещё не отправлено");
+            return;
+        }
         if (queuedCount() >= 100) {
             status("Очередь переполнена; повтори отправку после восстановления связи");
             return;
