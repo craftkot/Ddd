@@ -76,6 +76,7 @@ public final class InternetEngine {
     private volatile boolean chatVisible = false;
     private volatile long lastOfferAt = 0L;
     private volatile long lastPresenceSent = 0L;
+    private volatile long lastHelloSent = 0L;
     private volatile int pingRoundRobin = 0;
     private volatile String myName;
     private volatile boolean showPeerPings = true;
@@ -231,8 +232,13 @@ public final class InternetEngine {
             if (chatVisible) pingPeer(peer);
         }
     }
+    private void sendHello() {
+        if (stopped || !relayOnline || System.currentTimeMillis() < nextRelaySendAt) return;
+        lastHelloSent = System.currentTimeMillis();
+        signal(obj("t","hello"));
+    }
     private void announcePresence() {
-        if (stopped || !relayOnline) return;
+        if (stopped || !relayOnline || System.currentTimeMillis() < nextRelaySendAt) return;
         lastPresenceSent = System.currentTimeMillis();
         JSONObject p = obj("t","presence");
         put(p,"name",myName);
@@ -292,17 +298,22 @@ public final class InternetEngine {
         // explicit enter/exit status is sent immediately by setChatVisible().
         clock.scheduleAtFixedRate(() -> {
             if (stopped || !relayOnline) return;
-            long interval = chatVisible ? 5*60*1000L : 20*60*1000L;
-            if (System.currentTimeMillis()-lastPresenceSent >= interval) announcePresence();
+            long interval = chatVisible ? 30*60*1000L : 90*60*1000L;
+            // No heartbeat publications for an empty room.
+            if (snapshotMembers().size() > 1 &&
+                    System.currentTimeMillis()-lastPresenceSent >= interval)
+                announcePresence();
             publishMembers();
         }, 45, 45, TimeUnit.SECONDS);
         clock.scheduleAtFixedRate(() -> {
             if (!stopped) sendPings();
-        }, 30, 15*60, TimeUnit.SECONDS);
+        }, 30, 60*60, TimeUnit.SECONDS);
         clock.scheduleAtFixedRate(() -> {
             if (stopped || !relayOnline) return;
-            if (guestMode && !direct()) signal(obj("t", "hello"));
-        }, 2, 15*60, TimeUnit.SECONDS);
+            if (guestMode && !direct() && snapshotMembers().size() > 1 &&
+                    System.currentTimeMillis() - lastHelloSent > 4*60*60*1000L)
+                sendHello();
+        }, 2, 4*60*60, TimeUnit.SECONDS);
     }
 
     // WebRTC factory needs a Context. Stored exclusively as application context.
@@ -403,7 +414,7 @@ public final class InternetEngine {
                 conn = (HttpURLConnection) new URL(endpoint).openConnection();
                 streamConnection = conn;
                 conn.setConnectTimeout(12000);
-                conn.setReadTimeout(75000);
+                conn.setReadTimeout(180000);
                 conn.setRequestProperty("Accept", "application/x-ndjson");
                 int http = conn.getResponseCode();
                 if (http != 200) throw new java.io.IOException("HTTP " + http);
@@ -417,8 +428,12 @@ public final class InternetEngine {
                     status(direct() ? "P2P напрямую • шифрование включено" :
                             "Интернет-реле подключено • сообщения шифруются");
                 }
-                if (guestMode) signal(obj("t", "hello"));
-                announcePresence();
+                // The HTTP stream reconnects after idle timeouts. Do not send
+                // presence/hello every time: that rapidly exhausts ntfy quota.
+                if (guestMode && System.currentTimeMillis()-lastHelloSent > 4*60*60*1000L)
+                    sendHello();
+                if (System.currentTimeMillis()-lastPresenceSent > 30*60*1000L)
+                    announcePresence();
                 try (BufferedReader br = new BufferedReader(new InputStreamReader(
                         conn.getInputStream(), StandardCharsets.UTF_8))) {
                     String line;
