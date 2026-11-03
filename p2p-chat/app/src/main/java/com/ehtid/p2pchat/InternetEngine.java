@@ -1,11 +1,309 @@
-        try {
-            PeerConnectionFactory.initialize(PeerConnectionFactory.InitializationOptions
-                .builder(uiContext()).createInitializationOptions());
-            factory = PeerConnectionFactory.builder().createPeerConnectionFactory();
-        } catch (Exception error) {
-            status(meshMode ? "WebRTC недоступен: P2P не запустился" :
-                    "WebRTC недоступен: будет использоваться интернет-реле");
+package com.ehtid.p2pchat;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Base64;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.webrtc.DataChannel;
+import org.webrtc.IceCandidate;
+import org.webrtc.MediaConstraints;
+import org.webrtc.MediaStream;
+import org.webrtc.PeerConnection;
+import org.webrtc.PeerConnectionFactory;
+import org.webrtc.RtpReceiver;
+import org.webrtc.SdpObserver;
+import org.webrtc.SessionDescription;
+import javax.crypto.Cipher;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+public final class InternetEngine {
+    public interface Listener {
+        void onStatus(String text);
+        void onMessages(List<JSONObject> messages);
+        void onParticipants(List<Member> members);
+        void onIncoming(String nickname, String message);
+        void onManualSignal(String code, String kind);
+    }
+    private static final int MAX_HISTORY = 100;
+    private static final long HISTORY_COOLDOWN_MS = RoomPolicy.HISTORY_COOLDOWN_MS;
+    private static final String DEFAULT_RELAY = "";
+    private final Handler ui = new Handler(Looper.getMainLooper());
+    private final ExecutorService io = Executors.newCachedThreadPool();
+    private final ExecutorService sender = Executors.newSingleThreadExecutor();
+    private final ScheduledExecutorService clock = Executors.newSingleThreadScheduledExecutor();
+    private final SharedPreferences prefs;
+    private final Listener listener;
+    private final String room, id, topic, relay;
+    private final boolean meshMode;
+    private volatile PeerMesh mesh;
+    private final Map<String, JSONObject> pending = new LinkedHashMap<>();
+    private volatile long nextRelaySendAt;
+    private volatile int sendFailures;
+    private final SecretKeySpec aes;
+    private final SecureRandom random = new SecureRandom();
+    private final List<JSONObject> messages = new ArrayList<>();
+    private final Set<String> seen = Collections.synchronizedSet(new HashSet<>());
+    private final Map<String, JSONObject> waitingAcks = new ConcurrentHashMap<>();
+    private final Map<String, Member> members = new ConcurrentHashMap<>();
+    private final Map<String, Long> pingStart = new ConcurrentHashMap<>();
+    private final Map<String, String> pingOwner = new ConcurrentHashMap<>();
+    private final Map<String, Long> lastGuestHistory = new ConcurrentHashMap<>();
+    private volatile boolean chatVisible = false;
+    private volatile long lastOfferAt = 0L;
+    private volatile long lastPresenceSent = 0L;
+    private volatile long lastHelloSent = 0L;
+    private volatile boolean helloInFlight = false, presenceInFlight = false;
+    private volatile int pingRoundRobin = 0;
+    private volatile String myName;
+    private volatile boolean showPeerPings = true;
+    public static final class Member {
+        public final String id, name;
+        public final long lastSeen;
+        public final int pingMs;
+        public final boolean isMe, online;
+        public Member(String id, String name, long seen, int ping, boolean me, boolean online) {
+            this.id = id; this.name = name; this.lastSeen = seen;
+            this.pingMs = ping; this.isMe = me; this.online = online;
         }
+    }
+    private final Map<String, Fragments> pieces = new HashMap<>();
+    private final List<IceCandidate> queuedIce = new ArrayList<>();
+    private final Map<String, List<IceCandidate>> earlyIce = new HashMap<>();
+    private volatile boolean stopped, relayOnline, hostMode, guestMode;
+    private volatile String remoteId, lastRelayId;
+    private volatile PeerConnectionFactory factory;
+    private volatile PeerConnection rtc;
+    private volatile DataChannel data;
+    private volatile boolean remoteDescription;
+    private volatile HttpURLConnection streamConnection;
+
+    public InternetEngine(Context context, String code, boolean join, Listener callbacks) {
+        this.listener = callbacks;
+        room = normalize(code);
+        appContext = context.getApplicationContext();
+        prefs = appContext.getSharedPreferences("internet_p2p", Context.MODE_PRIVATE);
+        meshMode = appContext.getSharedPreferences("ui_settings",Context.MODE_PRIVATE)
+                .getBoolean("mesh_mode",false);
+        relay = getRelayServer(appContext);
+        nextRelaySendAt = prefs.getLong("retry_until_" + relay, 0L);
+        String savedId = prefs.getString("device_id", null);
+        if (savedId == null) {
+            savedId = UUID.randomUUID().toString();
+            prefs.edit().putString("device_id", savedId).apply();
+        }
+        id = savedId;
+        myName = prefs.getString("nick", "Пользователь");
+        myName = cleanName(myName);
+        members.put(id, new Member(id, myName, System.currentTimeMillis(), 0, true, false));
+        if (join) prefs.edit().putString("role_" + room, "guest").apply();
+        String role = prefs.getString("role_" + room, "");
+        hostMode = "host".equals(role);
+        guestMode = "guest".equals(role);
+        byte[] digest = sha(room.getBytes(StandardCharsets.UTF_8));
+        aes = new SecretKeySpec(digest, "AES");
+        StringBuilder t = new StringBuilder("ehtidp2p-");
+        for (int i = 0; i < 20; i++) t.append(String.format(java.util.Locale.US, "%02x", digest[i] & 0xff));
+        topic = t.toString();
+        try {
+            JSONArray old = new JSONArray(prefs.getString("msgs_" + room, "[]"));
+            for (int i = 0; i < old.length(); i++) {
+                JSONObject item = old.optJSONObject(i);
+                if (validMessage(item)) messages.add(item);
+            }
+        } catch (Exception ignored) {}
+        try {
+            JSONArray oldPending = new JSONArray(prefs.getString("pending_" + room, "[]"));
+            for (int i = 0; i < oldPending.length() && i < 100; i++) {
+                JSONObject msg = oldPending.optJSONObject(i);
+                if (validMessage(msg) && id.equals(msg.optString("from"))) {
+                    put(msg, "delivery", "pending");
+                    pending.put(msg.optString("id"), msg);
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    public static String getRelayServer(Context context) {
+        String raw = context.getSharedPreferences("ui_settings",Context.MODE_PRIVATE)
+                .getString("relay_url",DEFAULT_RELAY);
+        return HomeServerUrl.normalize(raw);
+    }
+
+    public static String normalize(String raw) {
+        return raw.toUpperCase(java.util.Locale.ROOT).replaceAll("[^A-Z2-9]", "");
+    }
+
+    public String myId() { return id; }
+    public String myName() { return myName; }
+    public void setName(String name) {
+        myName = cleanName(name);
+        prefs.edit().putString("nick", myName).apply();
+        members.put(id, new Member(id, myName, System.currentTimeMillis(), 0, true, chatVisible));
+        publishMembers();
+        if (meshMode) {
+            PeerMesh p=mesh;
+            if (p!=null) p.rename(myName);
+        } else announcePresence();
+    }
+    /** Presence is just a roster view; never use it to close network connections. */
+    public List<Member> snapshotMembers() {
+        long now = System.currentTimeMillis();
+        List<Member> list = new ArrayList<>();
+        for (Member m : members.values()) {
+            if (!m.isMe) {
+                // Mesh participants heartbeat every 30 seconds, and don't consume
+                // public broker quota. Show stale peers as offline promptly.
+                long meshTtl = m.online ? 90000L : 180000L;
+                if (meshMode ? now - m.lastSeen >= meshTtl :
+                        !RoomPolicy.isPresent(now,m.lastSeen,m.online)) continue;
+            }
+            list.add(new Member(m.id,m.name,m.lastSeen,m.pingMs,m.isMe,
+                    m.isMe ? (chatVisible && (meshMode ? mesh!=null && mesh.connectedCount()>0 :
+                        relayOnline && now >= nextRelaySendAt)) :
+                        (m.online && (meshMode || relayOnline))));
+        }
+        list.sort((a,b) -> a.isMe ? -1 : b.isMe ? 1 :
+                a.online != b.online ? Boolean.compare(b.online,a.online) :
+                a.name.compareToIgnoreCase(b.name));
+        return list;
+    }
+    /** The user is online only while the chat screen is actually open. */
+    public void setChatVisible(boolean visible) {
+        chatVisible = visible;
+        members.put(id,new Member(id,myName,System.currentTimeMillis(),0,true,visible));
+        publishMembers();
+        PeerMesh current=mesh;
+        if (meshMode && current!=null) current.setVisible(visible);
+        else announcePresence();
+    }
+    private static String cleanName(String s) {
+        if (s == null) return "Пользователь";
+        s = s.trim().replaceAll("[\\p{Cntrl}]", "");
+        if (s.length() > 24) s = s.substring(0,24);
+        return s.isEmpty() ? "Пользователь" : s;
+    }
+    private void publishMembers() {
+        List<Member> list = snapshotMembers();
+        ui.post(() -> { if (!stopped) listener.onParticipants(list); });
+    }
+    private void markMember(String peer, String nickname) {
+        markMember(peer,nickname,null);
+    }
+    /** Presence changes only membership data and never touches the WebRTC link. */
+    private void markMember(String peer, String nickname, Boolean visible) {
+        if (peer == null || peer.isEmpty() || peer.length() > 80 || peer.equals(id)) return;
+        long now = System.currentTimeMillis();
+        for (Map.Entry<String,Member> entry : members.entrySet())
+            if (!entry.getKey().equals(id) && now-entry.getValue().lastSeen > 180000L)
+                members.remove(entry.getKey(),entry.getValue());
+        if (members.size() >= 64 && !members.containsKey(peer)) return;
+        Member prev = members.get(peer);
+        String n = nickname == null || nickname.trim().isEmpty()
+                ? (prev == null ? "Гость" : prev.name) : cleanName(nickname);
+        boolean wasVisible = prev != null && prev.online;
+        boolean nowVisible = visible == null ? wasVisible : visible;
+        members.put(peer,new Member(peer,n,now,prev==null?-1:prev.pingMs,false,nowVisible));
+        publishMembers();
+        // Reply to a new peer (or a returning one) immediately. Subsequent
+        // heartbeats do not trigger replies, avoiding an infinite ping-pong.
+        if (!meshMode && visible != null &&
+                RoomPolicy.shouldReplyPresence(prev!=null,wasVisible,nowVisible)) {
+            announcePresence();
+            if (chatVisible) pingPeer(peer);
+        }
+    }
+    private synchronized void sendHello() {
+        if (stopped || !relayOnline || helloInFlight ||
+                System.currentTimeMillis() < nextRelaySendAt) return;
+        helloInFlight = true;
+        JSONObject packet = obj("t","hello");
+        sender.execute(() -> {
+            try {
+                if (publish(packet)) lastHelloSent = System.currentTimeMillis();
+            } finally {
+                helloInFlight = false;
+            }
+        });
+    }
+    private synchronized void announcePresence() {
+        if (stopped || !relayOnline || presenceInFlight ||
+                System.currentTimeMillis() < nextRelaySendAt) return;
+        presenceInFlight = true;
+        JSONObject p = obj("t","presence");
+        put(p,"name",myName);
+        put(p,"active",chatVisible);
+        sender.execute(() -> {
+            try {
+                if (publish(p)) lastPresenceSent = System.currentTimeMillis();
+            } finally {
+                presenceInFlight = false;
+            }
+        });
+    }
+    private void pingPeer(String peer) {
+        if (stopped || !relayOnline || !showPeerPings) return;
+        if (pingStart.size() > 12) return;
+        String nonce = UUID.randomUUID().toString();
+        pingStart.put(nonce,System.currentTimeMillis());
+        pingOwner.put(nonce,peer);
+        JSONObject p = obj("t","ping");
+        put(p,"to",peer);
+        put(p,"nonce",nonce);
+        signal(p);
+    }
+    private void sendPings() {
+        if (!showPeerPings || !relayOnline || !chatVisible) return;
+        long now = System.currentTimeMillis();
+        List<Member> available = snapshotMembers();
+        available.removeIf(m -> m.isMe || !RoomPolicy.isPresent(now,m.lastSeen,m.online));
+        // One rotating RTT sample instead of pinging all peers: O(1) requests
+        // and no participant evictions when a public relay is rate-limited.
+        if (!available.isEmpty()) {
+            Member next = available.get(Math.floorMod(pingRoundRobin++,available.size()));
+            pingPeer(next.id);
+        }
+        for (String nonce : new ArrayList<>(pingStart.keySet())) {
+            Long sent = pingStart.get(nonce);
+            if (sent != null && now-sent > 40000) {
+                pingStart.remove(nonce); pingOwner.remove(nonce);
+            }
+        }
+        publishMembers();
+    }
+
+    public List<JSONObject> snapshot() {
+        synchronized (messages) { return new ArrayList<>(messages); }
+    }
+
+    public void start() {
         if (!meshMode && relay.isEmpty()) {
             status("Укажи HTTPS-адрес домашнего сервера через кнопку «Сервер ПК»");
             publishMembers();
