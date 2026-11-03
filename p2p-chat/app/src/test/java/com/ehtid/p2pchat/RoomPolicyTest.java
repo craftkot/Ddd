@@ -25,9 +25,9 @@ public class RoomPolicyTest {
     }
 
     @Test public void backgroundDoesNotMeanDisconnected() {
-        assertTrue(RoomPolicy.isPresent(5*60*1000L,0L,true));
-        assertFalse(RoomPolicy.isPresent(9*60*1000L,0L,true));
-        assertTrue(RoomPolicy.isPresent(20*60*1000L,0L,false));
-        assertFalse(RoomPolicy.isPresent(26*60*1000L,0L,false));
+        assertTrue(RoomPolicy.isPresent(35*60*1000L,0L,true));
+        assertFalse(RoomPolicy.isPresent(41*60*1000L,0L,true));
+        assertTrue(RoomPolicy.isPresent(95*60*1000L,0L,false));
+        assertFalse(RoomPolicy.isPresent(111*60*1000L,0L,false));
     }
 }
