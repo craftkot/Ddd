@@ -45,7 +45,7 @@ public final class MainActivity extends Activity {
     private static final int MUTED = Color.rgb(157, 172, 196);
     private static final int ONLINE = Color.rgb(88, 223, 174);
     private EditText input, joinInput;
-    private TextView status, codeLabel, profileLabel, membersLabel;
+    private TextView status, codeLabel, profileLabel, membersLabel, homeServerLabel;
     private LinearLayout feed, membersPanel;
     private ScrollView scroll, membersScroll;
     private ChatService service;
@@ -108,6 +108,10 @@ public final class MainActivity extends Activity {
         } else {
             launchChat(code,false);
             maybeAskNotification();
+            if (HomeServerUrl.normalize(options().getString("relay_url","")).isEmpty() &&
+                    !options().getBoolean("mesh_mode",false)) {
+                getWindow().getDecorView().post(this::relayDialog);
+            }
         }
     }
 
@@ -211,7 +215,15 @@ public final class MainActivity extends Activity {
             launchChat(target,true);
         });
 
-        TextView p2pConnect=button("↔ Соединить телефоны P2P • без реле",PANEL,13);
+        TextView homeConnect=button("◉ Подключить домашний сервер",ACCENT,14);
+        LinearLayout.LayoutParams hp=new LinearLayout.LayoutParams(-1,dp(46));
+        hp.topMargin=dp(10);
+        roomBox.addView(homeConnect,hp);
+        homeConnect.setOnClickListener(v->relayDialog());
+        homeServerLabel=text(homeServerDescription(),12,MUTED,false);
+        homeServerLabel.setPadding(dp(3),dp(6),dp(3),0);
+        roomBox.addView(homeServerLabel);
+        TextView p2pConnect=button("↔ Соединить телефоны P2P • вручную",PANEL,13);
         LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(46));
         cp.topMargin=dp(10);
         roomBox.addView(p2pConnect,cp);
@@ -280,6 +292,12 @@ public final class MainActivity extends Activity {
                 status.setText("● Нет подключения к службе. Повтори отправку.");
                 return;
             }
+            if (!service.isPeerMesh() &&
+                    HomeServerUrl.normalize(options().getString("relay_url","")).isEmpty()) {
+                status.setText("● Сначала укажи HTTPS-адрес домашнего сервера");
+                relayDialog();
+                return;
+            }
             service.send(message);
             input.setText("");
         });
@@ -339,9 +357,9 @@ public final class MainActivity extends Activity {
         if (messages.isEmpty()) {
             TextView welcome = text(
                     "Начните разговор\n\n" +
-                    "Передайте другому участнику код комнаты. Затем нажмите " +
-                    "«Соединить телефоны P2P»: обменяйтесь приглашением и ответом. " +
-                    "В P2P-режиме сообщения идут через подключённые телефоны, без ntfy.",
+                    "Запусти EHTID Home Relay на компьютере, подключи HTTPS-адрес " +
+                    "через кнопку «Домашний сервер» и поделись кодом комнаты. " +
+                    "Телефоны смогут общаться через твой ПК, без ntfy.sh.",
                     15,MUTED,false);
             welcome.setGravity(Gravity.CENTER);
             welcome.setPadding(dp(16),dp(50),dp(16),dp(20));
@@ -448,6 +466,7 @@ public final class MainActivity extends Activity {
             if (first) {
                 launchChat(code,false);
                 maybeAskNotification();
+                getWindow().getDecorView().post(this::relayDialog);
             }
         }));
         dialog.show();
@@ -469,11 +488,11 @@ public final class MainActivity extends Activity {
                 "Работа чата в фоне",
                 "Показывать текст сообщений",
                 "Звук уведомлений",
-                "P2P-режим без сервера (по умолчанию)"
+                "P2P-режим (ручное подключение без сервера)"
         };
         String[] keys={"notifications","background","preview","sound","mesh_mode"};
         boolean[] checked = new boolean[keys.length];
-        for(int i=0;i<keys.length;i++) checked[i]=options().getBoolean(keys[i],true);
+        for(int i=0;i<keys.length;i++) checked[i]=options().getBoolean(keys[i],i!=4);
         AlertDialog dialog=new AlertDialog.Builder(this)
                 .setTitle("Настройки")
                 .setMultiChoiceItems(labels,checked,(d,which,enabled)-> {
@@ -483,7 +502,7 @@ public final class MainActivity extends Activity {
                     if (which==4 && service!=null) service.restartRelay();
                 })
                 .setNegativeButton("Изменить имя",(d,w)->askName(false))
-                .setNeutralButton("Сервер реле",(d,w)->relayDialog())
+                .setNeutralButton("Домашний сервер",(d,w)->relayDialog())
                 .setPositiveButton("Готово",(d,w)->{})
                 .create();
         dialog.show();
@@ -592,46 +611,93 @@ public final class MainActivity extends Activity {
                 .show();
     }
 
+    private String homeServerDescription() {
+        String address=HomeServerUrl.normalize(options().getString("relay_url",""));
+        if (address.isEmpty()) return "Сервер ПК: не настроен";
+        try {
+            java.net.URI uri=new java.net.URI(address);
+            return "Сервер ПК: " + uri.getHost();
+        } catch (Exception ignored) { return "Сервер ПК: адрес сохранён"; }
+    }
+
     private void relayDialog() {
-        EditText url = new EditText(this);
+        EditText url=new EditText(this);
         url.setSingleLine(true);
-        url.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-        url.setText(options().getString("relay_url","https://ntfy.sh"));
-        url.setHint("https://ntfy.example.org");
-        LinearLayout holder = new LinearLayout(this);
+        url.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_URI);
+        url.setText(options().getString("relay_url",""));
+        url.setHint("https://имя-компьютера.ts.net");
+        LinearLayout holder=new LinearLayout(this);
         holder.setPadding(dp(20),dp(9),dp(20),dp(4));
         holder.addView(url,new LinearLayout.LayoutParams(-1,-2));
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Сервер интернет-реле")
-                .setMessage("Нужен сервер, совместимый с ntfy. Все участники одной комнаты должны указать одинаковый адрес. Публичный ntfy.sh ограничен по числу сообщений.")
+        AlertDialog dialog=new AlertDialog.Builder(this)
+                .setTitle("Подключение к домашнему серверу")
+                .setMessage("На ПК запусти START-STABLE-TAILSCALE.cmd или START-EHTID.cmd " +
+                        "из архива EHTID Home Relay. Вставь выданный HTTPS-адрес. " +
+                        "На всех телефонах нужен одинаковый адрес и код комнаты. " +
+                        "При выключенном ПК сообщения останутся в очереди.")
                 .setView(holder)
-                .setNeutralButton("ntfy.sh",(d,w)-> {
-                    options().edit().putString("relay_url","https://ntfy.sh").apply();
-                    if (service != null) service.restartRelay();
-                })
-                .setNegativeButton("Отмена",(d,w)->{})
-                .setPositiveButton("Сохранить",null)
-                .create();
-        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-                .setOnClickListener(v -> {
-                    String value = url.getText().toString().trim().replaceAll("/+$","");
+                .setPositiveButton("Сохранить и подключить",null)
+                .setNeutralButton("Проверить сервер",null)
+                .setNegativeButton("Отмена",null).create();
+        dialog.setOnShowListener(v->{
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(clicked->{
+                String address=HomeServerUrl.normalize(url.getText().toString());
+                if (address.isEmpty()) {
+                    url.setError("Нужен HTTPS-адрес без пути (например, https://pc.ts.net)");
+                    return;
+                }
+                options().edit().putString("relay_url",address)
+                        .putBoolean("mesh_mode",false).apply();
+                if (homeServerLabel!=null) homeServerLabel.setText(homeServerDescription());
+                if (service!=null) service.restartRelay();
+                else launchChat(code,false);
+                status.setText("● Подключаем сервер " + address);
+                dialog.dismiss();
+            });
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(clicked->{
+                String address=HomeServerUrl.normalize(url.getText().toString());
+                if (address.isEmpty()) {
+                    url.setError("Введи HTTPS-адрес из окна сервера");
+                    return;
+                }
+                status.setText("● Проверяем доступность сервера...");
+                new Thread(()->{
+                    java.net.HttpURLConnection connection=null;
+                    String result;
                     try {
-                        java.net.URI uri = new java.net.URI(value);
-                        if (!"https".equalsIgnoreCase(uri.getScheme()) ||
-                                uri.getHost() == null || uri.getHost().isEmpty() ||
-                                uri.getRawUserInfo() != null || uri.getQuery()!=null ||
-                                uri.getFragment()!=null || !uri.getPath().isEmpty()) {
-                            url.setError("Укажи корневой HTTPS-адрес ntfy-сервера");
-                            return;
+                        connection=(java.net.HttpURLConnection)
+                                new java.net.URL(address+"/health").openConnection();
+                        connection.setConnectTimeout(7000);
+                        connection.setReadTimeout(7000);
+                        connection.setRequestProperty("Accept","application/json");
+                        int code=connection.getResponseCode();
+                        String body="";
+                        if (code==200) {
+                            try(java.io.InputStream in=connection.getInputStream()) {
+                                byte[] bytes=new byte[1024];
+                                int n=in.read(bytes);
+                                if(n>0) body=new String(bytes,0,n,java.nio.charset.StandardCharsets.UTF_8);
+                            }
                         }
-                    } catch (Exception bad) {
-                        url.setError("Некорректный HTTPS-адрес");
-                        return;
+                        result=code==200 && body.contains("EHTID Home Relay") &&
+                                body.contains("true") ?
+                                "EHTID Home Relay доступен; можешь сохранять адрес" :
+                                "Сервер отвечает неверно: HTTP "+code+
+                                ". Проверь запуск EHTID Home Relay";
+                    } catch(Exception e) {
+                        result="Не удалось подключиться к серверу: "+e.getClass().getSimpleName();
+                    } finally {
+                        if(connection!=null) connection.disconnect();
                     }
-                    options().edit().putString("relay_url",value).apply();
-                    if (service != null) service.restartRelay();
-                    dialog.dismiss();
-                }));
+                    final String message=result;
+                    runOnUiThread(()->{
+                        status.setText("● "+message);
+                        if(!isFinishing() && dialog.isShowing())
+                            url.setError(message.startsWith("EHTID Home Relay доступен")?null:message);
+                    });
+                },"EHTID-Server-Health").start();
+            });
+        });
         dialog.show();
     }
 
