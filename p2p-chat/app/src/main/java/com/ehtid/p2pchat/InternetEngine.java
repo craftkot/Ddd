@@ -313,6 +313,10 @@ public final class InternetEngine {
 
     public void sendMessage(String text) {
         if (stopped || text == null || text.trim().isEmpty() || text.length() > 1000) return;
+        if (queuedCount() >= 100) {
+            status("Очередь переполнена; повтори отправку после восстановления связи");
+            return;
+        }
         if (!hostMode && !guestMode) {
             hostMode = true;
             prefs.edit().putString("role_" + room, "host").apply();
@@ -347,7 +351,7 @@ public final class InternetEngine {
     private void persistPending() {
         JSONArray all = new JSONArray();
         for (JSONObject m : pending.values()) all.put(m);
-        prefs.edit().putString("pending_" + room,all.toString()).apply();
+        prefs.edit().putString("pending_" + room,all.toString()).commit();
     }
 
     public int queuedCount() {
@@ -604,7 +608,7 @@ public final class InternetEngine {
         JSONObject signal = obj("t", "sync");
         put(signal, "to", guest);
         put(signal, "data", batch);
-        publish(signal);
+        signal(signal);
     }
 
     private void signal(JSONObject packet) {
