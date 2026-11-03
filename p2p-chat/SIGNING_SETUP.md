@@ -20,10 +20,10 @@ The 64-character signing password is not committed.
 
 1. Open **https://github.com/craftkot/Ddd/settings/secrets/actions**.
 2. Click **New repository secret**.
-3. Name: `EHTID_SIGNING_PASSWORD`.
-4. Value: the **64-character secret delivered privately with the signing setup**.
+3. Name: `key` (repository-level Actions secret, NOT an environment variable).
+4. Value: the **exact 64-character password previously given for the keystore**, not the literal word `key`.
    Never paste it into an issue, commit, gist, or pull request.
-5. Click **Add secret**.
+5. Click **Add secret**. Confirm `key` is listed under **Repository secrets**; do not create it under **Environment secrets** unless the workflow has an environment mapping.
 6. Open **https://github.com/craftkot/Ddd/actions/workflows/build-p2p-chat.yml**.
 7. Choose **Run workflow** on branch `feature/p2p-chat`.
 8. The workflow decrypts the keystore, checks it, runs tests, builds a signed
