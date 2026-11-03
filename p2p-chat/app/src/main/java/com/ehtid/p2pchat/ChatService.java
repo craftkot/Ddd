@@ -32,6 +32,8 @@ public final class ChatService extends Service implements InternetEngine.Listene
     private List<InternetEngine.Member> members = new ArrayList<>();
     private boolean visible = false;
     private boolean foreground = false;
+    private String lastManualCode="";
+    private String lastManualKind="";
 
     public class LocalBinder extends Binder {
         public ChatService service() { return ChatService.this; }
@@ -61,6 +63,8 @@ public final class ChatService extends Service implements InternetEngine.Listene
             if (engine != null) engine.stop();
             room = requested;
             status = "Подключение…";
+            lastManualCode="";
+            lastManualKind="";
             messages = new ArrayList<>();
             members = new ArrayList<>();
             engine = new InternetEngine(getApplicationContext(), room,
@@ -90,6 +94,18 @@ public final class ChatService extends Service implements InternetEngine.Listene
     public void send(String text) {
         if (engine != null) engine.sendMessage(text);
     }
+    public boolean isPeerMesh() {
+        return engine!=null && engine.isMeshMode();
+    }
+    public int directPeerCount() {
+        return engine==null ? 0 : engine.meshPeerCount();
+    }
+    public void createPeerInvitation() {
+        if (engine!=null) engine.makeMeshOffer();
+    }
+    public void importPeerInvitation(String token) {
+        if (engine!=null) engine.importMeshCode(token);
+    }
     public void changeNickname(String name) {
         if (engine != null) engine.setName(name);
     }
@@ -97,7 +113,9 @@ public final class ChatService extends Service implements InternetEngine.Listene
     public void restartRelay() {
         if (room.isEmpty()) return;
         if (engine != null) engine.stop();
-        status = "Переподключаем интернет-реле…";
+        status = "Перезапускаем сетевое соединение…";
+        lastManualCode="";
+        lastManualKind="";
         members = new ArrayList<>();
         engine = new InternetEngine(getApplicationContext(),room,false,this);
         engine.setChatVisible(visible);
@@ -130,6 +148,7 @@ public final class ChatService extends Service implements InternetEngine.Listene
         l.onStatus(status);
         l.onMessages(new ArrayList<>(messages));
         l.onParticipants(new ArrayList<>(members));
+        if (!lastManualCode.isEmpty()) l.onManualSignal(lastManualCode,lastManualKind);
     }
 
     @Override public void onStatus(String s) {
@@ -147,6 +166,11 @@ public final class ChatService extends Service implements InternetEngine.Listene
         if (ui != null) ui.onParticipants(new ArrayList<>(list));
     }
 
+    @Override public void onManualSignal(String token,String kind) {
+        lastManualCode=token;
+        lastManualKind=kind;
+        if (ui!=null) ui.onManualSignal(token,kind);
+    }
     @Override public void onIncoming(String nickname, String message) {
         if (ui != null) ui.onIncoming(nickname, message);
         SharedPreferences options = getSharedPreferences("ui_settings", MODE_PRIVATE);
