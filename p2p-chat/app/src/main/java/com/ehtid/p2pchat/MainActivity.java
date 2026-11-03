@@ -281,7 +281,7 @@ public final class MainActivity extends Activity {
             if (member.online) onlineCount++;
         }
         membersLabel.setText("УЧАСТНИКИ · " + onlineCount + " В СЕТИ / " + count + " ПОДКЛЮЧЕНО");
-        int shown = Math.min(count, 50);
+        int shown = count;
         LinearLayout.LayoutParams viewport = (LinearLayout.LayoutParams) membersScroll.getLayoutParams();
         viewport.height = dp(Math.min(175, Math.max(33, shown * 34)));
         membersScroll.setLayoutParams(viewport);
@@ -304,7 +304,8 @@ public final class MainActivity extends Activity {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0,-2,1);
             lp.leftMargin = dp(8);
             row.addView(nick,lp);
-            String presence = member.online ? "В сети" : "В фоне";
+            String presence = member.online ? "В сети" :
+                    member.isMe ? "Подключение" : "В фоне";
             String ping = member.isMe ? "" :
                 (member.pingMs < 0 ? " · пинг —" : " · " + member.pingMs + " мс");
             row.addView(text(presence+ping,11,
