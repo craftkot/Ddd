@@ -190,7 +190,13 @@ public final class InternetEngine {
         long now = System.currentTimeMillis();
         List<Member> list = new ArrayList<>();
         for (Member m : members.values()) {
-            if (!m.isMe && !RoomPolicy.isPresent(now,m.lastSeen,m.online)) continue;
+            if (!m.isMe) {
+                // Mesh participants heartbeat every 30 seconds, and don't consume
+                // public broker quota. Show stale peers as offline promptly.
+                long meshTtl = m.online ? 90000L : 180000L;
+                if (meshMode ? now - m.lastSeen >= meshTtl :
+                        !RoomPolicy.isPresent(now,m.lastSeen,m.online)) continue;
+            }
             list.add(new Member(m.id,m.name,m.lastSeen,m.pingMs,m.isMe,
                     m.isMe ? (chatVisible && (meshMode ? mesh!=null && mesh.connectedCount()>0 :
                         relayOnline && now >= nextRelaySendAt)) :
