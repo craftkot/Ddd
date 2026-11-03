@@ -182,7 +182,7 @@ public final class InternetEngine {
         for (Member m : members.values()) {
             if (!m.isMe && !RoomPolicy.isPresent(now,m.lastSeen,m.online)) continue;
             list.add(new Member(m.id,m.name,m.lastSeen,m.pingMs,m.isMe,
-                    m.isMe ? (chatVisible && relayOnline) : (m.online && relayOnline)));
+                    m.isMe ? (chatVisible && relayOnline && now >= nextRelaySendAt) : (m.online && relayOnline)));
         }
         list.sort((a,b) -> a.isMe ? -1 : b.isMe ? 1 :
                 a.online != b.online ? Boolean.compare(b.online,a.online) :
@@ -406,8 +406,13 @@ public final class InternetEngine {
                 relayOnline = true;
                 failures = 0;
                 publishMembers();
-                status(direct() ? "P2P напрямую • зашифровано" :
-                        "Интернет-реле подключено • сообщения шифруются");
+                if (System.currentTimeMillis() < nextRelaySendAt) {
+                    status("Реле ограничило отправку: " + queuedCount() +
+                            " сообщений ожидают повтора");
+                } else {
+                    status(direct() ? "P2P напрямую • шифрование включено" :
+                            "Интернет-реле подключено • сообщения шифруются");
+                }
                 if (guestMode) signal(obj("t", "hello"));
                 announcePresence();
                 try (BufferedReader br = new BufferedReader(new InputStreamReader(
@@ -607,8 +612,8 @@ public final class InternetEngine {
         sender.execute(() -> publish(packet));
     }
 
-    private void publish(JSONObject packet) {
-        if (stopped) return;
+    private boolean publish(JSONObject packet) {
+        if (stopped || System.currentTimeMillis() < nextRelaySendAt) return false;
         put(packet, "id", UUID.randomUUID().toString());
         put(packet, "from", id);
         put(packet, "name", myName);
@@ -623,28 +628,31 @@ public final class InternetEngine {
             byte[] bytes = cipher.doFinal(packet.toString().getBytes(StandardCharsets.UTF_8));
             wire = "v1." + b64(iv) + "." + b64(bytes);
         } catch (Exception e) {
-            status("Не удалось зашифровать сообщение");
-            return;
+            status("Ошибка шифрования: сообщение сохранено в очереди");
+            return false;
         }
-        if (wire.length() <= 2350) {
-            post(wire, "msg".equals(packet.optString("t")));
-        } else {
-            String token = UUID.randomUUID().toString().replace("-", "");
-            int count = (wire.length() + 2099) / 2100;
-            if (count > 24) return;
-            for (int i = 0; i < count && !stopped; i++) {
-                int begin = i * 2100;
-                String frame = "frag1:" + token + ":" + i + ":" + count + ":" +
-                        wire.substring(begin, Math.min(begin + 2100, wire.length()));
-                post(frame, "msg".equals(packet.optString("t")));
-            }
+        boolean isMessage = "msg".equals(packet.optString("t"));
+        if (wire.length() <= 2350) return post(wire, isMessage);
+        String token = UUID.randomUUID().toString().replace("-", "");
+        int count = (wire.length() + 2099) / 2100;
+        if (count > 24) {
+            status("Слишком большой пакет: сообщение оставлено в очереди");
+            return false;
         }
+        for (int i = 0; i < count && !stopped; i++) {
+            int begin = i * 2100;
+            String frame = "frag1:" + token + ":" + i + ":" + count + ":" +
+                    wire.substring(begin, Math.min(begin + 2100, wire.length()));
+            if (!post(frame, isMessage)) return false;
+        }
+        return !stopped;
     }
 
-    private void post(String text, boolean cache) {
+    private boolean post(String text, boolean cache) {
+        if (stopped || System.currentTimeMillis() < nextRelaySendAt) return false;
         HttpURLConnection conn = null;
         try {
-            conn = (HttpURLConnection) new URL(RELAY + topic).openConnection();
+            conn = (HttpURLConnection) new URL(relay + "/" + topic).openConnection();
             conn.setRequestMethod("POST");
             conn.setConnectTimeout(10000);
             conn.setReadTimeout(10000);
@@ -656,10 +664,32 @@ public final class InternetEngine {
             conn.setFixedLengthStreamingMode(bytes.length);
             try (OutputStream out = conn.getOutputStream()) { out.write(bytes); }
             int response = conn.getResponseCode();
-            if (response < 200 || response >= 300)
-                status("Реле не приняло данные: HTTP " + response);
+            if (response >= 200 && response < 300) {
+                sendFailures = 0;
+                return true;
+            }
+
+            String retryAfter = conn.getHeaderField("Retry-After");
+            long delay = RelayRetryPolicy.retryDelayMs(response,retryAfter,sendFailures++);
+            nextRelaySendAt = System.currentTimeMillis() + delay;
+            prefs.edit().putLong("retry_until_" + relay,nextRelaySendAt).apply();
+            publishMembers();
+            if (response == 429) {
+                long minutes = (delay + 59999L) / 60000L;
+                status("HTTP 429: лимит публичного реле. Повтор через ~" +
+                        Math.max(1,minutes) + " мин; " + queuedCount() + " в очереди");
+            } else {
+                status("Реле HTTP " + response + ": повторная отправка позже, очередь " +
+                        queuedCount());
+            }
+            return false;
         } catch (Exception e) {
-            if (!stopped) status("Ошибка отправки по интернету: " + e.getMessage());
+            long delay = RelayRetryPolicy.retryDelayMs(503,null,sendFailures++);
+            nextRelaySendAt = System.currentTimeMillis() + delay;
+            prefs.edit().putLong("retry_until_" + relay,nextRelaySendAt).apply();
+            if (!stopped) status("Нет связи с реле: " + queuedCount() +
+                    " в очереди, повтор через " + Math.max(1,(delay+999L)/1000L) + " с");
+            return false;
         } finally {
             if (conn != null) conn.disconnect();
         }
@@ -978,6 +1008,7 @@ public final class InternetEngine {
             factory = null;
         }
         io.shutdownNow();
+        sender.shutdownNow();
         clock.shutdownNow();
     }
     private static class Fragments {
