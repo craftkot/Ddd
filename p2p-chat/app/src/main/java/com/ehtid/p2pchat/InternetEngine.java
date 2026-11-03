@@ -271,21 +271,12 @@ public final class InternetEngine {
     }
 
     private void sendUserData(JSONObject packet, JSONObject msg) {
-        put(packet, "m", msg);
-        DataChannel channel = data;
-        if (channel != null && channel.state() == DataChannel.State.OPEN) {
-            if (channel.send(new DataChannel.Buffer(ByteBuffer.wrap(
-                    packet.toString().getBytes(StandardCharsets.UTF_8)), false))) {
-                String msgId = msg.optString("id");
-                waitingAcks.put(msgId, packet);
-                clock.schedule(() -> {
-                    JSONObject pending = waitingAcks.remove(msgId);
-                    if (pending != null && !stopped) signal(pending);
-                }, 3, TimeUnit.SECONDS);
-                return;
-            }
-        }
+        put(packet,"m",msg);
+        // WebRTC's DataChannel has just one recipient; always broadcast encrypted
+        // ciphertext through the room relay, including while a direct link is open.
+        // Receivers deduplicate by message ID.
         signal(packet);
+        sendDirect(packet);
     }
 
     private void readRelay() {
@@ -390,14 +381,16 @@ public final class InternetEngine {
             String type = packet.optString("t");
             if (!"msg".equals(type) && !"sync".equals(type)) {
                 long ts = packet.optLong("ts");
-                if (Math.abs(System.currentTimeMillis() - ts) > 180000) return;
+                long maxAge = "presence".equals(type) ? 42000L : 180000L;
+                if (Math.abs(System.currentTimeMillis() - ts) > maxAge) return;
             }
             String to = packet.optString("to");
             if (!to.isEmpty() && !to.equals(id)) return;
-            if (!"ice".equals(type) && !"offer".equals(type) && !"answer".equals(type))
+            if ("ping".equals(type) || "pong".equals(type) || "hello".equals(type))
                 markMember(from, packet.optString("name"));
             switch (type) {
                 case "presence":
+                    markMember(from,packet.optString("name"),packet.optBoolean("active",false));
                     break;
                 case "ping":
                     JSONObject pong = obj("t", "pong");
@@ -450,14 +443,16 @@ public final class InternetEngine {
     private void onGuestHello(String guest) {
         if (!hostMode || stopped) return;
         long now = System.currentTimeMillis();
-        if (!guest.equals(lastHelloFrom) || now - lastSyncAt > 40000) {
-            lastHelloFrom = guest;
-            lastSyncAt = now;
+        Long previous = lastGuestHistory.get(guest);
+        if (previous == null || now - previous >= HISTORY_COOLDOWN_MS) {
+            lastGuestHistory.put(guest,now);
             relayHistory(guest);
         }
+        // The room is multi-user, while this WebRTC implementation is 1:1.
+        // Keep the first active direct connection; additional guests stay on
+        // the room-wide encrypted relay instead of evicting that participant.
         if (factory == null) return;
-        if (rtc != null && guest.equals(remoteId)) return;
-        if (rtc != null && direct()) return;
+        if (rtc != null && (direct() || now - lastOfferAt < 30000L)) return;
         startOffer(guest);
     }
 
@@ -555,7 +550,9 @@ public final class InternetEngine {
 
     private synchronized void startOffer(String guest) {
         if (stopped || !hostMode || factory == null) return;
+        if (direct()) return;
         resetRtc();
+        lastOfferAt = System.currentTimeMillis();
         remoteId = guest;
         PeerConnection pc = newPeer();
         if (pc == null) return;
@@ -584,8 +581,10 @@ public final class InternetEngine {
 
     private synchronized void acceptOffer(String from, String sdp) {
         if (stopped || factory == null || sdp.isEmpty()) return;
-        if (rtc != null && from.equals(remoteId)) return;
+        // Another participant entering the room must never replace this call.
+        if (rtc != null && (direct() || System.currentTimeMillis() - lastOfferAt < 30000L)) return;
         resetRtc();
+        lastOfferAt = System.currentTimeMillis();
         remoteId = from;
         synchronized (queuedIce) {
             List<IceCandidate> early = earlyIce.remove(from);
@@ -646,12 +645,8 @@ public final class InternetEngine {
                 if (state == PeerConnection.IceConnectionState.FAILED ||
                         state == PeerConnection.IceConnectionState.DISCONNECTED) {
                     if (!direct()) status("Прямой канал недоступен • работает шифрованное реле");
-                    if (state == PeerConnection.IceConnectionState.FAILED) {
-                        // Permit the host to retry after the next guest presence packet.
-                        clock.schedule(() -> {
-                            if (!stopped && !direct()) resetRtc();
-                        }, 2, TimeUnit.SECONDS);
-                    }
+                    // Do not reset peers asynchronously when other guests join.
+                    // A failed attempt can be replaced after its offer timeout.
                 }
             }
             @Override public void onIceConnectionReceivingChange(boolean state) {}
@@ -823,8 +818,8 @@ public final class InternetEngine {
     private void incomingAlert(JSONObject m) {
         if (m == null || m.optString("from").equals(id)) return;
         String nickname = cleanName(m.optString("name", "Гость"));
-        markMember(m.optString("from"), nickname);
         if (Math.abs(System.currentTimeMillis() - m.optLong("at",0)) > 120000) return;
+        markMember(m.optString("from"), nickname);
         String message = m.optString("text");
         ui.post(() -> { if (!stopped) listener.onIncoming(nickname, message); });
     }
