@@ -82,13 +82,13 @@ jobs:
         run: |
           set -euo pipefail
           APK="app/build/outputs/apk/debug/app-debug.apk"
-          RELEASE_APK="EHTID-P2P-Chat-v0.6.apk"
+          RELEASE_APK="EHTID-P2P-Chat-v0.7.apk"
           cp "$APK" "$RELEASE_APK"
-          TAG="ehtid-p2p-chat-v0.6"
+          TAG="ehtid-p2p-chat-v0.7"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$TAG" "$RELEASE_APK" --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" "$RELEASE_APK" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "EHTID P2P Chat v0.6 (Android beta)" --notes "Persistent queued messages, Retry-After backoff for HTTP 429, idle reconnect flood fix, delivery state labels, configurable ntfy-compatible HTTPS relay. Signed with same permanent Android certificate as v0.5; installs as in-place update." --prerelease
+            gh release create "$TAG" "$RELEASE_APK" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "EHTID P2P Chat v0.7 (Android beta)" --notes "Experimental offline-signaled peer-to-peer mesh: phones forward messages through WebRTC DataChannels, manual offer/answer, STUN only. No ntfy message quota in P2P mode. Carrier NAT/CGNAT can block direct paths without TURN; reconnect after app restarts requires a new pairing. Kept optional legacy relay mode. Not independently tested on real devices." --prerelease
           fi
       - name: Smoke test APK in Android emulator
         continue-on-error: true
