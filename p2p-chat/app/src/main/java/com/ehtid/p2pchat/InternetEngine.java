@@ -356,13 +356,22 @@ public final class InternetEngine {
                                 publishMembers();
                             }
                         }
-                        @Override public void peerConnected() {
-                            synchronized (pending) {
-                                if (!pending.isEmpty()) {
-                                    for (String msgId: new ArrayList<>(pending.keySet()))
-                                        updateDelivery(msgId,"p2p");
-                                    pending.clear();
-                                    persistPending();
+                        @Override public void peerConnected(List<String> forwardedHistoryIds) {
+                            if (forwardedHistoryIds!=null) {
+                                for (String msgId:forwardedHistoryIds) {
+                                    synchronized (messages) {
+                                        for (JSONObject m:messages) {
+                                            if (msgId.equals(m.optString("id")) &&
+                                                    id.equals(m.optString("from")) &&
+                                                    "pending".equals(m.optString("delivery"))) {
+                                                updateDelivery(msgId,"p2p");
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    synchronized (pending) {
+                                        if (pending.remove(msgId)!=null) persistPending();
+                                    }
                                 }
                             }
                             publishMembers();
