@@ -1,6 +1,15 @@
 plugins {
     id 'com.android.application'
 }
+
+// The release signing identity is encrypted in ci-signing. Never embed the
+// private key or its decryption password in a public repository.
+def signingPassword = System.getenv('EHTID_SIGNING_PASSWORD')
+def permanentKeystore = rootProject.file('ci-signing/permanent-release.p12')
+def isSigningConfigured = signingPassword != null && !signingPassword.isEmpty() && permanentKeystore.isFile()
+def actionBuildNumber = System.getenv('GITHUB_RUN_NUMBER')
+def monotonicCode = actionBuildNumber ? 5000 + Integer.parseInt(actionBuildNumber) : 5
+
 android {
     namespace 'com.ehtid.p2pchat'
     compileSdk 35
@@ -8,8 +17,30 @@ android {
         applicationId 'com.ehtid.p2pchat'
         minSdk 24
         targetSdk 35
-        versionCode 4
-        versionName '0.4.0'
+        versionCode monotonicCode
+        versionName '0.5.0'
+    }
+    signingConfigs {
+        permanent {
+            if (isSigningConfigured) {
+                storeFile permanentKeystore
+                storePassword signingPassword
+                keyAlias 'ehtid'
+                keyPassword signingPassword
+                storeType 'pkcs12'
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            // GitHub Actions always uses permanent signing. Local developers
+            // without the secret may still use their own ephemeral debug key.
+            if (isSigningConfigured) signingConfig signingConfigs.permanent
+        }
+        release {
+            if (isSigningConfigured) signingConfig signingConfigs.permanent
+            minifyEnabled false
+        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
