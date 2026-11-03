@@ -34,11 +34,11 @@ jobs:
           "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0"
       - name: Restore permanent signing key
         env:
-          EHTID_SIGNING_PASSWORD: ${{ secrets.key }}
+          EHTID_SIGNING_PASSWORD: ${{ secrets.kuyga }}
         run: |
           set -euo pipefail
           if [ -z "${EHTID_SIGNING_PASSWORD:-}" ]; then
-            echo "::error::GitHub Actions secret named key is missing. Add or correct it via Settings > Secrets and variables > Actions."
+            echo "::error::GitHub Actions secret named kuyga is missing. Add or correct it via Settings > Secrets and variables > Actions."
             exit 1
           fi
           mkdir -p ci-signing
@@ -55,7 +55,7 @@ jobs:
         run: gradle :app:testDebugUnitTest --no-daemon
       - name: Compile consistently signed APK
         env:
-          EHTID_SIGNING_PASSWORD: ${{ secrets.key }}
+          EHTID_SIGNING_PASSWORD: ${{ secrets.kuyga }}
         run: gradle :app:assembleDebug --no-daemon --stacktrace
       - name: Verify APK archive and signing
         run: |
