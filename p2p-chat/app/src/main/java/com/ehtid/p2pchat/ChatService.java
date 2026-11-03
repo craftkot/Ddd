@@ -93,6 +93,17 @@ public final class ChatService extends Service implements InternetEngine.Listene
     public void changeNickname(String name) {
         if (engine != null) engine.setName(name);
     }
+    /** Reconnect to the user-selected ntfy-compatible relay, retaining room/history. */
+    public void restartRelay() {
+        if (room.isEmpty()) return;
+        if (engine != null) engine.stop();
+        status = "Переподключаем интернет-реле…";
+        members = new ArrayList<>();
+        engine = new InternetEngine(getApplicationContext(),room,false,this);
+        engine.setChatVisible(visible);
+        engine.start();
+        emit();
+    }
     public void refreshSettings() {
         SharedPreferences p = getSharedPreferences("ui_settings", MODE_PRIVATE);
         boolean background = p.getBoolean("background", true);
