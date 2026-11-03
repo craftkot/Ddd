@@ -108,7 +108,8 @@ public final class MainActivity extends Activity {
         } else {
             launchChat(code,false);
             maybeAskNotification();
-            if (HomeServerUrl.normalize(options().getString("relay_url","")).isEmpty() &&
+            String currentServer=InternetEngine.getRelayServer(this);
+            if (currentServer.isEmpty() &&
                     !options().getBoolean("mesh_mode",false)) {
                 getWindow().getDecorView().post(this::relayDialog);
             }
@@ -293,7 +294,7 @@ public final class MainActivity extends Activity {
                 return;
             }
             if (!service.isPeerMesh() &&
-                    HomeServerUrl.normalize(options().getString("relay_url","")).isEmpty()) {
+                    InternetEngine.getRelayServer(this).isEmpty()) {
                 status.setText("● Сначала укажи HTTPS-адрес домашнего сервера");
                 relayDialog();
                 return;
@@ -613,7 +614,8 @@ public final class MainActivity extends Activity {
 
     private String homeServerDescription() {
         String address=HomeServerUrl.normalize(options().getString("relay_url",""));
-        if (address.isEmpty()) return "Сервер ПК: не настроен";
+        if (address.isEmpty() || "https://ntfy.sh".equals(address))
+            return "Сервер ПК: не настроен";
         try {
             java.net.URI uri=new java.net.URI(address);
             return "Сервер ПК: " + uri.getHost();
@@ -624,7 +626,8 @@ public final class MainActivity extends Activity {
         EditText url=new EditText(this);
         url.setSingleLine(true);
         url.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_URI);
-        url.setText(options().getString("relay_url",""));
+        String previousAddress=options().getString("relay_url","");
+        url.setText("https://ntfy.sh".equals(previousAddress)?"":previousAddress);
         url.setHint("https://имя-компьютера.ts.net");
         LinearLayout holder=new LinearLayout(this);
         holder.setPadding(dp(20),dp(9),dp(20),dp(4));
