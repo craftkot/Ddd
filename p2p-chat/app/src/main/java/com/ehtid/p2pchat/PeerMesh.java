@@ -52,7 +52,7 @@ public final class PeerMesh {
         void peerPresence(String peerId, String name, boolean visible, int pingMs);
         void peerPing(String peerId, int pingMs);
         void peerDisconnected(String peerId);
-        void peerConnected();
+        void peerConnected(List<String> forwardedHistoryIds);
         List<JSONObject> history();
     }
 
@@ -341,8 +341,8 @@ public final class PeerMesh {
                     l.active=true;
                     status("P2P подключён: "+connectedCount()+" прямых узлов. Без ntfy.");
                     announce();
-                    sendHistory(l);
-                    onUi(cb::peerConnected);
+                    List<String> forwarded = sendHistory(l);
+                    onUi(()->cb.peerConnected(forwarded));
                 } else if (dc.state()==DataChannel.State.CLOSED) {
                     peerLeft(l);
                 }
@@ -372,9 +372,10 @@ public final class PeerMesh {
         return forward(envelope,null)>0;
     }
 
-    private void sendHistory(Link recipient) {
+    private List<String> sendHistory(Link recipient) {
+        List<String> forwarded=new ArrayList<>();
         List<JSONObject> history=cb.history();
-        if (history==null) return;
+        if (history==null) return forwarded;
         int n=0;
         for (JSONObject msg:history) {
             if (n++>=100) break;
@@ -383,10 +384,11 @@ public final class PeerMesh {
             put(env,"event",msg.optString("id"));
             put(env,"hop",0);
             put(env,"body",msg);
-            send(recipient,env);
+            if (send(recipient,env)) forwarded.add(msg.optString("id"));
         }
         JSONObject own=presencePacket();
         send(recipient,own);
+        return forwarded;
     }
 
     public void announce() {
