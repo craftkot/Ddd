@@ -8,6 +8,10 @@ on:
       - '.github/workflows/build-p2p-chat.yml'
   workflow_dispatch:
 
+concurrency:
+  group: ehtid-p2p-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -85,8 +89,14 @@ jobs:
           RELEASE_APK="EHTID-P2P-Chat-v0.7.apk"
           cp "$APK" "$RELEASE_APK"
           TAG="ehtid-p2p-chat-v0.7"
+          LATEST="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/feature/p2p-chat" --jq '.object.sha')"
+          if [ "$LATEST" != "$GITHUB_SHA" ]; then
+            echo "::warning::Skipping stale APK: branch head is $LATEST but build is $GITHUB_SHA"
+            exit 0
+          fi
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$TAG" "$RELEASE_APK" --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "$TAG" --target "$GITHUB_SHA" --repo "$GITHUB_REPOSITORY"
           else
             gh release create "$TAG" "$RELEASE_APK" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "EHTID P2P Chat v0.7 (Android beta)" --notes "Experimental offline-signaled peer-to-peer mesh: phones forward messages through WebRTC DataChannels, manual offer/answer, STUN only. No ntfy message quota in P2P mode. Carrier NAT/CGNAT can block direct paths without TURN; reconnect after app restarts requires a new pairing. Kept optional legacy relay mode. Not independently tested on real devices." --prerelease
           fi
