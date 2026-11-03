@@ -32,15 +32,43 @@ jobs:
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
           test -n "$SDKMANAGER"
           "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0"
+      - name: Restore permanent signing key
+        env:
+          EHTID_SIGNING_PASSWORD: ${{ secrets.EHTID_SIGNING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${EHTID_SIGNING_PASSWORD:-}" ]; then
+            echo "::error::GitHub Actions secret EHTID_SIGNING_PASSWORD is missing. Add it via repository Settings > Secrets and variables > Actions before publishing."
+            exit 1
+          fi
+          mkdir -p ci-signing
+          base64 --decode ci-signing/permanent-release.p12.enc.b64 > ci-signing/permanent-release.p12.enc
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 300000 -md sha256 \
+            -in ci-signing/permanent-release.p12.enc \
+            -out ci-signing/permanent-release.p12 \
+            -pass env:EHTID_SIGNING_PASSWORD
+          chmod 600 ci-signing/permanent-release.p12
+          keytool -list -keystore ci-signing/permanent-release.p12 \
+            -storetype PKCS12 -alias ehtid \
+            -storepass:env EHTID_SIGNING_PASSWORD > /dev/null
       - name: Verify multi-visitor presence rules
         run: gradle :app:testDebugUnitTest --no-daemon
-      - name: Compile APK
+      - name: Compile consistently signed APK
+        env:
+          EHTID_SIGNING_PASSWORD: ${{ secrets.EHTID_SIGNING_PASSWORD }}
         run: gradle :app:assembleDebug --no-daemon --stacktrace
       - name: Verify APK archive and signing
         run: |
           test -s app/build/outputs/apk/debug/app-debug.apk
           unzip -tq app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
+          EXPECTED="efabef78a3c7dc1cf3be833d83e2e02d221685b90c120b1018c6b5e249ac7c77"
+          ACTUAL="$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | tr -d '\r' | tr '[:upper:]' '[:lower:]')"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::Wrong signing certificate! Expected permanent EHTID identity, got: $ACTUAL"
+            exit 1
+          fi
+          echo "Verified permanent certificate SHA-256: $ACTUAL"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
@@ -54,13 +82,13 @@ jobs:
         run: |
           set -euo pipefail
           APK="app/build/outputs/apk/debug/app-debug.apk"
-          RELEASE_APK="EHTID-P2P-Chat-v0.4.apk"
+          RELEASE_APK="EHTID-P2P-Chat-v0.5.apk"
           cp "$APK" "$RELEASE_APK"
-          TAG="ehtid-p2p-chat-v0.4"
+          TAG="ehtid-p2p-chat-v0.5"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$TAG" "$RELEASE_APK" --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" "$RELEASE_APK" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "EHTID P2P Chat v0.4 (Android beta)" --notes "Multi-user Internet chat beta: room-wide encrypted relay broadcasting, no eviction of existing direct guest, foreground status (В сети), background presence, sampled relay RTT, reduced service traffic. Not production-security audited. Requires Android 7+." --prerelease
+            gh release create "$TAG" "$RELEASE_APK" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "EHTID P2P Chat v0.5 (Android beta)" --notes "Permanent Android signing key for in-place updates; stable applicationId; monotonic versionCode; encrypted group chat beta. One final migration from pre-0.5 ephemeral-debug-signed builds is required." --prerelease
           fi
       - name: Smoke test APK in Android emulator
         continue-on-error: true
