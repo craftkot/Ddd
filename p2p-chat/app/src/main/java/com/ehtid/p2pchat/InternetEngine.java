@@ -146,7 +146,7 @@ public final class InternetEngine {
         for (Member m : members.values()) {
             if (!m.isMe && now - m.lastSeen >= PRESENCE_TIMEOUT_MS) continue;
             list.add(new Member(m.id,m.name,m.lastSeen,m.pingMs,m.isMe,
-                    m.isMe ? chatVisible : m.online));
+                    m.isMe ? (chatVisible && relayOnline) : (m.online && relayOnline)));
         }
         list.sort((a,b) -> a.isMe ? -1 : b.isMe ? 1 :
                 a.online != b.online ? Boolean.compare(b.online,a.online) :
@@ -296,6 +296,7 @@ public final class InternetEngine {
                 if (http != 200) throw new java.io.IOException("HTTP " + http);
                 relayOnline = true;
                 failures = 0;
+                publishMembers();
                 status(direct() ? "P2P напрямую • зашифровано" :
                         "Интернет-реле подключено • сообщения шифруются");
                 if (guestMode) signal(obj("t", "hello"));
@@ -317,6 +318,7 @@ public final class InternetEngine {
                 if (!stopped) {
                     failures++;
                     relayOnline = false;
+                    publishMembers();
                     status("Нет интернет-реле: " + error.getMessage() +
                             " • повторное подключение");
                 }
