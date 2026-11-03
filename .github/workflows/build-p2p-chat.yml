@@ -8,10 +8,6 @@ on:
       - '.github/workflows/build-p2p-chat.yml'
   workflow_dispatch:
 
-concurrency:
-  group: ehtid-p2p-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
