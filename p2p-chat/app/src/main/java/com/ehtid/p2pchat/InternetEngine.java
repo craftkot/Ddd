@@ -154,7 +154,10 @@ public final class InternetEngine {
     public static String getRelayServer(Context context) {
         String raw = context.getSharedPreferences("ui_settings",Context.MODE_PRIVATE)
                 .getString("relay_url",DEFAULT_RELAY);
-        return HomeServerUrl.normalize(raw);
+        String normalized=HomeServerUrl.normalize(raw);
+        // A previous release may have saved the public relay. Do not silently
+        // reconnect to ntfy.sh after the migration to a personal PC server.
+        return "https://ntfy.sh".equals(normalized) ? "" : normalized;
     }
 
     public static String normalize(String raw) {
