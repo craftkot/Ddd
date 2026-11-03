@@ -50,6 +50,7 @@ public final class InternetEngine {
         void onMessages(List<JSONObject> messages);
         void onParticipants(List<Member> members);
         void onIncoming(String nickname, String message);
+        void onManualSignal(String code, String kind);
     }
     private static final int MAX_HISTORY = 100;
     private static final long HISTORY_COOLDOWN_MS = RoomPolicy.HISTORY_COOLDOWN_MS;
@@ -61,6 +62,8 @@ public final class InternetEngine {
     private final SharedPreferences prefs;
     private final Listener listener;
     private final String room, id, topic, relay;
+    private final boolean meshMode;
+    private volatile PeerMesh mesh;
     private final Map<String, JSONObject> pending = new LinkedHashMap<>();
     private volatile long nextRelaySendAt;
     private volatile int sendFailures;
@@ -107,6 +110,8 @@ public final class InternetEngine {
         room = normalize(code);
         appContext = context.getApplicationContext();
         prefs = appContext.getSharedPreferences("internet_p2p", Context.MODE_PRIVATE);
+        meshMode = appContext.getSharedPreferences("ui_settings",Context.MODE_PRIVATE)
+                .getBoolean("mesh_mode",true);
         relay = getRelayServer(appContext);
         nextRelaySendAt = prefs.getLong("retry_until_" + relay, 0L);
         String savedId = prefs.getString("device_id", null);
@@ -175,7 +180,10 @@ public final class InternetEngine {
         prefs.edit().putString("nick", myName).apply();
         members.put(id, new Member(id, myName, System.currentTimeMillis(), 0, true, chatVisible));
         publishMembers();
-        announcePresence();
+        if (meshMode) {
+            PeerMesh p=mesh;
+            if (p!=null) p.rename(myName);
+        } else announcePresence();
     }
     /** Presence is just a roster view; never use it to close network connections. */
     public List<Member> snapshotMembers() {
@@ -184,7 +192,9 @@ public final class InternetEngine {
         for (Member m : members.values()) {
             if (!m.isMe && !RoomPolicy.isPresent(now,m.lastSeen,m.online)) continue;
             list.add(new Member(m.id,m.name,m.lastSeen,m.pingMs,m.isMe,
-                    m.isMe ? (chatVisible && relayOnline && now >= nextRelaySendAt) : (m.online && relayOnline)));
+                    m.isMe ? (chatVisible && (meshMode ? mesh!=null && mesh.connectedCount()>0 :
+                        relayOnline && now >= nextRelaySendAt)) :
+                        (m.online && (meshMode || relayOnline))));
         }
         list.sort((a,b) -> a.isMe ? -1 : b.isMe ? 1 :
                 a.online != b.online ? Boolean.compare(b.online,a.online) :
@@ -196,7 +206,9 @@ public final class InternetEngine {
         chatVisible = visible;
         members.put(id,new Member(id,myName,System.currentTimeMillis(),0,true,visible));
         publishMembers();
-        announcePresence();
+        PeerMesh current=mesh;
+        if (meshMode && current!=null) current.setVisible(visible);
+        else announcePresence();
     }
     private static String cleanName(String s) {
         if (s == null) return "Пользователь";
@@ -228,7 +240,8 @@ public final class InternetEngine {
         publishMembers();
         // Reply to a new peer (or a returning one) immediately. Subsequent
         // heartbeats do not trigger replies, avoiding an infinite ping-pong.
-        if (visible != null && RoomPolicy.shouldReplyPresence(prev!=null,wasVisible,nowVisible)) {
+        if (!meshMode && visible != null &&
+                RoomPolicy.shouldReplyPresence(prev!=null,wasVisible,nowVisible)) {
             announcePresence();
             if (chatVisible) pingPeer(peer);
         }
@@ -302,7 +315,58 @@ public final class InternetEngine {
                 .builder(uiContext()).createInitializationOptions());
             factory = PeerConnectionFactory.builder().createPeerConnectionFactory();
         } catch (Exception error) {
-            status("WebRTC недоступен: будет использоваться интернет-реле");
+            status(meshMode ? "WebRTC недоступен: P2P не запустился" :
+                    "WebRTC недоступен: будет использоваться интернет-реле");
+        }
+        if (meshMode) {
+            if (factory==null) return;
+            PeerMesh p = new PeerMesh(factory,room,id,myName,chatVisible,
+                    new PeerMesh.Callbacks() {
+                        @Override public void status(String value) {
+                            InternetEngine.this.status(value);
+                        }
+                        @Override public void signalReady(String code,String type) {
+                            ui.post(()->{ if(!stopped) listener.onManualSignal(code,type); });
+                        }
+                        @Override public void incomingMessage(JSONObject item) {
+                            if (append(item)) incomingAlert(item);
+                        }
+                        @Override public void peerPresence(String peer,String name,boolean active,int ping) {
+                            markMember(peer,name,active);
+                        }
+                        @Override public void peerPing(String peer,int ping) {
+                            Member old=members.get(peer);
+                            if (old!=null) {
+                                members.put(peer,new Member(peer,old.name,System.currentTimeMillis(),
+                                        ping,false,old.online));
+                                publishMembers();
+                            }
+                        }
+                        @Override public void peerDisconnected(String peer) {
+                            Member old=members.get(peer);
+                            if (old!=null) {
+                                members.put(peer,new Member(peer,old.name,System.currentTimeMillis(),
+                                        -1,false,false));
+                                publishMembers();
+                            }
+                        }
+                        @Override public void peerConnected() {
+                            synchronized (pending) {
+                                if (!pending.isEmpty()) {
+                                    for (String msgId: new ArrayList<>(pending.keySet()))
+                                        updateDelivery(msgId,"p2p");
+                                    pending.clear();
+                                    persistPending();
+                                }
+                            }
+                            publishMembers();
+                        }
+                        @Override public List<JSONObject> history() { return snapshot(); }
+                    });
+            mesh=p;
+            p.start();
+            publishMembers();
+            return;
         }
         io.execute(this::readRelay);
         publishMembers();
@@ -332,6 +396,22 @@ public final class InternetEngine {
         }, 2, 4*60*60, TimeUnit.SECONDS);
     }
 
+    public boolean isMeshMode() { return meshMode; }
+    public int meshPeerCount() {
+        PeerMesh p=mesh;
+        return p==null ? 0 : p.connectedCount();
+    }
+    public void makeMeshOffer() {
+        PeerMesh p=mesh;
+        if (p!=null) p.createOffer();
+        else status("P2P не запущен: выбери режим P2P в настройках");
+    }
+    public void importMeshCode(String code) {
+        PeerMesh p=mesh;
+        if (p!=null) p.importSignal(code);
+        else status("P2P не запущен");
+    }
+
     // WebRTC factory needs a Context. Stored exclusively as application context.
     private Context appContext;
     private Context uiContext() {
@@ -356,7 +436,11 @@ public final class InternetEngine {
         put(msg, "at", System.currentTimeMillis());
         put(msg, "delivery", "pending");
         append(msg);
-        sendUserData(obj("t", "msg"), msg);
+        if (meshMode) {
+            PeerMesh p=mesh;
+            if (p!=null && p.sendMessage(msg)) updateDelivery(msg.optString("id"),"p2p");
+            else status("P2P: сообщение сохранено. Подключите хотя бы один телефон.");
+        } else sendUserData(obj("t","msg"),msg);
     }
 
     private void sendUserData(JSONObject packet, JSONObject msg) {
@@ -1037,6 +1121,9 @@ public final class InternetEngine {
     public void stop() {
         stopped = true;
         relayOnline = false;
+        PeerMesh current=mesh;
+        mesh=null;
+        if (current!=null) current.close();
         if (streamConnection != null) streamConnection.disconnect();
         resetRtc();
         if (factory != null) {
