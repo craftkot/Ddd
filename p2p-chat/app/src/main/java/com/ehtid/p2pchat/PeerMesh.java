@@ -50,6 +50,7 @@ public final class PeerMesh {
         void signalReady(String token, String type);
         void incomingMessage(JSONObject message);
         void peerPresence(String peerId, String name, boolean visible, int pingMs);
+        void peerPing(String peerId, int pingMs);
         void peerDisconnected(String peerId);
         List<JSONObject> history();
     }
@@ -431,8 +432,7 @@ public final class PeerMesh {
             if (start>0 && diff>=0 && diff<60000 && start==incoming.pingSent &&
                     incoming.remoteId!=null) {
                 final String id=incoming.remoteId;
-                final String name=incoming.remoteName==null?"Участник":incoming.remoteName;
-                onUi(()->cb.peerPresence(id,name,true,(int)diff));
+                onUi(()->cb.peerPing(id,(int)diff));
             }
             return;
         }
@@ -446,8 +446,12 @@ public final class PeerMesh {
             String id=p.optString("id");
             String name=p.optString("name");
             if (id.isEmpty() || id.length()>80 || id.equals(selfId)) return;
-            incoming.remoteId=id;
-            incoming.remoteName=name;
+            // A forwarded presence belongs to a distant node, not the immediate
+            // WebRTC neighbor. Never overwrite the neighbor's identity.
+            if (incoming.remoteId==null) {
+                incoming.remoteId=id;
+                incoming.remoteName=name;
+            }
             boolean isVisible=p.optBoolean("active",false);
             onUi(()->cb.peerPresence(id,name,isVisible,-1));
         } else if ("msg".equals(kind)) {
