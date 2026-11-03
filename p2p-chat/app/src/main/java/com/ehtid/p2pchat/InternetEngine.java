@@ -77,6 +77,7 @@ public final class InternetEngine {
     private volatile long lastOfferAt = 0L;
     private volatile long lastPresenceSent = 0L;
     private volatile long lastHelloSent = 0L;
+    private volatile boolean helloInFlight = false, presenceInFlight = false;
     private volatile int pingRoundRobin = 0;
     private volatile String myName;
     private volatile boolean showPeerPings = true;
@@ -232,18 +233,33 @@ public final class InternetEngine {
             if (chatVisible) pingPeer(peer);
         }
     }
-    private void sendHello() {
-        if (stopped || !relayOnline || System.currentTimeMillis() < nextRelaySendAt) return;
-        lastHelloSent = System.currentTimeMillis();
-        signal(obj("t","hello"));
+    private synchronized void sendHello() {
+        if (stopped || !relayOnline || helloInFlight ||
+                System.currentTimeMillis() < nextRelaySendAt) return;
+        helloInFlight = true;
+        JSONObject packet = obj("t","hello");
+        sender.execute(() -> {
+            try {
+                if (publish(packet)) lastHelloSent = System.currentTimeMillis();
+            } finally {
+                helloInFlight = false;
+            }
+        });
     }
-    private void announcePresence() {
-        if (stopped || !relayOnline || System.currentTimeMillis() < nextRelaySendAt) return;
-        lastPresenceSent = System.currentTimeMillis();
+    private synchronized void announcePresence() {
+        if (stopped || !relayOnline || presenceInFlight ||
+                System.currentTimeMillis() < nextRelaySendAt) return;
+        presenceInFlight = true;
         JSONObject p = obj("t","presence");
         put(p,"name",myName);
         put(p,"active",chatVisible);
-        signal(p);
+        sender.execute(() -> {
+            try {
+                if (publish(p)) lastPresenceSent = System.currentTimeMillis();
+            } finally {
+                presenceInFlight = false;
+            }
+        });
     }
     private void pingPeer(String peer) {
         if (stopped || !relayOnline || !showPeerPings) return;
@@ -968,6 +984,7 @@ public final class InternetEngine {
 
     private boolean append(JSONObject item) {
         if (!validMessage(item) || stopped) return false;
+        if (!id.equals(item.optString("from"))) item.remove("delivery");
         synchronized (messages) {
             for (JSONObject old : messages)
                 if (old.optString("id").equals(item.optString("id"))) return false;
