@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -52,13 +53,17 @@ public final class InternetEngine {
     }
     private static final int MAX_HISTORY = 100;
     private static final long HISTORY_COOLDOWN_MS = RoomPolicy.HISTORY_COOLDOWN_MS;
-    private static final String RELAY = "https://ntfy.sh/";
+    private static final String DEFAULT_RELAY = "https://ntfy.sh";
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newCachedThreadPool();
+    private final ExecutorService sender = Executors.newSingleThreadExecutor();
     private final ScheduledExecutorService clock = Executors.newSingleThreadScheduledExecutor();
     private final SharedPreferences prefs;
     private final Listener listener;
-    private final String room, id, topic;
+    private final String room, id, topic, relay;
+    private final Map<String, JSONObject> pending = new LinkedHashMap<>();
+    private volatile long nextRelaySendAt;
+    private volatile int sendFailures;
     private final SecretKeySpec aes;
     private final SecureRandom random = new SecureRandom();
     private final List<JSONObject> messages = new ArrayList<>();
@@ -100,6 +105,8 @@ public final class InternetEngine {
         room = normalize(code);
         appContext = context.getApplicationContext();
         prefs = appContext.getSharedPreferences("internet_p2p", Context.MODE_PRIVATE);
+        relay = getRelayServer(appContext);
+        nextRelaySendAt = prefs.getLong("retry_until_" + relay, 0L);
         String savedId = prefs.getString("device_id", null);
         if (savedId == null) {
             savedId = UUID.randomUUID().toString();
@@ -125,6 +132,34 @@ public final class InternetEngine {
                 if (validMessage(item)) messages.add(item);
             }
         } catch (Exception ignored) {}
+        try {
+            JSONArray oldPending = new JSONArray(prefs.getString("pending_" + room, "[]"));
+            for (int i = 0; i < oldPending.length() && i < 100; i++) {
+                JSONObject msg = oldPending.optJSONObject(i);
+                if (validMessage(msg) && id.equals(msg.optString("from"))) {
+                    put(msg, "delivery", "pending");
+                    pending.put(msg.optString("id"), msg);
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    public static String getRelayServer(Context context) {
+        String raw = context.getSharedPreferences("ui_settings",Context.MODE_PRIVATE)
+                .getString("relay_url",DEFAULT_RELAY);
+        if (raw == null) return DEFAULT_RELAY;
+        raw = raw.trim().replaceAll("/+$","");
+        try {
+            java.net.URI uri = new java.net.URI(raw);
+            if (!"https".equalsIgnoreCase(uri.getScheme()) ||
+                    uri.getHost() == null || uri.getHost().isEmpty() ||
+                    uri.getRawUserInfo() != null || uri.getQuery() != null ||
+                    uri.getFragment() != null || uri.getPath().length() > 0)
+                return DEFAULT_RELAY;
+            return raw;
+        } catch (Exception invalid) {
+            return DEFAULT_RELAY;
+        }
     }
 
     public static String normalize(String raw) {
@@ -249,6 +284,10 @@ public final class InternetEngine {
         }
         io.execute(this::readRelay);
         publishMembers();
+        sender.execute(this::flushPending);
+        clock.scheduleAtFixedRate(() -> {
+            if (!stopped) sender.execute(this::flushPending);
+        }, 20, 20, TimeUnit.SECONDS);
         // ntfy.sh has a small daily publishing quota. Heartbeats are slow;
         // explicit enter/exit status is sent immediately by setChatVisible().
         clock.scheduleAtFixedRate(() -> {
@@ -284,17 +323,69 @@ public final class InternetEngine {
         put(msg, "name", myName);
         put(msg, "text", text.trim());
         put(msg, "at", System.currentTimeMillis());
+        put(msg, "delivery", "pending");
         append(msg);
         sendUserData(obj("t", "msg"), msg);
     }
 
     private void sendUserData(JSONObject packet, JSONObject msg) {
         put(packet,"m",msg);
-        // WebRTC's DataChannel has just one recipient; always broadcast encrypted
-        // ciphertext through the room relay, including while a direct link is open.
-        // Receivers deduplicate by message ID.
-        signal(packet);
+        // Direct path reaches at most one peer. Queue relay publication so it
+        // cannot vanish on 429, network loss, app restart or process recreation.
+        synchronized (pending) {
+            if (pending.size() >= 100) {
+                status("Очередь заполнена (100 сообщений); отправка остановлена");
+                return;
+            }
+            pending.put(msg.optString("id"), msg);
+            persistPending();
+        }
         sendDirect(packet);
+        sender.execute(this::flushPending);
+    }
+
+    private void persistPending() {
+        JSONArray all = new JSONArray();
+        for (JSONObject m : pending.values()) all.put(m);
+        prefs.edit().putString("pending_" + room,all.toString()).apply();
+    }
+
+    public int queuedCount() {
+        synchronized (pending) { return pending.size(); }
+    }
+
+    private void flushPending() {
+        if (stopped || System.currentTimeMillis() < nextRelaySendAt) return;
+        List<JSONObject> snapshot;
+        synchronized (pending) { snapshot = new ArrayList<>(pending.values()); }
+        for (JSONObject item : snapshot) {
+            if (stopped || System.currentTimeMillis() < nextRelaySendAt) break;
+            JSONObject packet = obj("t","msg");
+            // No shared mutation: publish() attaches fresh transport fields.
+            put(packet,"m",item);
+            if (!publish(packet)) break;
+            synchronized (pending) {
+                pending.remove(item.optString("id"));
+                persistPending();
+            }
+            updateDelivery(item.optString("id"),"relay");
+        }
+    }
+
+    private void updateDelivery(String messageId, String state) {
+        synchronized (messages) {
+            for (JSONObject item : messages) {
+                if (messageId.equals(item.optString("id"))) {
+                    put(item,"delivery",state);
+                    break;
+                }
+            }
+            JSONArray store = new JSONArray();
+            for (JSONObject item : messages) store.put(item);
+            prefs.edit().putString("msgs_" + room,store.toString()).apply();
+        }
+        List<JSONObject> list = snapshot();
+        ui.post(() -> { if (!stopped) listener.onMessages(list); });
     }
 
     private void readRelay() {
@@ -303,7 +394,7 @@ public final class InternetEngine {
             HttpURLConnection conn = null;
             try {
                 String suffix = lastRelayId == null ? "30m" : lastRelayId;
-                String endpoint = RELAY + topic + "/json?since=" +
+                String endpoint = relay + "/" + topic + "/json?since=" +
                         java.net.URLEncoder.encode(suffix, "UTF-8");
                 conn = (HttpURLConnection) new URL(endpoint).openConnection();
                 streamConnection = conn;
@@ -513,7 +604,7 @@ public final class InternetEngine {
 
     private void signal(JSONObject packet) {
         if (stopped) return;
-        io.execute(() -> publish(packet));
+        sender.execute(() -> publish(packet));
     }
 
     private void publish(JSONObject packet) {
