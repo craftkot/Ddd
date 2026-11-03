@@ -58,6 +58,12 @@ public final class MainActivity extends Activity {
     private final InternetEngine.Listener callbacks = new InternetEngine.Listener() {
         @Override public void onStatus(String s) {
             status.setText("● " + s);
+            String check = s.toLowerCase(Locale.ROOT);
+            boolean warning = check.contains("429") || check.contains("очеред") ||
+                    check.contains("не приняло") || check.contains("нет связи") ||
+                    check.contains("ошибка") || check.contains("лимит") ||
+                    check.contains("отключ");
+            status.setTextColor(warning ? Color.rgb(255,179,107) : ONLINE);
         }
         @Override public void onMessages(List<JSONObject> messages) { draw(messages); }
         @Override public void onParticipants(List<InternetEngine.Member> members) {
@@ -351,9 +357,13 @@ public final class MainActivity extends Activity {
                 LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-2,-2);
                 tp.topMargin=dp(3);
                 bubble.addView(body,tp);
-                TextView time = text(new SimpleDateFormat("HH:mm",Locale.getDefault())
-                        .format(new Date(m.optLong("at",System.currentTimeMillis()))),
-                        10,MUTED,false);
+                String clockText = new SimpleDateFormat("HH:mm",Locale.getDefault())
+                        .format(new Date(m.optLong("at",System.currentTimeMillis())));
+                String delivery = m.optString("delivery");
+                if (own && "pending".equals(delivery)) clockText += " · В очереди";
+                if (own && "relay".equals(delivery)) clockText += " · Принято реле";
+                TextView time = text(clockText,10,
+                        "pending".equals(delivery) ? Color.rgb(255,185,105) : MUTED,false);
                 time.setGravity(Gravity.RIGHT);
                 bubble.addView(time);
             }
@@ -455,9 +465,53 @@ public final class MainActivity extends Activity {
                     if (which==1 && service!=null) service.refreshSettings();
                     if (which==0 && enabled) maybeAskNotification();
                 })
-                .setNeutralButton("Изменить имя",(d,w)->askName(false))
+                .setNegativeButton("Изменить имя",(d,w)->askName(false))
+                .setNeutralButton("Сервер реле",(d,w)->relayDialog())
                 .setPositiveButton("Готово",(d,w)->{})
                 .create();
+        dialog.show();
+    }
+
+    private void relayDialog() {
+        EditText url = new EditText(this);
+        url.setSingleLine(true);
+        url.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        url.setText(options().getString("relay_url","https://ntfy.sh"));
+        url.setHint("https://ntfy.example.org");
+        LinearLayout holder = new LinearLayout(this);
+        holder.setPadding(dp(20),dp(9),dp(20),dp(4));
+        holder.addView(url,new LinearLayout.LayoutParams(-1,-2));
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Сервер интернет-реле")
+                .setMessage("Нужен сервер, совместимый с ntfy. Все участники одной комнаты должны указать одинаковый адрес. Публичный ntfy.sh ограничен по числу сообщений.")
+                .setView(holder)
+                .setNeutralButton("ntfy.sh",(d,w)-> {
+                    options().edit().putString("relay_url","https://ntfy.sh").apply();
+                    if (service != null) service.restartRelay();
+                })
+                .setNegativeButton("Отмена",(d,w)->{})
+                .setPositiveButton("Сохранить",null)
+                .create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    String value = url.getText().toString().trim().replaceAll("/+$","");
+                    try {
+                        java.net.URI uri = new java.net.URI(value);
+                        if (!"https".equalsIgnoreCase(uri.getScheme()) ||
+                                uri.getHost() == null || uri.getHost().isEmpty() ||
+                                uri.getRawUserInfo() != null || uri.getQuery()!=null ||
+                                uri.getFragment()!=null || !uri.getPath().isEmpty()) {
+                            url.setError("Укажи корневой HTTPS-адрес ntfy-сервера");
+                            return;
+                        }
+                    } catch (Exception bad) {
+                        url.setError("Некорректный HTTPS-адрес");
+                        return;
+                    }
+                    options().edit().putString("relay_url",value).apply();
+                    if (service != null) service.restartRelay();
+                    dialog.dismiss();
+                }));
         dialog.show();
     }
 
