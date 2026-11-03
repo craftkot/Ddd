@@ -51,7 +51,7 @@ jobs:
           keytool -list -keystore ci-signing/permanent-release.p12 \
             -storetype PKCS12 -alias ehtid \
             -storepass:env EHTID_SIGNING_PASSWORD > /dev/null
-      - name: Verify multi-visitor presence rules
+      - name: Verify room and relay rate-limit policies
         run: gradle :app:testDebugUnitTest --no-daemon
       - name: Compile consistently signed APK
         env:
@@ -82,13 +82,13 @@ jobs:
         run: |
           set -euo pipefail
           APK="app/build/outputs/apk/debug/app-debug.apk"
-          RELEASE_APK="EHTID-P2P-Chat-v0.5.apk"
+          RELEASE_APK="EHTID-P2P-Chat-v0.6.apk"
           cp "$APK" "$RELEASE_APK"
-          TAG="ehtid-p2p-chat-v0.5"
+          TAG="ehtid-p2p-chat-v0.6"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$TAG" "$RELEASE_APK" --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" "$RELEASE_APK" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "EHTID P2P Chat v0.5 (Android beta)" --notes "Permanent Android signing key for in-place updates; stable applicationId; monotonic versionCode; encrypted group chat beta. One final migration from pre-0.5 ephemeral-debug-signed builds is required." --prerelease
+            gh release create "$TAG" "$RELEASE_APK" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "EHTID P2P Chat v0.6 (Android beta)" --notes "Persistent queued messages, Retry-After backoff for HTTP 429, idle reconnect flood fix, delivery state labels, configurable ntfy-compatible HTTPS relay. Signed with same permanent Android certificate as v0.5; installs as in-place update." --prerelease
           fi
       - name: Smoke test APK in Android emulator
         continue-on-error: true
