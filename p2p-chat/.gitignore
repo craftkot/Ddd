@@ -1,0 +1,11 @@
+# Never commit the decrypted Android signing private key
+ci-signing/*.p12
+ci-signing/*.jks
+ci-signing/*.keystore
+ci-signing/*.enc
+ci-signing/REPOSITORY_SECRET.txt
+*.apk
+.gradle/
+build/
+app/build/
+local.properties
