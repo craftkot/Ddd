@@ -53,6 +53,7 @@ public final class MainActivity extends Activity {
     private boolean bindRequested;
     private boolean active;
     private String code, myId = "";
+    private String renderedManualSignal = "";
     private final List<InternetEngine.Member> currentMembers = new ArrayList<>();
     private final SharedPreferences.OnSharedPreferenceChangeListener unused = null;
     private final InternetEngine.Listener callbacks = new InternetEngine.Listener() {
@@ -72,6 +73,11 @@ public final class MainActivity extends Activity {
             drawMembers();
         }
         @Override public void onIncoming(String nick, String text) {}
+        @Override public void onManualSignal(String token, String kind) {
+            if (token==null || token.isEmpty() || token.equals(renderedManualSignal)) return;
+            renderedManualSignal=token;
+            showManualCode(token,kind);
+        }
     };
     private final ServiceConnection conn = new ServiceConnection() {
         @Override public void onServiceConnected(ComponentName name, IBinder binder) {
@@ -205,6 +211,12 @@ public final class MainActivity extends Activity {
             launchChat(target,true);
         });
 
+        TextView p2pConnect=button("↔ Соединить телефоны P2P • без реле",PANEL,13);
+        LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(46));
+        cp.topMargin=dp(10);
+        roomBox.addView(p2pConnect,cp);
+        p2pConnect.setOnClickListener(v->peerMenu());
+
         LinearLayout memberCard = new LinearLayout(this);
         memberCard.setOrientation(LinearLayout.VERTICAL);
         memberCard.setBackground(round(SURFACE,14));
@@ -327,8 +339,9 @@ public final class MainActivity extends Activity {
         if (messages.isEmpty()) {
             TextView welcome = text(
                     "Начните разговор\n\n" +
-                    "Отправьте первое сообщение и передайте код комнаты. " +
-                    "Другой человек вставит код, и чат соединится через интернет.",
+                    "Передайте другому участнику код комнаты. Затем нажмите " +
+                    "«Соединить телефоны P2P»: обменяйтесь приглашением и ответом. " +
+                    "В P2P-режиме сообщения идут через подключённые телефоны, без ntfy.",
                     15,MUTED,false);
             welcome.setGravity(Gravity.CENTER);
             welcome.setPadding(dp(16),dp(50),dp(16),dp(20));
@@ -362,6 +375,7 @@ public final class MainActivity extends Activity {
                 String delivery = m.optString("delivery");
                 if (own && "pending".equals(delivery)) clockText += " · В очереди";
                 if (own && "relay".equals(delivery)) clockText += " · Принято реле";
+                if (own && "p2p".equals(delivery)) clockText += " · Передано P2P";
                 TextView time = text(clockText,10,
                         "pending".equals(delivery) ? Color.rgb(255,185,105) : MUTED,false);
                 time.setGravity(Gravity.RIGHT);
@@ -382,6 +396,7 @@ public final class MainActivity extends Activity {
         currentMembers.clear();
         drawMembers();
         status.setText("● Подключение…");
+        renderedManualSignal="";
         Intent intent = ChatService.intent(this,room,joining);
         try {
             if (options().getBoolean("background",true) && Build.VERSION.SDK_INT >= 26)
@@ -453,9 +468,10 @@ public final class MainActivity extends Activity {
                 "Уведомления о сообщениях",
                 "Работа чата в фоне",
                 "Показывать текст сообщений",
-                "Звук уведомлений"
+                "Звук уведомлений",
+                "P2P-режим без сервера (по умолчанию)"
         };
-        String[] keys={"notifications","background","preview","sound"};
+        String[] keys={"notifications","background","preview","sound","mesh_mode"};
         boolean[] checked = new boolean[keys.length];
         for(int i=0;i<keys.length;i++) checked[i]=options().getBoolean(keys[i],true);
         AlertDialog dialog=new AlertDialog.Builder(this)
@@ -464,12 +480,116 @@ public final class MainActivity extends Activity {
                     options().edit().putBoolean(keys[which],enabled).apply();
                     if (which==1 && service!=null) service.refreshSettings();
                     if (which==0 && enabled) maybeAskNotification();
+                    if (which==4 && service!=null) service.restartRelay();
                 })
                 .setNegativeButton("Изменить имя",(d,w)->askName(false))
                 .setNeutralButton("Сервер реле",(d,w)->relayDialog())
                 .setPositiveButton("Готово",(d,w)->{})
                 .create();
         dialog.show();
+    }
+
+    private void peerMenu() {
+        if (service==null) {
+            status.setText("● Служба соединения ещё не готова");
+            return;
+        }
+        if (!service.isPeerMesh()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("P2P выключен")
+                    .setMessage("Включи «P2P-режим без сервера» в настройках. Тогда ntfy.sh не используется для переписки.")
+                    .setPositiveButton("Настройки",(d,w)->settingsDialog())
+                    .setNegativeButton("Закрыть",null)
+                    .show();
+            return;
+        }
+        String info="В одной комнате можно связать несколько телефонов. Каждый " +
+                "новый контакт требует один обмен кодами: приглашение → ответ. " +
+                "После этого телефоны передают сообщения соседям по цепочке. " +
+                "На некоторых мобильных сетях прямой канал может не установиться из-за CGNAT.";
+        new AlertDialog.Builder(this)
+                .setTitle("P2P-соединение • "+service.directPeerCount()+" узлов")
+                .setMessage(info)
+                .setPositiveButton("Создать приглашение",(d,w)->{
+                    status.setText("● Собираем адреса WebRTC…");
+                    service.createPeerInvitation();
+                })
+                .setNeutralButton("Вставить код",(d,w)->manualInputDialog())
+                .setNegativeButton("Закрыть",null)
+                .show();
+    }
+
+    private void manualInputDialog() {
+        EditText field=new EditText(this);
+        field.setHint("EHTIDM1:... (приглашение или ответ)");
+        field.setTextSize(12);
+        field.setTextColor(WHITE);
+        field.setHintTextColor(MUTED);
+        field.setMinLines(3);
+        field.setMaxLines(8);
+        field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE |
+                InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        field.setPadding(dp(8),dp(8),dp(8),dp(8));
+        field.setBackground(round(PANEL,10));
+        LinearLayout holder=new LinearLayout(this);
+        holder.setPadding(dp(16),dp(12),dp(16),dp(7));
+        holder.addView(field,new LinearLayout.LayoutParams(-1,dp(180)));
+        AlertDialog dialog=new AlertDialog.Builder(this)
+                .setTitle("Вставить P2P-код")
+                .setMessage("Нужно быть в одной комнате. Приглашение создаёт ответ; ответ завершает подключение.")
+                .setView(holder)
+                .setNegativeButton("Отмена",null)
+                .setPositiveButton("Применить",null).create();
+        dialog.setOnShowListener(v->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view->{
+            String token=field.getText().toString().trim();
+            if (!token.startsWith("EHTIDM1:") || token.length()<100) {
+                field.setError("Вставь полный P2P-код с префиксом EHTIDM1:");
+                return;
+            }
+            if (service==null) {
+                field.setError("Нет службы соединения");
+                return;
+            }
+            service.importPeerInvitation(token);
+            dialog.dismiss();
+        }));
+        dialog.show();
+    }
+
+    private void showManualCode(String token,String kind) {
+        if (isFinishing() || isDestroyed()) return;
+        boolean offer="offer".equals(kind);
+        EditText output=new EditText(this);
+        output.setText(token);
+        output.setTextSize(11);
+        output.setTextColor(WHITE);
+        output.setSingleLine(false);
+        output.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        output.setTextIsSelectable(true);
+        output.setPadding(dp(8),dp(8),dp(8),dp(8));
+        output.setBackground(round(PANEL,10));
+        LinearLayout holder=new LinearLayout(this);
+        holder.setPadding(dp(15),dp(8),dp(15),dp(8));
+        holder.addView(output,new LinearLayout.LayoutParams(-1,dp(175)));
+        new AlertDialog.Builder(this)
+                .setTitle(offer?"P2P-приглашение готово":"P2P-ответ готов")
+                .setMessage(offer?
+                    "Передай этот код второму телефону. Там нажми «Вставить код». Он создаст ответ, который надо вставить здесь.":
+                    "Отправь код создателю приглашения: он должен нажать «Вставить код». После этого ожидай соединения.")
+                .setView(holder)
+                .setPositiveButton("Скопировать",(d,w)->{
+                    ((ClipboardManager)getSystemService(Context.CLIPBOARD_SERVICE))
+                        .setPrimaryClip(ClipData.newPlainText("EHTID P2P",token));
+                    status.setText("● P2P-код скопирован");
+                })
+                .setNeutralButton("Поделиться",(d,w)->{
+                    Intent share=new Intent(Intent.ACTION_SEND);
+                    share.setType("text/plain");
+                    share.putExtra(Intent.EXTRA_TEXT,token);
+                    startActivity(Intent.createChooser(share,"Передать P2P-код"));
+                })
+                .setNegativeButton("Закрыть",null)
+                .show();
     }
 
     private void relayDialog() {
