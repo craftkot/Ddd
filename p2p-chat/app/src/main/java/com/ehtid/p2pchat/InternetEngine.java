@@ -399,8 +399,8 @@ public final class InternetEngine {
             if (!seen.add(pid)) return;
             if (seen.size() > 2000) seen.clear();
             String type = packet.optString("t");
+            long ts = packet.optLong("ts");
             if (!"msg".equals(type) && !"sync".equals(type)) {
-                long ts = packet.optLong("ts");
                 long maxAge = "presence".equals(type) ? 120000L : 180000L;
                 if (Math.abs(System.currentTimeMillis() - ts) > maxAge) return;
             }
