@@ -51,9 +51,7 @@ public final class InternetEngine {
         void onIncoming(String nickname, String message);
     }
     private static final int MAX_HISTORY = 100;
-    private static final long ONLINE_TIMEOUT_MS = 8 * 60 * 1000L;
-    private static final long BACKGROUND_TIMEOUT_MS = 25 * 60 * 1000L;
-    private static final long HISTORY_COOLDOWN_MS = 60000L;
+    private static final long HISTORY_COOLDOWN_MS = RoomPolicy.HISTORY_COOLDOWN_MS;
     private static final String RELAY = "https://ntfy.sh/";
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newCachedThreadPool();
@@ -147,8 +145,7 @@ public final class InternetEngine {
         long now = System.currentTimeMillis();
         List<Member> list = new ArrayList<>();
         for (Member m : members.values()) {
-            long ttl = m.online ? ONLINE_TIMEOUT_MS : BACKGROUND_TIMEOUT_MS;
-            if (!m.isMe && now - m.lastSeen >= ttl) continue;
+            if (!m.isMe && !RoomPolicy.isPresent(now,m.lastSeen,m.online)) continue;
             list.add(new Member(m.id,m.name,m.lastSeen,m.pingMs,m.isMe,
                     m.isMe ? (chatVisible && relayOnline) : (m.online && relayOnline)));
         }
@@ -194,7 +191,7 @@ public final class InternetEngine {
         publishMembers();
         // Reply to a new peer (or a returning one) immediately. Subsequent
         // heartbeats do not trigger replies, avoiding an infinite ping-pong.
-        if (visible != null && (prev == null || (!wasVisible && nowVisible))) {
+        if (visible != null && RoomPolicy.shouldReplyPresence(prev!=null,wasVisible,nowVisible)) {
             announcePresence();
             if (chatVisible) pingPeer(peer);
         }
@@ -222,7 +219,7 @@ public final class InternetEngine {
         if (!showPeerPings || !relayOnline || !chatVisible) return;
         long now = System.currentTimeMillis();
         List<Member> available = snapshotMembers();
-        available.removeIf(m -> m.isMe || now-m.lastSeen > ONLINE_TIMEOUT_MS);
+        available.removeIf(m -> m.isMe || !RoomPolicy.isPresent(now,m.lastSeen,m.online));
         // One rotating RTT sample instead of pinging all peers: O(1) requests
         // and no participant evictions when a public relay is rate-limited.
         if (!available.isEmpty()) {
@@ -472,7 +469,7 @@ public final class InternetEngine {
         if (!hostMode || stopped) return;
         long now = System.currentTimeMillis();
         Long previous = lastGuestHistory.get(guest);
-        if (previous == null || now - previous >= HISTORY_COOLDOWN_MS) {
+        if (RoomPolicy.shouldSyncHistory(previous,now)) {
             lastGuestHistory.put(guest,now);
             relayHistory(guest);
         }
@@ -480,7 +477,7 @@ public final class InternetEngine {
         // Keep the first active direct connection; additional guests stay on
         // the room-wide encrypted relay instead of evicting that participant.
         if (factory == null) return;
-        if (rtc != null && (direct() || now - lastOfferAt < 30000L)) return;
+        if (!RoomPolicy.mayNegotiate(rtc != null,direct(),now-lastOfferAt)) return;
         startOffer(guest);
     }
 
@@ -611,7 +608,7 @@ public final class InternetEngine {
     private synchronized void acceptOffer(String from, String sdp) {
         if (stopped || factory == null || sdp.isEmpty()) return;
         // Another participant entering the room must never replace this call.
-        if (rtc != null && (direct() || System.currentTimeMillis() - lastOfferAt < 30000L)) return;
+        if (!RoomPolicy.mayNegotiate(rtc != null,direct(),System.currentTimeMillis()-lastOfferAt)) return;
         resetRtc();
         lastOfferAt = System.currentTimeMillis();
         remoteId = from;
