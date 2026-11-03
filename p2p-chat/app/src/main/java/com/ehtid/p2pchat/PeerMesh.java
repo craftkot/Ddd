@@ -59,7 +59,6 @@ public final class PeerMesh {
     private static final String PREFIX = "EHTIDM1:";
     private static final int MAX_TOKEN_BYTES = 60000;
     private static final int MAX_LINKS = 16;
-    private static final int MAX_HOPS = 8;
     private final PeerConnectionFactory factory;
     private final String roomFingerprint, selfId;
     private final Callbacks cb;
@@ -442,9 +441,9 @@ public final class PeerMesh {
         }
         String event=p.optString("event");
         int hop=p.optInt("hop");
-        if (event.isEmpty() || event.length()>80 || hop<0 || hop>=MAX_HOPS) return;
+        if (event.isEmpty() || event.length()>80) return;
         String key=kind+":"+event;
-        if (!recentIds.add(key)) return;
+        if (!MeshFloodPolicy.accept(recentIds,key,hop)) return;
         if (recentIds.size()>8000) recentIds.clear();
         if ("presence".equals(kind)) {
             String id=p.optString("id");
