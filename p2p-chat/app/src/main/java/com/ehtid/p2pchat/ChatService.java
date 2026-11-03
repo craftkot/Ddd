@@ -65,6 +65,7 @@ public final class ChatService extends Service implements InternetEngine.Listene
             members = new ArrayList<>();
             engine = new InternetEngine(getApplicationContext(), room,
                     intent.getBooleanExtra(EXTRA_JOIN, false), this);
+            engine.setChatVisible(visible);
             engine.start();
             emit();
         }
@@ -78,7 +79,11 @@ public final class ChatService extends Service implements InternetEngine.Listene
         if (listener != null) emit();
     }
 
-    public void setVisible(boolean on) { visible = on; }
+    /** Foreground presence controls the roster only, not the socket/service. */
+    public void setVisible(boolean on) {
+        visible = on;
+        if (engine != null) engine.setChatVisible(on);
+    }
     public String currentRoom() { return room; }
     public String myId() { return engine == null ? "" : engine.myId(); }
 
