@@ -51,7 +51,8 @@ public final class InternetEngine {
         void onIncoming(String nickname, String message);
     }
     private static final int MAX_HISTORY = 100;
-    private static final long PRESENCE_TIMEOUT_MS = 42000L;
+    private static final long ONLINE_TIMEOUT_MS = 8 * 60 * 1000L;
+    private static final long BACKGROUND_TIMEOUT_MS = 25 * 60 * 1000L;
     private static final long HISTORY_COOLDOWN_MS = 60000L;
     private static final String RELAY = "https://ntfy.sh/";
     private final Handler ui = new Handler(Looper.getMainLooper());
@@ -71,6 +72,8 @@ public final class InternetEngine {
     private final Map<String, Long> lastGuestHistory = new ConcurrentHashMap<>();
     private volatile boolean chatVisible = false;
     private volatile long lastOfferAt = 0L;
+    private volatile long lastPresenceSent = 0L;
+    private volatile int pingRoundRobin = 0;
     private volatile String myName;
     private volatile boolean showPeerPings = true;
     public static final class Member {
@@ -144,7 +147,8 @@ public final class InternetEngine {
         long now = System.currentTimeMillis();
         List<Member> list = new ArrayList<>();
         for (Member m : members.values()) {
-            if (!m.isMe && now - m.lastSeen >= PRESENCE_TIMEOUT_MS) continue;
+            long ttl = m.online ? ONLINE_TIMEOUT_MS : BACKGROUND_TIMEOUT_MS;
+            if (!m.isMe && now - m.lastSeen >= ttl) continue;
             list.add(new Member(m.id,m.name,m.lastSeen,m.pingMs,m.isMe,
                     m.isMe ? (chatVisible && relayOnline) : (m.online && relayOnline)));
         }
@@ -190,32 +194,44 @@ public final class InternetEngine {
         publishMembers();
         // Reply to a new peer (or a returning one) immediately. Subsequent
         // heartbeats do not trigger replies, avoiding an infinite ping-pong.
-        if (visible != null && (prev == null || (!wasVisible && nowVisible)))
+        if (visible != null && (prev == null || (!wasVisible && nowVisible))) {
             announcePresence();
+            if (chatVisible) pingPeer(peer);
+        }
     }
     private void announcePresence() {
         if (stopped || !relayOnline) return;
+        lastPresenceSent = System.currentTimeMillis();
         JSONObject p = obj("t","presence");
         put(p,"name",myName);
         put(p,"active",chatVisible);
         signal(p);
     }
+    private void pingPeer(String peer) {
+        if (stopped || !relayOnline || !showPeerPings) return;
+        if (pingStart.size() > 12) return;
+        String nonce = UUID.randomUUID().toString();
+        pingStart.put(nonce,System.currentTimeMillis());
+        pingOwner.put(nonce,peer);
+        JSONObject p = obj("t","ping");
+        put(p,"to",peer);
+        put(p,"nonce",nonce);
+        signal(p);
+    }
     private void sendPings() {
-        if (!showPeerPings || !relayOnline) return;
+        if (!showPeerPings || !relayOnline || !chatVisible) return;
         long now = System.currentTimeMillis();
-        for (Member m : snapshotMembers()) {
-            if (m.isMe || now-m.lastSeen > 45000) continue;
-            String nonce = UUID.randomUUID().toString();
-            pingStart.put(nonce,now);
-            pingOwner.put(nonce,m.id);
-            JSONObject p = obj("t","ping");
-            put(p,"to",m.id);
-            put(p,"nonce",nonce);
-            signal(p);
+        List<Member> available = snapshotMembers();
+        available.removeIf(m -> m.isMe || now-m.lastSeen > ONLINE_TIMEOUT_MS);
+        // One rotating RTT sample instead of pinging all peers: O(1) requests
+        // and no participant evictions when a public relay is rate-limited.
+        if (!available.isEmpty()) {
+            Member next = available.get(Math.floorMod(pingRoundRobin++,available.size()));
+            pingPeer(next.id);
         }
         for (String nonce : new ArrayList<>(pingStart.keySet())) {
             Long sent = pingStart.get(nonce);
-            if (sent != null && now - sent > 40000) {
+            if (sent != null && now-sent > 40000) {
                 pingStart.remove(nonce); pingOwner.remove(nonce);
             }
         }
@@ -236,16 +252,21 @@ public final class InternetEngine {
         }
         io.execute(this::readRelay);
         publishMembers();
+        // ntfy.sh has a small daily publishing quota. Heartbeats are slow;
+        // explicit enter/exit status is sent immediately by setChatVisible().
         clock.scheduleAtFixedRate(() -> {
-            if (!stopped) {
-                announcePresence();
-                sendPings();
-            }
-        }, 1, 12, TimeUnit.SECONDS);
+            if (stopped || !relayOnline) return;
+            long interval = chatVisible ? 5*60*1000L : 20*60*1000L;
+            if (System.currentTimeMillis()-lastPresenceSent >= interval) announcePresence();
+            publishMembers();
+        }, 45, 45, TimeUnit.SECONDS);
+        clock.scheduleAtFixedRate(() -> {
+            if (!stopped) sendPings();
+        }, 30, 15*60, TimeUnit.SECONDS);
         clock.scheduleAtFixedRate(() -> {
             if (stopped || !relayOnline) return;
             if (guestMode && !direct()) signal(obj("t", "hello"));
-        }, 2, 16, TimeUnit.SECONDS);
+        }, 2, 15*60, TimeUnit.SECONDS);
     }
 
     // WebRTC factory needs a Context. Stored exclusively as application context.
@@ -383,13 +404,18 @@ public final class InternetEngine {
             String type = packet.optString("t");
             if (!"msg".equals(type) && !"sync".equals(type)) {
                 long ts = packet.optLong("ts");
-                long maxAge = "presence".equals(type) ? 42000L : 180000L;
+                long maxAge = "presence".equals(type) ? 120000L : 180000L;
                 if (Math.abs(System.currentTimeMillis() - ts) > maxAge) return;
             }
             String to = packet.optString("to");
             if (!to.isEmpty() && !to.equals(id)) return;
             if ("ping".equals(type) || "pong".equals(type) || "hello".equals(type))
                 markMember(from, packet.optString("name"));
+            if ("msg".equals(type) && Math.abs(System.currentTimeMillis()-ts)<120000L) {
+                // Messages act as presence while chatting, reducing heartbeat posts.
+                Boolean senderVisible = packet.has("active") ? packet.optBoolean("active", false) : null;
+                markMember(from,packet.optString("name"),senderVisible);
+            }
             switch (type) {
                 case "presence":
                     markMember(from,packet.optString("name"),packet.optBoolean("active",false));
@@ -498,6 +524,7 @@ public final class InternetEngine {
         put(packet, "id", UUID.randomUUID().toString());
         put(packet, "from", id);
         put(packet, "name", myName);
+        put(packet, "active", chatVisible);
         put(packet, "ts", System.currentTimeMillis());
         String wire;
         try {
