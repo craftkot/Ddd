@@ -3,8 +3,8 @@ package com.ehtid.p2pchat;
 /** Network-independent room rules, tested without Android or live relay. */
 public final class RoomPolicy {
     private RoomPolicy() {}
-    public static final long ONLINE_TTL_MS = 8 * 60 * 1000L;
-    public static final long BACKGROUND_TTL_MS = 25 * 60 * 1000L;
+    public static final long ONLINE_TTL_MS = 40 * 60 * 1000L;
+    public static final long BACKGROUND_TTL_MS = 110 * 60 * 1000L;
     public static final long OFFER_TIMEOUT_MS = 30000L;
     public static final long HISTORY_COOLDOWN_MS = 60000L;
 
