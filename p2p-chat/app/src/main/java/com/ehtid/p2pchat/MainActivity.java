@@ -47,7 +47,7 @@ public final class MainActivity extends Activity {
     private EditText input, joinInput;
     private TextView status, codeLabel, profileLabel, membersLabel;
     private LinearLayout feed, membersPanel;
-    private ScrollView scroll;
+    private ScrollView scroll, membersScroll;
     private ChatService service;
     private boolean bound;
     private boolean bindRequested;
@@ -211,9 +211,13 @@ public final class MainActivity extends Activity {
         memberCard.addView(membersLabel);
         membersPanel = new LinearLayout(this);
         membersPanel.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-1,-2);
+        membersScroll = new ScrollView(this);
+        membersScroll.setFillViewport(false);
+        membersScroll.setVerticalScrollBarEnabled(true);
+        membersScroll.addView(membersPanel,new ScrollView.LayoutParams(-1,-2));
+        LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-1,dp(35));
         pp.topMargin=dp(5);
-        memberCard.addView(membersPanel,pp);
+        memberCard.addView(membersScroll,pp);
 
         status = text("● Ожидание подключения…",12,ONLINE,false);
         status.setPadding(dp(10),dp(10),dp(10),dp(10));
@@ -269,31 +273,45 @@ public final class MainActivity extends Activity {
     }
 
     private void drawMembers() {
-        if (membersPanel == null) return;
+        if (membersPanel == null || membersScroll == null) return;
         membersPanel.removeAllViews();
         int count = currentMembers.size();
-        membersLabel.setText("УЧАСТНИКИ · " + count + " В СЕТИ");
+        int onlineCount = 0;
+        for (InternetEngine.Member member : currentMembers) {
+            if (member.online) onlineCount++;
+        }
+        membersLabel.setText("УЧАСТНИКИ · " + onlineCount + " В СЕТИ / " + count + " ПОДКЛЮЧЕНО");
+        int shown = Math.min(count, 50);
+        LinearLayout.LayoutParams viewport = (LinearLayout.LayoutParams) membersScroll.getLayoutParams();
+        viewport.height = dp(Math.min(175, Math.max(33, shown * 34)));
+        membersScroll.setLayoutParams(viewport);
+
         if (count == 0) {
             membersPanel.addView(text("Ищем участников…",13,MUTED,false));
             return;
         }
-        for (int i=0;i<Math.min(count,8);i++) {
-            InternetEngine.Member m = currentMembers.get(i);
+        for (int i=0;i<shown;i++) {
+            InternetEngine.Member member = currentMembers.get(i);
             LinearLayout row = new LinearLayout(this);
             row.setGravity(Gravity.CENTER_VERTICAL);
-            row.setPadding(0,dp(5),0,dp(5));
-            membersPanel.addView(row);
-            TextView online = text("●",13,ONLINE,true);
-            row.addView(online);
-            String nickname = m.name + (m.isMe ? "  (вы)" : "");
-            TextView name = text(nickname,13,WHITE,true);
-            LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(0,-2,1);
-            np.leftMargin=dp(8);
-            row.addView(name,np);
-            String ping = m.isMe ? "онлайн" : (m.pingMs < 0 ? "ping —" : m.pingMs+" мс · реле");
-            row.addView(text(ping,11,m.pingMs>=500?Color.rgb(255,181,111):MUTED,false));
+            row.setPadding(0,dp(6),0,dp(6));
+            membersPanel.addView(row,new LinearLayout.LayoutParams(-1,dp(34)));
+            row.addView(text("●",13,member.online?ONLINE:MUTED,true));
+            String name = member.name+(member.isMe?"  (вы)":"");
+            TextView nick = text(name,13,WHITE,true);
+            nick.setSingleLine(true);
+            nick.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0,-2,1);
+            lp.leftMargin = dp(8);
+            row.addView(nick,lp);
+            String presence = member.online ? "В сети" : "В фоне";
+            String ping = member.isMe ? "" :
+                (member.pingMs < 0 ? " · пинг —" : " · " + member.pingMs + " мс");
+            row.addView(text(presence+ping,11,
+                    member.online?ONLINE:MUTED,false));
         }
-        if (count>8) membersPanel.addView(text("И ещё " + (count-8) + " участников",12,MUTED,false));
+        if (count > shown)
+            membersPanel.addView(text("Ещё "+(count-shown)+" участников",12,MUTED,false));
     }
 
     private void draw(List<JSONObject> messages) {
