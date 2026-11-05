@@ -7,7 +7,7 @@ a Windows PC, ntfy.sh rate limits or manual WebRTC offer/answer exchange.
 
 The server source, tests, D1 schema, deployment workflow and Cloudflare
 account setup instructions are in
-[`cloudflare-relay/README.md`](../../cloudflare-relay/README.md).
+[`cloudflare-relay/README.md`](../cloudflare-relay/README.md).
 
 Once deployed, open EHTID Chat v0.9 on each phone and tap
 **«Подключить Cloudflare»**. Enter:
