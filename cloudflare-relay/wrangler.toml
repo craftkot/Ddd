@@ -9,4 +9,4 @@ crons = ["0 */6 * * *"]
 [[d1_databases]]
 binding = "DB"
 database_name = "ehtid-chat"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "bfa31032-1f5b-4bb1-b602-b9675fc42f9a"
