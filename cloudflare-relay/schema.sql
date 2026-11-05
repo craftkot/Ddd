@@ -36,3 +36,9 @@ CREATE TABLE IF NOT EXISTS media_files (
   PRIMARY KEY (topic, file_id)
 );
 CREATE INDEX IF NOT EXISTS idx_media_files_expiry ON media_files(expires_at);
+
+-- Daily cap on expensive Workers AI transcription requests.
+CREATE TABLE IF NOT EXISTS ai_usage (
+  day TEXT PRIMARY KEY,
+  requests INTEGER NOT NULL DEFAULT 0
+);
