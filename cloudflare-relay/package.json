@@ -1,0 +1,14 @@
+{
+  "name": "ehtid-cloudflare-relay",
+  "private": true,
+  "type": "module",
+  "version": "0.9.0",
+  "scripts": {
+    "test": "node --test",
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
