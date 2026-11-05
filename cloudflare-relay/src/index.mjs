@@ -4,7 +4,8 @@
  * and GET /ehtidp2p-{40hex}/json?since=30m|7d|e{seq}.
  *
  * The server never decrypts payloads; clients encrypt messages with AES-GCM.
- * A private, server-wide bearer token prevents anonymous writes/reads.
+ * Per-room capabilities derived from a private room code prevent arbitrary
+ * access to known rooms. No owner-wide credentials are distributed in APKs.
  */
 const TOPIC = /^ehtidp2p-[a-f0-9]{40}$/;
 const MAX_WIRE_BYTES = 12000;
@@ -26,15 +27,24 @@ function responseJson(data, status = 200, extra = {}) {
   });
 }
 
-function allowedToken(header, configured) {
-  if (typeof configured !== "string" || configured.length < 24) return false;
-  if (typeof header !== "string" || !header.startsWith("Bearer ")) return false;
-  const value = header.slice(7);
-  if (value.length !== configured.length) return false;
-  // Avoid a variable-time early exit on the first mismatching character.
-  let mismatch = 0;
-  for (let i = 0; i < value.length; i++) mismatch |= value.charCodeAt(i) ^ configured.charCodeAt(i);
-  return mismatch === 0;
+/**
+ * A phone derives its capability from its private 20-character room code:
+ * token = hex(SHA-256("EHTID-RELAY-ACCESS-V1:" + roomCode))
+ * topic = "ehtidp2p-" + hex(SHA-256(token))[0..40].
+ *
+ * The access token is NOT the AES encryption key, and the server never
+ * receives the room code. A static global API key is NOT embedded in APKs.
+ * Any party knowing a room capability can read ciphertext, but cannot infer
+ * the AES key just from this proof.
+ */
+async function authorizedRoom(request, topic) {
+  const authorization=request.headers.get("Authorization") || "";
+  if (!/^Bearer [0-9a-f]{64}$/.test(authorization)) return false;
+  const proof=authorization.slice(7);
+  const digest=new Uint8Array(await crypto.subtle.digest(
+      "SHA-256",new TextEncoder().encode(proof)));
+  const hex=Array.from(digest,b=>b.toString(16).padStart(2,"0")).join("");
+  return topic==="ehtidp2p-"+hex.slice(0,40);
 }
 
 function validateWire(value) {
@@ -164,22 +174,23 @@ export default {
       if (url.pathname === "/" || url.pathname === "/health") {
         if (request.method !== "GET") return responseJson({ error: "method not allowed" }, 405);
         return responseJson({
-          ok: Boolean(env.DB && env.RELAY_ACCESS_TOKEN?.length >= 24),
+          ok: Boolean(env.DB),
           service: "EHTID Cloudflare Relay",
           storage: "D1",
-          version: "0.9",
+          version: "1.0",
+          authentication: "per-room-capability",
           publicAccess: false,
-        }, env.DB && env.RELAY_ACCESS_TOKEN?.length >= 24 ? 200 : 503);
+        }, env.DB ? 200 : 503);
       }
 
       if (url.pathname === "/auth") {
         if (request.method !== "GET")
           return responseJson({ ok: false, error: "method not allowed" }, 405);
-        if (!env.DB || !env.RELAY_ACCESS_TOKEN || env.RELAY_ACCESS_TOKEN.length < 24)
-          return responseJson({ ok: false, error: "relay not configured" }, 503);
-        if (!allowedToken(request.headers.get("Authorization"), env.RELAY_ACCESS_TOKEN))
-          return responseJson({ ok: false, error: "unauthorized" }, 401);
-        return responseJson({ ok: true, authenticated: true });
+        if (!env.DB) return responseJson({ ok: false, error: "relay unavailable" }, 503);
+        const topic=url.searchParams.get("topic") || "";
+        if (!TOPIC.test(topic) || !(await authorizedRoom(request,topic)))
+          return responseJson({ ok: false, error: "room access denied" }, 401);
+        return responseJson({ ok: true, authenticated: true, topic });
       }
       const parts = url.pathname.split("/").filter(Boolean);
       const topic = parts[0];
@@ -187,11 +198,11 @@ export default {
           (parts.length === 2 && parts[1] !== "json")) {
         return responseJson({ ok: false, error: "not found" }, 404);
       }
-      if (!env.DB || !env.RELAY_ACCESS_TOKEN || env.RELAY_ACCESS_TOKEN.length < 24) {
-        return responseJson({ ok: false, error: "relay not configured" }, 503);
+      if (!env.DB) {
+        return responseJson({ ok: false, error: "relay database unavailable" }, 503);
       }
-      if (!allowedToken(request.headers.get("Authorization"), env.RELAY_ACCESS_TOKEN)) {
-        return responseJson({ ok: false, error: "unauthorized" }, 401);
+      if (!(await authorizedRoom(request, topic))) {
+        return responseJson({ ok: false, error: "room access denied" }, 401);
       }
       if (parts.length === 1 && request.method === "POST") return await publish(request, env, topic);
       if (parts.length === 2 && request.method === "GET") return await subscribe(request, env, topic, url);
