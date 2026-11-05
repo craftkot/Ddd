@@ -46,8 +46,7 @@ GitHub does not create a Worker or D1 database.
    - `EHTID_RELAY_TOKEN`: a fresh random secret of at least 24 characters,
      *different from the Android signing password*. Keep your own copy:
      you must enter it on every phone. Never publish it in GitHub/chat.
-5. Open **Actions → Deploy EHTID Relay to Cloudflare → Run workflow**
-   and choose branch `feature/p2p-chat`.
+5. Open [GitHub Actions → Deploy EHTID Relay to Cloudflare](https://github.com/craftkot/Ddd/actions/workflows/deploy-cloudflare-relay.yml) and choose **Run workflow** on the **`main`** branch. The deployment workflow automatically checks out the tested source code from `feature/p2p-chat`.
    The workflow runs the tests, creates/reuses `ehtid-chat` D1, initializes
    `schema.sql`, deploys the Worker and uploads the secret.
 6. In the completed log **Deploy authenticated Worker** copy its
