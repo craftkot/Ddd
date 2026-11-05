@@ -1,59 +1,50 @@
-# EHTID Chat v0.9 — Cloudflare Workers + D1
+# EHTID Chat v1.0 — только код комнаты
 
-Android chat application; supports multiple users over the internet without
-a Windows PC, ntfy.sh rate limits or manual WebRTC offer/answer exchange.
+**Для пользователя:** установи APK, придумай ник, создай комнату или
+введи код другого человека. Никакие настройки Cloudflare и ключи API
+не требуются. Публичный адрес сервера встроен в приложение:
 
-### Cloudflare setup
+`https://ehtid-chat-relay.craftkot404.workers.dev`
 
-The server source, tests, D1 schema, deployment workflow and Cloudflare
-account setup instructions are in
-[`cloudflare-relay/README.md`](../cloudflare-relay/README.md).
+История сохраняется на телефоне, а зашифрованные события — в Cloudflare D1
+до семи дней. Участникам нужен только 20-символьный секретный код комнаты.
+Один и тот же код даёт доступ к одной и той же комнате с разных телефонов.
 
-Once deployed, open EHTID Chat v0.9 on each phone and tap
-**«Подключить Cloudflare»**. Enter:
+## Реализация
 
-1. Your Worker HTTPS URL (`https://...workers.dev`) from deployment logs.
-2. The shared `EHTID_RELAY_TOKEN` value (24+ characters) you created.
-3. The same 20-character chat room code as other participants.
+- `RoomAccess.bearer(room)` вычисляет отдельный 256-битный токен доступа:
+  SHA-256 доменно-разделённой строки `EHTID-RELAY-ACCESS-V1:` + код комнаты.
+- `RoomAccess.topic(room)` вычисляет приватный идентификатор комнаты
+  `ehtidp2p-` + первые 40 шестнадцатеричных знаков SHA-256(token).
+- Cloudflare проверяет, что `SHA-256(token)` совпадает с именем топика,
+  не получая код комнаты или исходный AES-ключ `SHA-256(room)`.
+- AES-GCM формат сообщений и локальный ключ не менялись.
+- URL Worker встроен в APK, но **секрет владельца Cloudflare и API
+  token не встроены**. Вручную вводить адрес сервера и токен больше не надо.
+- Автоматический опрос Cloudflare в фоне зависит от ограничений Android.
+  Получение HTTP 201 от Worker означает запись на сервер, но не
+  подтверждает доставку другому телефону.
+- Серверу и приложению нужны актуальные версии: **v0.9 и v1.0
+  несовместимы по облачному топику**. При обновлении локальная история
+  остаётся, но старые облачные события на новой машине не появятся.
 
-Tap **«Проверить»**: the app calls `/health` and `/auth`. Then
-**«Подключиться»** to save the settings. The server URL and token are not
-hardcoded into the APK. The earlier public ntfy.sh relay is not automatically
-used.
-
-### Technical design
-
-- Android-to-Worker: encrypted packet POST and bounded JSON Lines polling.
-- Worker responses include a cursor to avoid rereading old history;
-  ~10-second foreground polling, ~30-second background polling.
-- Cloudflare D1 stores ciphertext for 7 days. Short-lived presence
-  packets expire after 12 minutes.
-- Group notifications require Android background permission and may be delayed
-  or suspended by operating system battery management.
-- Offline outgoing messages remain in the local outgoing queue and are retried.
-- An accepted POST is **not** proof that the other device received a message.
-- Android's local message history is preserved during in-place updates,
-  provided the permanent signing key and package name are unchanged.
-- Legacy manual phone-to-phone WebRTC mesh is available under Settings, but
-  it is off by default.
-
-### Build
-
-Android 7+; JDK 17, Gradle 8.9, Android SDK 35:
+## Сборка
 
 ```sh
 cd p2p-chat
 gradle :app:testDebugUnitTest :app:assembleDebug
 ```
 
-GitHub Actions on `feature/p2p-chat` build and sign the APK with the same
-permanent signing certificate used from v0.5 onwards.
+GitHub Actions в ветке `feature/p2p-chat` публикует APK, подписанный
+постоянным сертификатом EHTID (тот же сертификат, что в v0.5–v0.9).
+Установить обновление можно поверх предыдущей версии, без удаления данных.
 
-### Limitations
+Backend: [Cloudflare Workers + D1](../cloudflare-relay/README.md).
 
-Cloudflare Free is not unlimited (Workers and D1 quotas apply). Shared
-server token is not per-user identity verification and should be kept private.
-The cryptographic design is experimental and is not security-audited.
-The source code can be built without a Cloudflare account, but a real online
-Worker and D1 database cannot be provisioned without authorization from
-the owner's Cloudflare account.
+## Ограничения безопасности
+
+**Любой обладатель кода может писать в комнату.** Участники не имеют
+отдельных паролей и подтверждённой личности. Код должен оставаться
+секретным; если он утечёт, безопаснее создать новую комнату.
+Бесплатная квота Cloudflare не бесконечна. Шифрование не проходило
+независимого аудита.
