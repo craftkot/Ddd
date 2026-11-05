@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import worker from "../src/index.mjs";
 
-const ROOM = "U497ZANYDLWPKQJT5RWLL";
+const ROOM = "EHTIDTESTROOM88Z99";
 const hash = input => createHash("sha256").update(input,"utf8").digest("hex");
 const SECRET = hash("EHTID-RELAY-ACCESS-V1:" + ROOM);
 const TOPIC = "ehtidp2p-" + hash(SECRET).slice(0,40);
@@ -77,8 +77,8 @@ test("health is public but does not disclose token",async()=>{
 
 test("phone can authenticate with a room-specific proof without exposing encryption keys",async()=>{
   const e=environment();
-  assert.equal(SECRET,"82e62e4545c68cd22848aade6d657db5f4738bd2719cebf5f65de3b6d053c6f3");
-  assert.equal(TOPIC,"ehtidp2p-f6e195650e3d8d0b599b39b4adc15cddd67082e5");
+  assert.equal(SECRET,"9dc9cb2b91ec0307ddbee78dabaf0b167226b8da8d8fc8d2c5901f5bee25fe3a");
+  assert.equal(TOPIC,"ehtidp2p-d09b81a540e20abb3df12bfc5f50f852d99e6912");
   assert.notEqual(SECRET,hash(ROOM)); // AES remains private, token is domain separated
   const ok=await worker.fetch(req("GET","/auth?topic="+TOPIC),e);
   assert.equal(ok.status,200);
