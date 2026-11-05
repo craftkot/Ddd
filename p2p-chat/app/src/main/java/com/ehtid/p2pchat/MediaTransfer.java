@@ -169,6 +169,61 @@ public final class MediaTransfer {
         return meta;
     }
 
+    public static File saveLocal(Context ctx,String room,JSONObject meta,byte[] bytes) throws Exception {
+        if(bytes==null||bytes.length!=meta.optInt("size")||bytes.length>MAX_FILE_BYTES)
+            throw new IllegalArgumentException("Некорректный файл");
+        File target=localPath(ctx,room,meta);
+        try(FileOutputStream out=new FileOutputStream(target)){out.write(bytes);}
+        return target;
+    }
+
+    private static File localPath(Context ctx,String room,JSONObject meta) throws Exception {
+        String id=meta.optString("id");
+        if(!id.matches("[a-f0-9]{32}"))throw new IllegalArgumentException("Некорректный ID");
+        File cache=new File(ctx.getFilesDir(),"media/"+RoomAccess.topic(room));
+        if(!cache.exists()&&!cache.mkdirs())throw new java.io.IOException("Нет доступа к памяти");
+        String mime=safeMime(meta.optString("mime"));
+        String ext=android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(mime);
+        if(ext==null||!ext.matches("[a-zA-Z0-9]{1,8}"))ext="bin";
+        return new File(cache,id+"."+ext);
+    }
+
+    /** Explicit user opt-in is mandatory: this sends RAW audio to Cloudflare
+     * Workers AI for transcription, unlike encrypted private file uploads. */
+    public static String transcribe(byte[] audio,String room) throws Exception {
+        if(audio==null||audio.length<100||audio.length>2*1024*1024)
+            throw new IllegalArgumentException("Расшифровка доступна для записей до 2 МБ");
+        HttpURLConnection c=(HttpURLConnection)new URL(
+                HOST+"/"+RoomAccess.topic(room)+"/transcribe").openConnection();
+        try {
+            c.setRequestMethod("POST");
+            c.setConnectTimeout(15000);
+            c.setReadTimeout(90000);
+            c.setRequestProperty("Authorization","Bearer "+RoomAccess.bearer(room));
+            c.setRequestProperty("Content-Type","audio/mp4");
+            c.setDoOutput(true);
+            c.setFixedLengthStreamingMode(audio.length);
+            try(OutputStream out=c.getOutputStream()){out.write(audio);}
+            int status=c.getResponseCode();
+            InputStream incoming=status>=200&&status<300?c.getInputStream():c.getErrorStream();
+            String text;
+            try(InputStream in=incoming;ByteArrayOutputStream b=new ByteArrayOutputStream()){
+                byte[] buf=new byte[1024];int n,total=0;
+                while((n=in.read(buf))!=-1){
+                    if((total+=n)>8192)throw new java.io.IOException("Слишком длинный ответ");
+                    b.write(buf,0,n);
+                }
+                text=b.toString("UTF-8");
+            }
+            JSONObject res=new JSONObject(text);
+            if(status!=200||!res.optBoolean("ok"))
+                throw new java.io.IOException("Whisper: "+res.optString("error","HTTP "+status));
+            String transcript=res.optString("text","").trim();
+            if(transcript.isEmpty())throw new java.io.IOException("Речь не распознана");
+            return transcript.length()>3000?transcript.substring(0,3000):transcript;
+        } finally {c.disconnect();}
+    }
+
     /**
      * Returns private local file. Validates the encrypted manifest, authenticated
      * GCM tag and original length before opening any untrusted content.
@@ -180,12 +235,7 @@ public final class MediaTransfer {
         if(!id.matches("[a-f0-9]{32}")||parts<1||parts>MAX_PARTS||
                 bytes<1||bytes>MAX_FILE_BYTES)
             throw new IllegalArgumentException("Некорректное вложение");
-        File cache=new File(ctx.getFilesDir(),"media/"+RoomAccess.topic(room));
-        if(!cache.exists()&&!cache.mkdirs())throw new java.io.IOException("Нет доступа к памяти");
-        String mime=safeMime(meta.optString("mime"));
-        String ext=android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(mime);
-        if(ext==null||!ext.matches("[a-zA-Z0-9]{1,8}"))ext="bin";
-        File local=new File(cache,id+"."+ext);
+        File local=localPath(ctx,room,meta);
         if(local.isFile()&&local.length()==bytes)return local;
         JSONObject serverMeta=new JSONObject(call("GET",room,"/files/"+id+"/meta",null));
         if(serverMeta.optInt("parts")!=parts || serverMeta.optInt("encodedBytes")>MAX_ENCODED)
