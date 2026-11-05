@@ -1,4 +1,4 @@
-name = "ddd"
+name = "ehtid-chat-relay"
 main = "src/index.mjs"
 compatibility_date = "2026-10-01"
 workers_dev = true
