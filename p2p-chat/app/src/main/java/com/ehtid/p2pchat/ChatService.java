@@ -94,6 +94,9 @@ public final class ChatService extends Service implements InternetEngine.Listene
     public void send(String text) {
         if (engine != null) engine.sendMessage(text);
     }
+    public void sendAttachment(org.json.JSONObject media) {
+        if(engine!=null)engine.sendAttachment(media);
+    }
     public boolean isPeerMesh() {
         return engine!=null && engine.isMeshMode();
     }
