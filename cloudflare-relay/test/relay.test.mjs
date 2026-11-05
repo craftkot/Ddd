@@ -1,9 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import worker from "../src/index.mjs";
 
-const SECRET = "stable-secret-".padEnd(40,"Z");
-const TOPIC = "ehtidp2p-" + "a".repeat(40);
+const ROOM = "U497ZANYDLWPKQJT5RWLL";
+const hash = input => createHash("sha256").update(input,"utf8").digest("hex");
+const SECRET = hash("EHTID-RELAY-ACCESS-V1:" + ROOM);
+const TOPIC = "ehtidp2p-" + hash(SECRET).slice(0,40);
 const URL = "https://ehtid-chat-relay.example.workers.dev";
 const WIRE = "v1." + "A".repeat(16) + "." + "B".repeat(64);
 
@@ -50,7 +53,7 @@ class FakeD1 {
     };
   }
 }
-function environment() { return {DB:new FakeD1(),RELAY_ACCESS_TOKEN:SECRET}; }
+function environment() { return {DB:new FakeD1()}; }
 function headers(extra = {}) { return { Authorization:"Bearer "+SECRET, ...extra }; }
 function req(method,path,body,customHeaders = {}) {
   return new Request(URL+path,{method,
@@ -67,23 +70,27 @@ test("health is public but does not disclose token",async()=>{
   assert.equal(data.ok,true);
   assert.equal(data.service,"EHTID Cloudflare Relay");
   assert.equal(JSON.stringify(data).includes(SECRET),false);
-  const unconfigured=await worker.fetch(new Request(URL+"/health"),{DB:e.DB});
+  assert.equal(data.authentication,"per-room-capability");
+  const unconfigured=await worker.fetch(new Request(URL+"/health"),{});
   assert.equal(unconfigured.status,503);
 });
 
-test("phone can check its shared token without reading a room",async()=>{
+test("phone can authenticate with a room-specific proof without exposing encryption keys",async()=>{
   const e=environment();
-  const ok=await worker.fetch(req("GET","/auth"),e);
+  assert.equal(SECRET,"82e62e4545c68cd22848aade6d657db5f4738bd2719cebf5f65de3b6d053c6f3");
+  assert.equal(TOPIC,"ehtidp2p-f6e195650e3d8d0b599b39b4adc15cddd67082e5");
+  assert.notEqual(SECRET,hash(ROOM)); // AES remains private, token is domain separated
+  const ok=await worker.fetch(req("GET","/auth?topic="+TOPIC),e);
   assert.equal(ok.status,200);
   assert.equal((await ok.json()).authenticated,true);
-  const bad=await worker.fetch(new Request(URL+"/auth",{
-    headers:{ Authorization:"Bearer not-the-secret" }
+  const bad=await worker.fetch(new Request(URL+"/auth?topic="+TOPIC,{
+    headers:{ Authorization:"Bearer "+hash("EHTID-RELAY-ACCESS-V1:OTHERROOM") }
   }),e);
   assert.equal(bad.status,401);
   assert.equal(e.DB.rows.length,0);
 });
 
-test("all room operations require the shared secret",async()=>{
+test("all room operations require their own per-room capability",async()=>{
   const e=environment();
   for(const method of ["POST","GET"]) {
     const path=method==="POST"?"/"+TOPIC:"/"+TOPIC+"/json?since=30m";
@@ -93,6 +100,13 @@ test("all room operations require the shared secret",async()=>{
     assert.equal(r.status,401);
   }
   assert.equal(e.DB.rows.length,0);
+  const wrongRoom=hash("EHTID-RELAY-ACCESS-V1:OTHERROOM");
+  const unauthorized=await worker.fetch(new Request(URL+"/"+TOPIC+"/json?since=30m",{
+    headers:{Authorization:"Bearer "+wrongRoom}
+  }),e);
+  assert.equal(unauthorized.status,401);
+  // Knowing the public topic is not sufficient to read another room.
+  assert.notEqual("ehtidp2p-"+hash(wrongRoom).slice(0,40),TOPIC);
 });
 
 test("two phones receive the same encrypted event with stable cursors",async()=>{
