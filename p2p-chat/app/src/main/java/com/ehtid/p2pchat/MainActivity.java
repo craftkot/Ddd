@@ -1052,6 +1052,15 @@ public final class MainActivity extends Activity {
         return b.toString();
     }
 
+    @Override protected void onDestroy() {
+        if(recorder!=null)stopRecording(false);
+        if(voicePlayer!=null) {
+            try {voicePlayer.release();} catch(Exception ignored){}
+            voicePlayer=null;
+        }
+        super.onDestroy();
+    }
+
     @Override protected void onStart() {
         super.onStart();
         active=true;
