@@ -52,7 +52,7 @@ activation of an R2 subscription in Cloudflare.
 `POST /{topic}/transcribe` accepts up to 2 MiB of **unencrypted**
 audio/mp4, audio/mpeg, audio/ogg, audio/webm or audio/wav, authenticates the
 room capability and passes the audio to
-`@cf/openai/whisper` through Workers AI binding `AI`. It returns recognized
+`@cf/openai/whisper-large-v3-turbo` through Workers AI binding `AI`. It returns recognized
 text (up to 3,000 characters). No plaintext audio or transcript is stored
 in D1 by this endpoint. The UI requires explicit user confirmation before
 sending unencrypted audio for AI transcription.
