@@ -115,6 +115,17 @@ public final class InternetEngine {
         meshMode = false;
         relay = getRelayServer(appContext);
         relayToken = RoomAccess.bearer(room);
+        // One-time migration: forget the obsolete shared Cloudflare token,
+        // old URL and old relay 429 backoff, but preserve chat history and
+        // messages waiting in the local outgoing queue.
+        android.content.SharedPreferences settings=appContext.getSharedPreferences(
+                "ui_settings",Context.MODE_PRIVATE);
+        if (!prefs.getBoolean("cloudflare_room_access_v1",false)) {
+            settings.edit().remove("relay_token").remove("relay_url")
+                    .remove("mesh_mode").apply();
+            prefs.edit().remove("retry_until_" + relay)
+                    .putBoolean("cloudflare_room_access_v1",true).apply();
+        }
         nextRelaySendAt = prefs.getLong("retry_until_" + relay, 0L);
         String savedId = prefs.getString("device_id", null);
         if (savedId == null) {
