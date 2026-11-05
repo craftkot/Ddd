@@ -21,7 +21,6 @@ public final class RoomAccessTest {
     }
 
     @Test public void roomCapabilityDoesNotExposeLegacyAesKey() {
-        String oldAesKeyDigest="7";
         assertEquals(64,RoomAccess.bearer("U497ZANYDLWPKQJT5RWLL").length());
         assertTrue(RoomAccess.topic("U497ZANYDLWPKQJT5RWLL")
                 .matches("ehtidp2p-[0-9a-f]{40}"));
