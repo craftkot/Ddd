@@ -48,7 +48,7 @@ jobs:
           umask 077
           printf 'RELAY_ACCESS_TOKEN=%s\n' "$RELAY_ACCESS_TOKEN" > .env.production
           npx wrangler deploy --secrets-file .env.production | tee "$RUNNER_TEMP/ehtid-deploy.log"
-          URL="$(grep -Eo 'https://[a-zA-Z0-9.-]+\\.workers\\.dev' "$RUNNER_TEMP/ehtid-deploy.log" | head -1 || true)"
+          URL="$(grep -Eo 'https://[[:alnum:].-]+\.workers\.dev' "$RUNNER_TEMP/ehtid-deploy.log" | head -1 || true)"
           if [ -z "$URL" ]; then
             echo "::warning::Worker deployed but public URL could not be parsed from Wrangler output"
             echo "Copy the HTTPS workers.dev address from the deployment logs."
