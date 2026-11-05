@@ -1,66 +1,59 @@
-# EHTID Chat 0.7 — phone-relayed WebRTC mesh (experimental)
+# EHTID Chat v0.9 — Cloudflare Workers + D1
 
-This Android app now defaults to a **phone-to-phone mesh transport**. Chat
-messages are forwarded by participating phones over encrypted WebRTC
-DataChannels. **The ntfy.sh relay is not contacted in mesh mode**; the older
-ntfy transport remains an optional switch in Settings.
+Android chat application; supports multiple users over the internet without
+a Windows PC, ntfy.sh rate limits or manual WebRTC offer/answer exchange.
 
-## Establish a connection WITHOUT a messaging relay
+### Cloudflare setup
 
-All participants must use the same 20-character room code.
+The server source, tests, D1 schema, deployment workflow and Cloudflare
+account setup instructions are in
+[`cloudflare-relay/README.md`](../../cloudflare-relay/README.md).
 
-1. Phone A: open a room and share its room code with phone B (copy/share).
-2. Phone B: enter the same room code and tap **Войти**.
-3. Phone A: **↔ Соединить телефоны P2P** -> **Создать приглашение**.
-4. Phone A: copy or share the resulting **EHTIDM1:** token with phone B
-   using any out-of-band mechanism (SMS, email, messenger, QR utility, etc).
-5. Phone B: **↔ Соединить телефоны P2P** -> **Вставить код** -> paste
-   invitation and tap **Применить**. The app generates an **answer**.
-6. Phone B: send the full answer token back to phone A.
-7. Phone A: **↔ Соединить телефоны P2P** -> **Вставить код** -> paste
-   answer. The two phones should connect through ICE/STUN if their NATs permit.
-8. Repeat for more phones: any connected participant can create another
-   invitation and link a new phone. Example: A---B---C. B forwards messages
-   A<->C, and all nodes deduplicate repeated events.
+Once deployed, open EHTID Chat v0.9 on each phone and tap
+**«Подключить Cloudflare»**. Enter:
 
-**Important limitations:**
+1. Your Worker HTTPS URL (`https://...workers.dev`) from deployment logs.
+2. The shared `EHTID_RELAY_TOKEN` value (24+ characters) you created.
+3. The same 20-character chat room code as other participants.
 
-- Manual signaling is required for each newly created WebRTC connection.
-  A peer may need to repeat the handshake after both apps are restarted.
-- CGNAT/symmetric NAT, VPN/firewalls and carrier mobile restrictions can
-  prevent direct connectivity. Google/Cloudflare STUN is used only to discover
-  ICE candidates; **without TURN there is no guaranteed internet connection**.
-- Phones act as relays only while Android keeps their WebRTC sessions alive
-  (foreground service / battery optimizations apply). If a bridging phone
-  goes offline, network partitions can occur.
-- No ntfy message quota in mesh mode, but all phones still have battery,
-  bandwidth, and maximum-connection constraints (up to 16 direct links per
-  phone, max 8 forwarding hops, last 100 messages synced on join).
-- Group message forwarding is opportunistic and not yet audited for security
-  or independently verified on real multi-phone mobile networks.
-- The room code is the group secret for older AES-GCM fallback transport.
-  Peer mesh uses WebRTC DTLS encryption hop-by-hop; participating relay
-  phones can see group messages. It is not a private end-to-end-encrypted
-  messenger against other participants.
-- The old ntfy-based mode can still be enabled in Settings if desired;
-  it remains subject to the ntfy.sh HTTP 429 quota unless pointed at a
-  compatible independently hosted service.
+Tap **«Проверить»**: the app calls `/health` and `/auth`. Then
+**«Подключиться»** to save the settings. The server URL and token are not
+hardcoded into the APK. The earlier public ntfy.sh relay is not automatically
+used.
 
-## Settings
+### Technical design
 
-**P2P-режим без сервера** is enabled by default. Disabling it restarts the
-transport, connects to the configured ntfy-compatible relay, and uses
-the old room transport. Enabling it again disconnects the public relay.
+- Android-to-Worker: encrypted packet POST and bounded JSON Lines polling.
+- Worker responses include a cursor to avoid rereading old history;
+  ~10-second foreground polling, ~30-second background polling.
+- Cloudflare D1 stores ciphertext for 7 days. Short-lived presence
+  packets expire after 12 minutes.
+- Group notifications require Android background permission and may be delayed
+  or suspended by operating system battery management.
+- Offline outgoing messages remain in the local outgoing queue and are retried.
+- An accepted POST is **not** proof that the other device received a message.
+- Android's local message history is preserved during in-place updates,
+  provided the permanent signing key and package name are unchanged.
+- Legacy manual phone-to-phone WebRTC mesh is available under Settings, but
+  it is off by default.
 
-## Build and CI
+### Build
 
-Android 7+, JDK 17, Gradle 8.9, SDK 35.
-```bash
+Android 7+; JDK 17, Gradle 8.9, Android SDK 35:
+
+```sh
 cd p2p-chat
 gradle :app:testDebugUnitTest :app:assembleDebug
 ```
 
-CI on `feature/p2p-chat` signs published APKs with the permanent key from
-0.5 and above. The v0.7 update can install over v0.5/v0.6 without uninstall.
-Android emulator smoke checks do not constitute a real multi-phone
-connectivity test.
+GitHub Actions on `feature/p2p-chat` build and sign the APK with the same
+permanent signing certificate used from v0.5 onwards.
+
+### Limitations
+
+Cloudflare Free is not unlimited (Workers and D1 quotas apply). Shared
+server token is not per-user identity verification and should be kept private.
+The cryptographic design is experimental and is not security-audited.
+The source code can be built without a Cloudflare account, but a real online
+Worker and D1 database cannot be provisioned without authorization from
+the owner's Cloudflare account.
