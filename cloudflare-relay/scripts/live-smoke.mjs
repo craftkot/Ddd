@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
 
 const ROOT = process.env.EHTID_RELAY_URL ||
@@ -17,7 +17,8 @@ async function run() {
   const health = await request("/health");
   assert.equal(health.status,200,"Cloudflare health status");
   const info = await health.json();
-  assert.equal(info.version,"1.0");
+  assert.equal(info.version,"1.1");
+  assert.ok(info.features.includes("media-chunks-v1"));
   assert.equal(info.ok,true);
   assert.equal(info.authentication,"per-room-capability");
 
@@ -42,6 +43,21 @@ async function run() {
   const lines=(await pulled.text()).trim().split("\n").map(line=>JSON.parse(line));
   assert.ok(lines.some(item=>item.event==="message" && item.message===packet),
     "same encrypted packet must roundtrip through the real D1 database");
-  console.log("EHTID v1.0 live Worker /health, /auth, D1 write/read: PASS");
+  const id=randomUUID().replaceAll("-","");
+  const blob="QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo"; // fake AES-GCM-ish payload
+  const base="/"+topic+"/files/"+id;
+  const uploaded=await request(base+"/0",{
+    method:"POST",headers:{...auth,"Content-Type":"text/plain"},body:blob
+  });
+  assert.equal(uploaded.status,201,"media part accepted");
+  const committed=await request(base+"/complete",{
+    method:"POST",headers:{...auth,"Content-Type":"application/json"},
+    body:JSON.stringify({parts:1,encodedBytes:blob.length})
+  });
+  assert.equal(committed.status,201,"media manifest finalized");
+  const fetched=await request(base+"/0",{headers:auth});
+  assert.equal(fetched.status,200);
+  assert.equal(await fetched.text(),blob,"encrypted media content preserved");
+  console.log("EHTID v1.1 Worker /health, /auth, encrypted chat and media D1 roundtrip: PASS");
 }
 run().catch(error=>{console.error("EHTID v1.0 live smoke: FAILED", error.message);process.exitCode=1;});
