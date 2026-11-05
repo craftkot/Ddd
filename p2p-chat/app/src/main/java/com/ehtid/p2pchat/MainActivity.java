@@ -53,7 +53,6 @@ public final class MainActivity extends Activity {
     private boolean bindRequested;
     private boolean active;
     private String code, myId = "";
-    private String renderedManualSignal = "";
     private final List<InternetEngine.Member> currentMembers = new ArrayList<>();
     private final SharedPreferences.OnSharedPreferenceChangeListener unused = null;
     private final InternetEngine.Listener callbacks = new InternetEngine.Listener() {
@@ -73,11 +72,7 @@ public final class MainActivity extends Activity {
             drawMembers();
         }
         @Override public void onIncoming(String nick, String text) {}
-        @Override public void onManualSignal(String token, String kind) {
-            if (token==null || token.isEmpty() || token.equals(renderedManualSignal)) return;
-            renderedManualSignal=token;
-            showManualCode(token,kind);
-        }
+        @Override public void onManualSignal(String token, String kind) {}
     };
     private final ServiceConnection conn = new ServiceConnection() {
         @Override public void onServiceConnected(ComponentName name, IBinder binder) {
@@ -108,11 +103,6 @@ public final class MainActivity extends Activity {
         } else {
             launchChat(code,false);
             maybeAskNotification();
-            String currentServer=InternetEngine.getRelayServer(this);
-            if (currentServer.isEmpty() &&
-                    !options().getBoolean("mesh_mode",false)) {
-                getWindow().getDecorView().post(this::relayDialog);
-            }
         }
     }
 
@@ -216,19 +206,9 @@ public final class MainActivity extends Activity {
             launchChat(target,true);
         });
 
-        TextView homeConnect=button("☁ Подключить Cloudflare",ACCENT,14);
-        LinearLayout.LayoutParams hp=new LinearLayout.LayoutParams(-1,dp(46));
-        hp.topMargin=dp(10);
-        roomBox.addView(homeConnect,hp);
-        homeConnect.setOnClickListener(v->relayDialog());
-        homeServerLabel=text(homeServerDescription(),12,MUTED,false);
-        homeServerLabel.setPadding(dp(3),dp(6),dp(3),0);
+        homeServerLabel=text("☁ Cloudflare • сервер встроен",12,ONLINE,false);
+        homeServerLabel.setPadding(dp(3),dp(8),dp(3),dp(2));
         roomBox.addView(homeServerLabel);
-        TextView p2pConnect=button("↔ Соединить телефоны P2P • вручную",PANEL,13);
-        LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(46));
-        cp.topMargin=dp(10);
-        roomBox.addView(p2pConnect,cp);
-        p2pConnect.setOnClickListener(v->peerMenu());
 
         LinearLayout memberCard = new LinearLayout(this);
         memberCard.setOrientation(LinearLayout.VERTICAL);
@@ -291,12 +271,6 @@ public final class MainActivity extends Activity {
             }
             if (service == null) {
                 status.setText("● Нет подключения к службе. Повтори отправку.");
-                return;
-            }
-            if (!service.isPeerMesh() &&
-                    InternetEngine.getRelayServer(this).isEmpty()) {
-                status.setText("● Сначала укажи HTTPS-адрес домашнего сервера");
-                relayDialog();
                 return;
             }
             service.send(message);
@@ -415,7 +389,6 @@ public final class MainActivity extends Activity {
         currentMembers.clear();
         drawMembers();
         status.setText("● Подключение…");
-        renderedManualSignal="";
         Intent intent = ChatService.intent(this,room,joining);
         try {
             if (options().getBoolean("background",true) && Build.VERSION.SDK_INT >= 26)
@@ -467,7 +440,6 @@ public final class MainActivity extends Activity {
             if (first) {
                 launchChat(code,false);
                 maybeAskNotification();
-                getWindow().getDecorView().post(this::relayDialog);
             }
         }));
         dialog.show();
@@ -484,266 +456,23 @@ public final class MainActivity extends Activity {
     }
 
     private void settingsDialog() {
-        String[] labels = {
-                "Уведомления о сообщениях",
-                "Работа чата в фоне",
-                "Показывать текст сообщений",
-                "Звук уведомлений",
-                "P2P-режим (ручное подключение без сервера)"
-        };
-        String[] keys={"notifications","background","preview","sound","mesh_mode"};
-        boolean[] checked = new boolean[keys.length];
-        for(int i=0;i<keys.length;i++) checked[i]=options().getBoolean(keys[i],i!=4);
-        AlertDialog dialog=new AlertDialog.Builder(this)
+        String[] labels={"Уведомления о сообщениях","Работа чата в фоне",
+                "Показывать текст сообщений","Звук уведомлений"};
+        String[] keys={"notifications","background","preview","sound"};
+        boolean[] checked=new boolean[keys.length];
+        for(int i=0;i<keys.length;i++)
+            checked[i]=options().getBoolean(keys[i],true);
+        new AlertDialog.Builder(this)
                 .setTitle("Настройки")
-                .setMultiChoiceItems(labels,checked,(d,which,enabled)-> {
+                .setMessage("Cloudflare подключён автоматически. Для входа нужен только код комнаты.")
+                .setMultiChoiceItems(labels,checked,(d,which,enabled)->{
                     options().edit().putBoolean(keys[which],enabled).apply();
-                    if (which==1 && service!=null) service.refreshSettings();
-                    if (which==0 && enabled) maybeAskNotification();
-                    if (which==4 && service!=null) service.restartRelay();
+                    if(which==1 && service!=null) service.refreshSettings();
+                    if(which==0 && enabled) maybeAskNotification();
                 })
                 .setNegativeButton("Изменить имя",(d,w)->askName(false))
-                .setNeutralButton("Cloudflare",(d,w)->relayDialog())
                 .setPositiveButton("Готово",(d,w)->{})
-                .create();
-        dialog.show();
-    }
-
-    private void peerMenu() {
-        if (service==null) {
-            status.setText("● Служба соединения ещё не готова");
-            return;
-        }
-        if (!service.isPeerMesh()) {
-            new AlertDialog.Builder(this)
-                    .setTitle("P2P выключен")
-                    .setMessage("Включи «P2P-режим без сервера» в настройках. Тогда ntfy.sh не используется для переписки.")
-                    .setPositiveButton("Настройки",(d,w)->settingsDialog())
-                    .setNegativeButton("Закрыть",null)
-                    .show();
-            return;
-        }
-        String info="В одной комнате можно связать несколько телефонов. Каждый " +
-                "новый контакт требует один обмен кодами: приглашение → ответ. " +
-                "После этого телефоны передают сообщения соседям по цепочке. " +
-                "На некоторых мобильных сетях прямой канал может не установиться из-за CGNAT.";
-        new AlertDialog.Builder(this)
-                .setTitle("P2P-соединение • "+service.directPeerCount()+" узлов")
-                .setMessage(info)
-                .setPositiveButton("Создать приглашение",(d,w)->{
-                    status.setText("● Собираем адреса WebRTC…");
-                    service.createPeerInvitation();
-                })
-                .setNeutralButton("Вставить код",(d,w)->manualInputDialog())
-                .setNegativeButton("Закрыть",null)
                 .show();
-    }
-
-    private void manualInputDialog() {
-        EditText field=new EditText(this);
-        field.setHint("EHTIDM1:... (приглашение или ответ)");
-        field.setTextSize(12);
-        field.setTextColor(WHITE);
-        field.setHintTextColor(MUTED);
-        field.setMinLines(3);
-        field.setMaxLines(8);
-        field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE |
-                InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        field.setPadding(dp(8),dp(8),dp(8),dp(8));
-        field.setBackground(round(PANEL,10));
-        LinearLayout holder=new LinearLayout(this);
-        holder.setPadding(dp(16),dp(12),dp(16),dp(7));
-        holder.addView(field,new LinearLayout.LayoutParams(-1,dp(180)));
-        AlertDialog dialog=new AlertDialog.Builder(this)
-                .setTitle("Вставить P2P-код")
-                .setMessage("Нужно быть в одной комнате. Приглашение создаёт ответ; ответ завершает подключение.")
-                .setView(holder)
-                .setNegativeButton("Отмена",null)
-                .setPositiveButton("Применить",null).create();
-        dialog.setOnShowListener(v->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view->{
-            String token=field.getText().toString().trim();
-            if (!token.startsWith("EHTIDM1:") || token.length()<100) {
-                field.setError("Вставь полный P2P-код с префиксом EHTIDM1:");
-                return;
-            }
-            if (service==null) {
-                field.setError("Нет службы соединения");
-                return;
-            }
-            service.importPeerInvitation(token);
-            dialog.dismiss();
-        }));
-        dialog.show();
-    }
-
-    private void showManualCode(String token,String kind) {
-        if (isFinishing() || isDestroyed()) return;
-        boolean offer="offer".equals(kind);
-        EditText output=new EditText(this);
-        output.setText(token);
-        output.setTextSize(11);
-        output.setTextColor(WHITE);
-        output.setSingleLine(false);
-        output.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        output.setTextIsSelectable(true);
-        output.setPadding(dp(8),dp(8),dp(8),dp(8));
-        output.setBackground(round(PANEL,10));
-        LinearLayout holder=new LinearLayout(this);
-        holder.setPadding(dp(15),dp(8),dp(15),dp(8));
-        holder.addView(output,new LinearLayout.LayoutParams(-1,dp(175)));
-        new AlertDialog.Builder(this)
-                .setTitle(offer?"P2P-приглашение готово":"P2P-ответ готов")
-                .setMessage(offer?
-                    "Передай этот код второму телефону. Там нажми «Вставить код». Он создаст ответ, который надо вставить здесь.":
-                    "Отправь код создателю приглашения: он должен нажать «Вставить код». После этого ожидай соединения.")
-                .setView(holder)
-                .setPositiveButton("Скопировать",(d,w)->{
-                    ((ClipboardManager)getSystemService(Context.CLIPBOARD_SERVICE))
-                        .setPrimaryClip(ClipData.newPlainText("EHTID P2P",token));
-                    status.setText("● P2P-код скопирован");
-                })
-                .setNeutralButton("Поделиться",(d,w)->{
-                    Intent share=new Intent(Intent.ACTION_SEND);
-                    share.setType("text/plain");
-                    share.putExtra(Intent.EXTRA_TEXT,token);
-                    startActivity(Intent.createChooser(share,"Передать P2P-код"));
-                })
-                .setNegativeButton("Закрыть",null)
-                .show();
-    }
-
-    private String homeServerDescription() {
-        String address=HomeServerUrl.normalize(options().getString("relay_url",""));
-        if (address.isEmpty() || "https://ntfy.sh".equals(address))
-            return "Cloudflare: не настроен";
-        try {
-            java.net.URI uri=new java.net.URI(address);
-            return "Cloudflare: " + uri.getHost();
-        } catch (Exception ignored) { return "Cloudflare: адрес сохранён"; }
-    }
-
-    private void relayDialog() {
-        EditText url=new EditText(this);
-        url.setSingleLine(true);
-        url.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-        String previousAddress=options().getString("relay_url","");
-        url.setText("https://ntfy.sh".equals(previousAddress)?"":previousAddress);
-        url.setHint("https://ehtid-chat-relay.<account>.workers.dev");
-
-        EditText key=new EditText(this);
-        key.setSingleLine(true);
-        key.setTextSize(14);
-        key.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        key.setText(options().getString("relay_token",""));
-        key.setHint("Общий ключ доступа (не меньше 24 символов)");
-        key.setSelectAllOnFocus(true);
-
-        LinearLayout holder=new LinearLayout(this);
-        holder.setOrientation(LinearLayout.VERTICAL);
-        holder.setPadding(dp(18),dp(8),dp(18),dp(6));
-        holder.addView(text("HTTPS-АДРЕС CLOUDFLARE",11,MUTED,true));
-        LinearLayout.LayoutParams urlParams=new LinearLayout.LayoutParams(-1,-2);
-        urlParams.bottomMargin=dp(9);
-        holder.addView(url,urlParams);
-        holder.addView(text("КЛЮЧ ДОСТУПА",11,MUTED,true));
-        holder.addView(key,new LinearLayout.LayoutParams(-1,-2));
-
-        AlertDialog dialog=new AlertDialog.Builder(this)
-                .setTitle("Cloudflare • EHTID Chat")
-                .setMessage("Разверни EHTID Relay на Cloudflare Workers + D1. " +
-                        "На всех телефонах укажи один HTTPS-адрес и одинаковый ключ. " +
-                        "Старый ntfy.sh больше не требуется.")
-                .setView(holder)
-                .setPositiveButton("Подключиться",null)
-                .setNeutralButton("Проверить",null)
-                .setNegativeButton("Отмена",null).create();
-
-        dialog.setOnShowListener(v->{
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(clicked->{
-                String address=HomeServerUrl.normalize(url.getText().toString());
-                String secret=key.getText().toString().trim();
-                if (address.isEmpty()) {
-                    url.setError("Введи полный HTTPS-адрес workers.dev, без пути");
-                    return;
-                }
-                if (secret.length()<24 || secret.length()>256) {
-                    key.setError("Ключ: 24–256 символов; возьми его из настройки Cloudflare");
-                    return;
-                }
-                options().edit().putString("relay_url",address)
-                        .putString("relay_token",secret)
-                        .putBoolean("mesh_mode",false).apply();
-                if (homeServerLabel!=null) homeServerLabel.setText(homeServerDescription());
-                if (service!=null) service.restartRelay();
-                else launchChat(code,false);
-                status.setText("● Подключаем Cloudflare: "+address);
-                dialog.dismiss();
-            });
-
-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(clicked->{
-                String address=HomeServerUrl.normalize(url.getText().toString());
-                String secret=key.getText().toString().trim();
-                if (address.isEmpty()) {
-                    url.setError("Введи HTTPS-адрес Cloudflare");
-                    return;
-                }
-                if (secret.length()<24) {
-                    key.setError("Введи ключ доступа");
-                    return;
-                }
-                status.setText("● Проверяем Cloudflare…");
-                new Thread(()->{
-                    String result;
-                    boolean good=false;
-                    try {
-                        java.net.HttpURLConnection health=(java.net.HttpURLConnection)
-                                new java.net.URL(address+"/health").openConnection();
-                        health.setConnectTimeout(8000);
-                        health.setReadTimeout(8000);
-                        int healthCode=health.getResponseCode();
-                        String body="";
-                        if (healthCode==200) {
-                            try(java.io.InputStream stream=health.getInputStream()) {
-                                byte[] buf=new byte[1024];
-                                int n=stream.read(buf);
-                                if (n>0)
-                                    body=new String(buf,0,n,java.nio.charset.StandardCharsets.UTF_8);
-                            }
-                        }
-                        health.disconnect();
-                        if (healthCode!=200 || !body.contains("EHTID Cloudflare Relay")) {
-                            result="Ответ не от EHTID Cloudflare Relay: HTTP "+healthCode;
-                        } else {
-                            java.net.HttpURLConnection auth=(java.net.HttpURLConnection)
-                                    new java.net.URL(address+"/auth").openConnection();
-                            auth.setRequestProperty("Authorization","Bearer "+secret);
-                            auth.setConnectTimeout(8000);
-                            auth.setReadTimeout(8000);
-                            int authCode=auth.getResponseCode();
-                            auth.disconnect();
-                            if (authCode==200) {
-                                good=true;
-                                result="Cloudflare подключён; ключ доступа подходит";
-                            } else if(authCode==401) {
-                                result="Ключ доступа неверный (HTTP 401)";
-                            } else {
-                                result="Cloudflare вернул HTTP "+authCode+" при проверке ключа";
-                            }
-                        }
-                    } catch(Exception error) {
-                        result="Не удалось открыть Cloudflare: "+error.getClass().getSimpleName();
-                    }
-                    final String message=result;
-                    final boolean valid=good;
-                    runOnUiThread(()->{
-                        status.setText("● "+message);
-                        if (!valid && !isFinishing() && dialog.isShowing())
-                            key.setError(message);
-                    });
-                },"EHTID-Cloudflare-Health").start();
-            });
-        });
-        dialog.show();
     }
 
     private TextView button(String label,int color,int sp) {
