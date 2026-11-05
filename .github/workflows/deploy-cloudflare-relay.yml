@@ -46,6 +46,7 @@ jobs:
           node -e "const f=require('fs'); const list=JSON.parse(f.readFileSync(process.argv[1])); const found=list.find(x=>x.name==='ehtid-chat'); if(!found||!found.uuid) throw Error('EHTID D1 not found'); let cfg=f.readFileSync('wrangler.toml','utf8'); cfg=cfg.replace(/database_id = \"[a-f0-9-]+\"/, 'database_id = \"'+found.uuid+'\"'); f.writeFileSync('wrangler.toml',cfg)" "$RUNNER_TEMP/ehtid-d1-list.json"
       - name: Initialize D1 schema (safe to repeat)
         run: npx wrangler d1 execute ehtid-chat --remote --file=./schema.sql --yes
+      # v1.1.1: Whisper large-v3-turbo supports base64 encoded audio uploads.
       - name: Deploy and smoke-test room-code Worker
         run: |
           set -euo pipefail
