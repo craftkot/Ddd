@@ -71,6 +71,18 @@ test("health is public but does not disclose token",async()=>{
   assert.equal(unconfigured.status,503);
 });
 
+test("phone can check its shared token without reading a room",async()=>{
+  const e=environment();
+  const ok=await worker.fetch(req("GET","/auth"),e);
+  assert.equal(ok.status,200);
+  assert.equal((await ok.json()).authenticated,true);
+  const bad=await worker.fetch(new Request(URL+"/auth",{
+    headers:{ Authorization:"Bearer not-the-secret" }
+  }),e);
+  assert.equal(bad.status,401);
+  assert.equal(e.DB.rows.length,0);
+});
+
 test("all room operations require the shared secret",async()=>{
   const e=environment();
   for(const method of ["POST","GET"]) {
