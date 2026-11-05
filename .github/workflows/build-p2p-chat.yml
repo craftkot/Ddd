@@ -82,9 +82,9 @@ jobs:
         run: |
           set -euo pipefail
           APK="app/build/outputs/apk/debug/app-debug.apk"
-          RELEASE_APK="EHTID-P2P-Chat-v0.8.apk"
+          RELEASE_APK="EHTID-P2P-Chat-v0.9.apk"
           cp "$APK" "$RELEASE_APK"
-          TAG="ehtid-p2p-chat-v0.8"
+          TAG="ehtid-p2p-chat-v0.9"
           LATEST="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/feature/p2p-chat" --jq '.object.sha')"
           if [ "$LATEST" != "$GITHUB_SHA" ]; then
             echo "::warning::Skipping stale APK: branch head is $LATEST but build is $GITHUB_SHA"
@@ -94,7 +94,7 @@ jobs:
             gh release upload "$TAG" "$RELEASE_APK" --clobber --repo "$GITHUB_REPOSITORY"
             gh release edit "$TAG" --target "$GITHUB_SHA" --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" "$RELEASE_APK" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "EHTID P2P Chat v0.8 (Android beta)" --notes "Home-server-first Android release for EHTID Home Relay on Windows: paste HTTPS Cloudflare/Tailscale Funnel URL, test GET /health, auto reconnect, locally queued messages, no public ntfy fallback, manual P2P optional. Compatible permanent signing key from v0.5; installs over v0.7. Not independently tested between real phones." --prerelease
+            gh release create "$TAG" "$RELEASE_APK" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "EHTID P2P Chat v0.9 (Android beta)" --notes "Cloudflare Workers and D1 release: authenticated encrypted relay, shared access token, server health and auth probe, D1 paginated cursor polling at 10s/30s, 7-day history, no Windows PC, no ntfy fallback. Installs over v0.8 using same permanent Android signing identity. Requires user-deployed Cloudflare Worker and D1; not yet verified with live physical phones." --prerelease
           fi
       - name: Smoke test APK in Android emulator
         continue-on-error: true
