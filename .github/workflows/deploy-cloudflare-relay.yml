@@ -52,10 +52,10 @@ jobs:
           npx wrangler deploy | tee "$RUNNER_TEMP/ehtid-deploy.log"
           URL="$(grep -Eo 'https://[[:alnum:].-]+[.]workers[.]dev' "$RUNNER_TEMP/ehtid-deploy.log" | head -1 || true)"
           test -n "$URL" || { echo "::error::No workers.dev URL in deployment logs"; exit 1; }
-          echo "### EHTID Chat v1.0 • code-only Cloudflare" >> "$GITHUB_STEP_SUMMARY"
+          echo "### EHTID Chat v1.1 • media and opt-in transcription" >> "$GITHUB_STEP_SUMMARY"
           echo "Server URL: $URL" >> "$GITHUB_STEP_SUMMARY"
           curl -fsS --retry 5 --retry-delay 2 "$URL/health" |
-            node -e "let s='';process.stdin.on('data',x=>s+=x).on('end',()=>{const j=JSON.parse(s);if(!j.ok||j.version!=='1.0'||j.authentication!=='per-room-capability')process.exit(1)})"
+            node -e "let s='';process.stdin.on('data',x=>s+=x).on('end',()=>{const j=JSON.parse(s);if(!j.ok||j.version!=='1.1'||j.authentication!=='per-room-capability'||!j.features.includes('media-chunks-v1'))process.exit(1)})"
           # Synthetic test room; no real user room codes or API secrets are logged.
           CHECK_ACCESS="$(node -e 'const c=require("crypto");console.log(c.createHash("sha256").update("EHTID-RELAY-ACCESS-V1:EHTIDTESTROOM88Z99").digest("hex"))')"
           CHECK_TOPIC="ehtidp2p-$(node -e 'const c=require("crypto");console.log(c.createHash("sha256").update(process.argv[1]).digest("hex").slice(0,40))' "$CHECK_ACCESS")"
@@ -69,4 +69,5 @@ jobs:
             node -e "let s='';process.stdin.on('data',x=>s+=x).on('end',()=>{if(!JSON.parse(s).accepted)process.exit(1)})"
           curl -fsS -H "Authorization: Bearer $CHECK_ACCESS" "$URL/$CHECK_TOPIC/json?since=30m" |
             node -e "let s='';process.stdin.on('data',x=>s+=x).on('end',()=>{if(!s.trim().split(String.fromCharCode(10)).some(x=>JSON.parse(x).message==='v1.AAAAAAAAAAAAAAAA.BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'))process.exit(1)})"
-          echo "Live health, room authentication and D1 encrypted packet round-trip passed." >> "$GITHUB_STEP_SUMMARY"
+          EHTID_RELAY_URL="$URL" node scripts/live-smoke.mjs
+          echo "Live authentication, text messages, 10 MiB-capable media API and D1 round-trip passed." >> "$GITHUB_STEP_SUMMARY"
