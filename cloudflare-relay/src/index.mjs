@@ -217,7 +217,7 @@ async function transcribeVoice(request,env) {
   for(let i=0;i<raw.length;i+=8192)
     binary+=String.fromCharCode(...raw.subarray(i,i+8192));
   try {
-    const result=await env.AI.run("@cf/openai/whisper",{audio:btoa(binary)});
+    const result=await env.AI.run("@cf/openai/whisper-large-v3-turbo",{audio:btoa(binary),task:"transcribe"});
     const transcript=typeof result?.text==="string"?result.text.trim():"";
     if(!transcript)return responseJson({ok:false,error:"no speech detected"},422);
     return responseJson({ok:true,text:transcript.slice(0,3000)});
