@@ -13,6 +13,12 @@ const MAX_BATCH = 150;
 const MESSAGE_TTL = 7 * 24 * 60 * 60 * 1000;
 const EPHEMERAL_TTL = 12 * 60 * 1000;
 const POLL_SECONDS = 10;
+// Limit plaintext source attachments to 10 MiB. AES-GCM adds 28 bytes
+// (12 byte nonce and 16 byte tag), then base64url uses about 4/3 storage.
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_ENCODED_BYTES = Math.ceil((MAX_FILE_BYTES + 28) * 4 / 3) + 3;
+const MEDIA_CHUNK_BYTES = 196608;
+const MAX_MEDIA_PARTS = Math.ceil(MAX_ENCODED_BYTES / MEDIA_CHUNK_BYTES);
 const HEADERS = {
   "Cache-Control": "no-store",
   "X-Content-Type-Options": "nosniff",
@@ -64,10 +70,10 @@ function validateWire(value) {
   return false;
 }
 
-async function readBody(request) {
+async function readBody(request, limit = MAX_WIRE_BYTES) {
   if (!request.body) return "";
   const size = Number(request.headers.get("Content-Length"));
-  if (Number.isFinite(size) && size > MAX_WIRE_BYTES) return null;
+  if (Number.isFinite(size) && size > limit) return null;
   const reader = request.body.getReader();
   const chunks = [];
   let total = 0;
@@ -75,7 +81,7 @@ async function readBody(request) {
     const { done, value } = await reader.read();
     if (done) break;
     total += value.byteLength;
-    if (total > MAX_WIRE_BYTES) {
+    if (total > limit) {
       await reader.cancel();
       return null;
     }
@@ -167,6 +173,79 @@ async function subscribe(request, env, topic, url) {
   });
 }
 
+const FILE_ID = /^[a-f0-9]{32}$/;
+
+async function mediaRoute(request, env, topic, parts) {
+  if (parts.length !== 4 || parts[1] !== "files" || !FILE_ID.test(parts[2]))
+    return responseJson({ok:false,error:"invalid attachment path"},404);
+  const fileId=parts[2], operation=parts[3];
+  const now=Date.now(), expires=now+MESSAGE_TTL;
+  if (operation==="complete" && request.method==="POST") {
+    const raw=await readBody(request,512);
+    if (!raw) return responseJson({ok:false,error:"invalid finalize request"},400);
+    let manifest;
+    try { manifest=JSON.parse(raw); } catch { return responseJson({ok:false,error:"invalid JSON"},400); }
+    const count=manifest?.parts, encoded=manifest?.encodedBytes;
+    if (!Number.isInteger(count) || count<1 || count>MAX_MEDIA_PARTS ||
+        !Number.isInteger(encoded) || encoded<20 || encoded>MAX_ENCODED_BYTES)
+      return responseJson({ok:false,error:"invalid attachment size"},413);
+
+    const found=await env.DB.prepare(
+      "SELECT COUNT(*) AS pieces, MIN(part_index) AS first_idx, " +
+      "MAX(part_index) AS last_idx, SUM(LENGTH(payload)) AS bytes " +
+      "FROM media_parts WHERE topic=? AND file_id=? AND expires_at>?"
+    ).bind(topic,fileId,now).first();
+    if (Number(found?.pieces)!==count || Number(found?.first_idx)!==0 ||
+        Number(found?.last_idx)!==count-1 || Number(found?.bytes)!==encoded)
+      return responseJson({ok:false,error:"missing or corrupt attachment chunks"},409);
+    await env.DB.prepare(
+      "INSERT OR REPLACE INTO media_files (topic,file_id,chunk_count,encoded_bytes,created_at,expires_at) " +
+      "VALUES (?,?,?,?,?,?)"
+    ).bind(topic,fileId,count,encoded,now,expires).run();
+    return responseJson({ok:true,complete:true,parts:count},201);
+  }
+  if (operation==="meta" && request.method==="GET") {
+    const row=await env.DB.prepare(
+      "SELECT chunk_count,encoded_bytes FROM media_files " +
+      "WHERE topic=? AND file_id=? AND expires_at>?"
+    ).bind(topic,fileId,now).first();
+    return row ? responseJson({ok:true,parts:row.chunk_count,encodedBytes:row.encoded_bytes}) :
+      responseJson({ok:false,error:"attachment not found"},404);
+  }
+  if (!/^\d{1,2}$/.test(operation)) return responseJson({ok:false,error:"not found"},404);
+  const index=Number(operation);
+  if (index>=MAX_MEDIA_PARTS) return responseJson({ok:false,error:"chunk out of range"},400);
+  if (request.method==="POST") {
+    const stored=await env.DB.prepare(
+      "SELECT chunk_count FROM media_files WHERE topic=? AND file_id=? AND expires_at>?"
+    ).bind(topic,fileId,now).first();
+    if (stored) return responseJson({ok:false,error:"attachment already finalized"},409);
+    const chunk=await readBody(request,MEDIA_CHUNK_BYTES);
+    if (!chunk || chunk.length>MEDIA_CHUNK_BYTES || !/^[A-Za-z0-9_-]+$/.test(chunk))
+      return responseJson({ok:false,error:"invalid encrypted attachment chunk"},413);
+    await env.DB.prepare(
+      "INSERT OR REPLACE INTO media_parts (topic,file_id,part_index,payload,created_at,expires_at) " +
+      "VALUES (?,?,?,?,?,?)"
+    ).bind(topic,fileId,index,chunk,now,expires).run();
+    return responseJson({ok:true,index},201);
+  }
+  if (request.method==="GET") {
+    const meta=await env.DB.prepare(
+      "SELECT chunk_count FROM media_files WHERE topic=? AND file_id=? AND expires_at>?"
+    ).bind(topic,fileId,now).first();
+    if (!meta || index>=meta.chunk_count)
+      return responseJson({ok:false,error:"attachment unavailable"},404);
+    const found=await env.DB.prepare(
+      "SELECT payload FROM media_parts WHERE topic=? AND file_id=? AND part_index=? AND expires_at>?"
+    ).bind(topic,fileId,index,now).first();
+    if (!found) return responseJson({ok:false,error:"chunk expired"},404);
+    return new Response(found.payload,{
+      status:200,headers:{...HEADERS,"Content-Type":"text/plain; charset=utf-8"}
+    });
+  }
+  return responseJson({ok:false,error:"method not allowed"},405);
+}
+
 export default {
   async fetch(request, env) {
     try {
@@ -177,8 +256,9 @@ export default {
           ok: Boolean(env.DB),
           service: "EHTID Cloudflare Relay",
           storage: "D1",
-          version: "1.0",
+          version: "1.1",
           authentication: "per-room-capability",
+          features: ["media-chunks-v1"],
           publicAccess: false,
         }, env.DB ? 200 : 503);
       }
@@ -194,8 +274,9 @@ export default {
       }
       const parts = url.pathname.split("/").filter(Boolean);
       const topic = parts[0];
-      if (!topic || !TOPIC.test(topic) || parts.length > 2 ||
-          (parts.length === 2 && parts[1] !== "json")) {
+      if (!topic || !TOPIC.test(topic) || parts.length>4 ||
+          (parts.length===2 && parts[1]!=="json") ||
+          (parts.length>2 && parts[1]!=="files")) {
         return responseJson({ ok: false, error: "not found" }, 404);
       }
       if (!env.DB) {
@@ -204,6 +285,8 @@ export default {
       if (!(await authorizedRoom(request, topic))) {
         return responseJson({ ok: false, error: "room access denied" }, 401);
       }
+      if (parts.length===4 && parts[1]==="files")
+        return await mediaRoute(request,env,topic,parts);
       if (parts.length === 1 && request.method === "POST") return await publish(request, env, topic);
       if (parts.length === 2 && request.method === "GET") return await subscribe(request, env, topic, url);
       return responseJson({ ok: false, error: "method not allowed" }, 405);
@@ -216,6 +299,12 @@ export default {
   async scheduled(_event, env, ctx) {
     ctx.waitUntil(env.DB.prepare(
       "DELETE FROM chat_events WHERE expires_at <= ?"
+    ).bind(Date.now()).run());
+    ctx.waitUntil(env.DB.prepare(
+      "DELETE FROM media_parts WHERE expires_at <= ?"
+    ).bind(Date.now()).run());
+    ctx.waitUntil(env.DB.prepare(
+      "DELETE FROM media_files WHERE expires_at <= ?"
     ).bind(Date.now()).run());
   },
 };
