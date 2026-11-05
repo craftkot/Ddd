@@ -69,6 +69,8 @@ test("health is public but does not disclose token",async()=>{
   const data=await r.json();
   assert.equal(data.ok,true);
   assert.equal(data.service,"EHTID Cloudflare Relay");
+  assert.equal(data.version,"1.1");
+  assert.deepEqual(data.features,["media-chunks-v1"]);
   assert.equal(JSON.stringify(data).includes(SECRET),false);
   assert.equal(data.authentication,"per-room-capability");
   const unconfigured=await worker.fetch(new Request(URL+"/health"),{});
@@ -162,6 +164,41 @@ test("fragments and short-lived presence packets roundtrip",async()=>{
   assert.equal(e.DB.rows.length,0);
 });
 
+test("media chunks enforce per-room authorization and finalize complete sets",async()=>{
+  const e=environment();
+  const id="f".repeat(32);
+  const first="ABcd".repeat(2000);
+  const second="Efgh".repeat(1000);
+  const base="/"+TOPIC+"/files/"+id;
+  const anonymous=await worker.fetch(new Request(URL+base+"/0",{method:"POST",body:first}),e);
+  assert.equal(anonymous.status,401);
+  assert.equal((await worker.fetch(req("POST",base+"/0",first),e)).status,201);
+  assert.equal((await worker.fetch(req("POST",base+"/1",second),e)).status,201);
+  const badManifest=await worker.fetch(req("POST",base+"/complete",
+    JSON.stringify({parts:3,encodedBytes:first.length+second.length})),e);
+  assert.equal(badManifest.status,409);
+  const good=await worker.fetch(req("POST",base+"/complete",
+    JSON.stringify({parts:2,encodedBytes:first.length+second.length})),e);
+  assert.equal(good.status,201);
+  const meta=await worker.fetch(req("GET",base+"/meta"),e);
+  assert.deepEqual(await meta.json(),{ok:true,parts:2,encodedBytes:first.length+second.length});
+  assert.equal(await (await worker.fetch(req("GET",base+"/0"),e)).text(),first);
+  assert.equal(await (await worker.fetch(req("GET",base+"/1"),e)).text(),second);
+  assert.equal((await worker.fetch(req("POST",base+"/0",first),e)).status,409);
+  const wrong=await worker.fetch(new Request(URL+base+"/meta",{
+    headers:{Authorization:"Bearer "+"0".repeat(64)}
+  }),e);
+  assert.equal(wrong.status,401);
+});
+test("media rejects attachments larger than 10 MiB, invalid ids and oversized chunks",async()=>{
+  const e=environment(),id="a".repeat(32),base="/"+TOPIC+"/files/"+id;
+  assert.equal((await worker.fetch(req("POST",base+"/complete",
+    JSON.stringify({parts:73,encodedBytes:20000})),e)).status,413);
+  assert.equal((await worker.fetch(req("POST",base+"/complete",
+    JSON.stringify({parts:1,encodedBytes:20000000})),e)).status,413);
+  assert.equal((await worker.fetch(req("POST",base+"/0","ABC".repeat(70000)),e)).status,413);
+  assert.equal((await worker.fetch(req("POST","/"+TOPIC+"/files/invalid/0","AAAA"),e)).status,404);
+});
 test("history is bounded and paginated without losing later events",async()=>{
   const e=environment();
   const now=Date.now();
