@@ -28,4 +28,4 @@ jobs:
           espeak-ng -v en -s 130 -w /tmp/ehtid-test-voice.wav "Hello. This is a test voice recording for the EHTID chat application."
           ffmpeg -hide_banner -loglevel error -y -i /tmp/ehtid-test-voice.wav -ar 16000 -ac 1 -c:a aac -b:a 32000 /tmp/ehtid-test-voice.m4a
       - name: End-to-end Cloudflare Whisper
-        run: node scripts/voice-smoke.mjs /tmp/ehtid-test-voice.m4a
+        run: node scripts/voice-smoke.mjs /tmp/ehtid-test-voice.wav
