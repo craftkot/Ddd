@@ -1,59 +1,64 @@
-# EHTID Chat v1.0 — только код комнаты
+# EHTID Chat v1.1 — код комнаты, файлы, голосовые и оформление
 
-**Для пользователя:** установи APK, придумай ник, создай комнату или
-введи код другого человека. Никакие настройки Cloudflare и ключи API
-не требуются. Публичный адрес сервера встроен в приложение:
+Public free relay: `https://ehtid-chat-relay.craftkot404.workers.dev`.
+The URL is already integrated into the Android app; participants never
+enter separate Cloudflare settings or server access tokens. Share the
+private 20-character code, install the same Android APK, and join.
 
-`https://ehtid-chat-relay.craftkot404.workers.dev`
+## What changed
 
-История сохраняется на телефоне, а зашифрованные события — в Cloudflare D1
-до семи дней. Участникам нужен только 20-символьный секретный код комнаты.
-Один и тот же код даёт доступ к одной и той же комнате с разных телефонов.
+**Chat**
+- Encrypted text and attachment manifests, room-local history and
+  notifications (subject to Android background restrictions).
+- Upload any file or picture up to **10 MiB** by tapping **＋**.
+  Attachments are end-to-end AES-GCM encrypted, transmitted as D1 chunks,
+  and downloaded on demand in chat.
+- Tap **▣ Посмотреть фото** to view an image, **▶ Прослушать** for an
+  AAC/M4A voice note or **⬇ Открыть файл** for other files.
+  File open uses a secure Android FileProvider URI.
+- Tap **🎤** to record a voice note, tap **■** to finish and send.
+  Recording automatically stops after three minutes.
+- Voice-note **📝 Расшифровать голосовое** is optional. The user must
+  explicitly approve sending a plaintext copy of the selected audio
+  to the Cloudflare Whisper model. The original chat attachment stays
+  encrypted. Whisper transcript stays in local preferences and is
+  displayed below that voice message, not silently shared with others.
+  AI limits, models and accuracy vary.
+- Cached decrypted media stays in the app's private files directory.
 
-## Реализация
+**Navigation**
+- Swipe **right from chat** to open the participants panel; swipe left
+  from participants to return to chat.
+- Swipe **left from chat** to open profile/settings; swipe right to return.
+- Participant details include nickname, online/offline state, device ID
+  prefix, ping, last advertised login time and last received signal
+  formatted down to seconds. Presence is periodic, not exact connection
+  tracking: times may be stale, especially in the background.
+- Profile includes nickname change, notification options, and personal
+  wallpaper selection from any local image via Android Documents picker.
+  Background images stay local to each user and can be reset to dark mode.
 
-- `RoomAccess.bearer(room)` вычисляет отдельный 256-битный токен доступа:
-  SHA-256 доменно-разделённой строки `EHTID-RELAY-ACCESS-V1:` + код комнаты.
-- `RoomAccess.topic(room)` вычисляет приватный идентификатор комнаты
-  `ehtidp2p-` + первые 40 шестнадцатеричных знаков SHA-256(token).
-- Cloudflare проверяет, что `SHA-256(token)` совпадает с именем топика,
-  не получая код комнаты или исходный AES-ключ `SHA-256(room)`.
-- AES-GCM формат сообщений и локальный ключ не менялись.
-- URL Worker встроен в APK, но **секрет владельца Cloudflare и API
-  token не встроены**. Вручную вводить адрес сервера и токен больше не надо.
-- Автоматический опрос Cloudflare в фоне зависит от ограничений Android.
-  Получение HTTP 201 от Worker означает запись на сервер, но не
-  подтверждает доставку другому телефону.
-- Серверу и приложению нужны актуальные версии: **v0.9 и v1.0
-  несовместимы по облачному топику**. При обновлении локальная история
-  остаётся, но старые облачные события на новой машине не появятся.
+## Compatibility
 
-## Сборка
+- Android 7.0+ (API 24).
+- Android runtime microphone permission required to record voice.
+- Network needed to upload/download; **media uploads are not offline queued**.
+- The cloud retains media and message ciphertext for up to seven days;
+  local media remains cached until Android app storage is cleared or
+  the app is uninstalled.
+- Existing room code, chat history and permanent signing key remain.
+  v1.1 installs over v1.0 without deleting app data.
+- Cloudflare D1 Free 500 MB per database, Workers Free request quota and
+  Workers AI Free daily quotas remain finite. The app is a beta and the
+  cryptography has not been independently audited.
+
+## Build
 
 ```sh
 cd p2p-chat
 gradle :app:testDebugUnitTest :app:assembleDebug
 ```
 
-GitHub Actions в ветке `feature/p2p-chat` публикует APK, подписанный
-постоянным сертификатом EHTID (тот же сертификат, что в v0.5–v0.9).
-Установить обновление можно поверх предыдущей версии, без удаления данных.
-
-Backend: [Cloudflare Workers + D1](../cloudflare-relay/README.md).
-
-## Перед установкой
-
-На всех телефонах должна стоять именно **v1.0 или новее**.
-После включения нового Worker v0.9 будет получать HTTP 401, потому что
-старый общий токен больше не авторизует комнаты. Установка поверх
-предыдущей версии сохраняет локальную историю, ник и последний код комнаты.
-Для создания отдельной секретной комнаты нажми «Новая комната», скопируй
-код и передай его участникам. Не публикуй этот код открыто.
-
-## Ограничения безопасности
-
-**Любой обладатель кода может писать в комнату.** Участники не имеют
-отдельных паролей и подтверждённой личности. Код должен оставаться
-секретным; если он утечёт, безопаснее создать новую комнату.
-Бесплатная квота Cloudflare не бесконечна. Шифрование не проходило
-независимого аудита.
+GitHub Actions on `feature/p2p-chat` produces a permanently signed APK.
+Backend source, protocol and privacy documentation:
+[cloudflare-relay](../cloudflare-relay/README.md).
