@@ -82,9 +82,9 @@ jobs:
         run: |
           set -euo pipefail
           APK="app/build/outputs/apk/debug/app-debug.apk"
-          RELEASE_APK="EHTID-P2P-Chat-v1.0.apk"
+          RELEASE_APK="EHTID-P2P-Chat-v1.1.apk"
           cp "$APK" "$RELEASE_APK"
-          TAG="ehtid-p2p-chat-v1.0"
+          TAG="ehtid-p2p-chat-v1.1"
           LATEST="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/feature/p2p-chat" --jq '.object.sha')"
           if [ "$LATEST" != "$GITHUB_SHA" ]; then
             echo "::warning::Skipping stale APK: branch head is $LATEST but build is $GITHUB_SHA"
@@ -94,7 +94,7 @@ jobs:
             gh release upload "$TAG" "$RELEASE_APK" --clobber --repo "$GITHUB_REPOSITORY"
             gh release edit "$TAG" --target "$GITHUB_SHA" --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" "$RELEASE_APK" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "EHTID P2P Chat v1.0 (Android beta)" --notes "Cloudflare code-only chat: server URL embedded; only the random room code is needed; per-room access proof without distributing a global API secret; on-device encrypted history kept; no Windows PC or ntfy. Incompatible with v0.9 cloud topic; all users must upgrade. Same permanent signing identity; installs over earlier APKs. Not yet verified between real phones." --prerelease
+            gh release create "$TAG" "$RELEASE_APK" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "EHTID P2P Chat v1.1 (Android beta)" --notes "EHTID Chat v1.1: encrypted file sharing up to 10 MiB, photos and voice notes inline, Cloudflare AI Whisper voice transcription only with explicit consent, private wallpapers, swipe-right participant details with timestamps, swipe-left profile/settings. Code-only Cloudflare Worker. Server and Android v1.1 required for attachments. Permanent signing identity unchanged; installs over v1.0 without deleting local history. Beta: real two-phone media tests pending." --prerelease
           fi
       - name: Smoke test APK in Android emulator
         continue-on-error: true
