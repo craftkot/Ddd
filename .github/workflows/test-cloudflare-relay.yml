@@ -1,0 +1,27 @@
+name: Test Cloudflare EHTID Relay
+on:
+  push:
+    branches:
+      - feature/p2p-chat
+    paths:
+      - 'cloudflare-relay/**'
+      - '.github/workflows/test-cloudflare-relay.yml'
+  workflow_dispatch:
+
+jobs:
+  test-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: cloudflare-relay
+    steps:
+      - uses: actions/checkout@v4
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check syntax
+        run: node --check src/index.mjs
+      - name: Test encrypted relay API (no Cloudflare account needed)
+        run: node --test
