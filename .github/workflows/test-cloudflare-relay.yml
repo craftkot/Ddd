@@ -25,3 +25,5 @@ jobs:
         run: node --check src/index.mjs
       - name: Test encrypted relay API (no Cloudflare account needed)
         run: node --test
+      - name: Live Cloudflare Worker/D1 round-trip verification
+        run: node scripts/live-smoke.mjs
