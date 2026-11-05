@@ -13,22 +13,55 @@ const WIRE = "v1." + "A".repeat(16) + "." + "B".repeat(64);
 class FakeD1 {
   rows = [];
   index = 0;
+  mediaParts = [];
+  mediaFiles = [];
   prepare(sql) {
     return {
       bind: (...args) => ({
         run: async () => {
+          if (sql.startsWith("INSERT OR REPLACE INTO media_parts")) {
+            const [topic,file_id,part_index,payload,created_at,expires_at]=args;
+            this.mediaParts=this.mediaParts.filter(x=>!(x.topic===topic&&x.file_id===file_id&&x.part_index===part_index));
+            this.mediaParts.push({topic,file_id,part_index,payload,created_at,expires_at});
+            return {success:true};
+          }
+          if (sql.startsWith("INSERT OR REPLACE INTO media_files")) {
+            const [topic,file_id,chunk_count,encoded_bytes,created_at,expires_at]=args;
+            this.mediaFiles=this.mediaFiles.filter(x=>!(x.topic===topic&&x.file_id===file_id));
+            this.mediaFiles.push({topic,file_id,chunk_count,encoded_bytes,created_at,expires_at});
+            return {success:true};
+          }
           if (sql.startsWith("INSERT")) {
             const [topic,payload,created_at,expires_at] = args;
             this.rows.push({ seq: ++this.index, topic, payload, created_at, expires_at });
             return { success:true };
           }
           if (sql.startsWith("DELETE")) {
-            this.rows = this.rows.filter(row => row.expires_at > args[0]);
+            if(sql.includes("media_parts")) this.mediaParts=this.mediaParts.filter(row=>row.expires_at>args[0]);
+            else if(sql.includes("media_files")) this.mediaFiles=this.mediaFiles.filter(row=>row.expires_at>args[0]);
+            else this.rows=this.rows.filter(row=>row.expires_at>args[0]);
             return { success:true };
           }
           throw new Error("Unhandled run query: " + sql);
         },
         first: async () => {
+          if (sql.includes("COUNT(*) AS pieces")) {
+            const [topic,file_id,now]=args;
+            const rows=this.mediaParts.filter(x=>x.topic===topic&&x.file_id===file_id&&x.expires_at>now);
+            return {pieces:rows.length,first_idx:rows.length?Math.min(...rows.map(x=>x.part_index)):null,
+              last_idx:rows.length?Math.max(...rows.map(x=>x.part_index)):null,
+              bytes:rows.reduce((acc,x)=>acc+x.payload.length,0)};
+          }
+          if (sql.includes("FROM media_files")) {
+            const [topic,file_id,now]=args;
+            const item=this.mediaFiles.find(x=>x.topic===topic&&x.file_id===file_id&&x.expires_at>now);
+            return item?{chunk_count:item.chunk_count,encoded_bytes:item.encoded_bytes}:null;
+          }
+          if (sql.includes("FROM media_parts")) {
+            const [topic,file_id,index,now]=args;
+            const item=this.mediaParts.find(x=>x.topic===topic&&x.file_id===file_id&&x.part_index===index&&x.expires_at>now);
+            return item?{payload:item.payload}:null;
+          }
           if (!sql.includes("MAX(seq)")) throw new Error("Unhandled first query");
           const matches = this.rows.filter(row => row.topic === args[0]);
           return { upper_seq: Math.max(0, ...matches.map(x => x.seq)) };
