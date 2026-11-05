@@ -50,7 +50,7 @@ jobs:
         run: |
           set -euo pipefail
           npx wrangler deploy | tee "$RUNNER_TEMP/ehtid-deploy.log"
-          URL="$(grep -Eo 'https://[[:alnum:].-]+\\.workers\\.dev' "$RUNNER_TEMP/ehtid-deploy.log" | head -1 || true)"
+          URL="$(grep -Eo 'https://[[:alnum:].-]+[.]workers[.]dev' "$RUNNER_TEMP/ehtid-deploy.log" | head -1 || true)"
           test -n "$URL" || { echo "::error::No workers.dev URL in deployment logs"; exit 1; }
           echo "### EHTID Chat v1.0 • code-only Cloudflare" >> "$GITHUB_STEP_SUMMARY"
           echo "Server URL: $URL" >> "$GITHUB_STEP_SUMMARY"
@@ -68,5 +68,5 @@ jobs:
           curl -fsS -X POST -H "Content-Type: text/plain; charset=utf-8" -H "Cache: no" -H "Authorization: Bearer $CHECK_ACCESS" --data-binary "$SMOKE_MESSAGE" "$URL/$CHECK_TOPIC" |
             node -e "let s='';process.stdin.on('data',x=>s+=x).on('end',()=>{if(!JSON.parse(s).accepted)process.exit(1)})"
           curl -fsS -H "Authorization: Bearer $CHECK_ACCESS" "$URL/$CHECK_TOPIC/json?since=30m" |
-            node -e "let s='';process.stdin.on('data',x=>s+=x).on('end',()=>{if(!s.split('\\n').filter(Boolean).some(x=>JSON.parse(x).message==='v1.AAAAAAAAAAAAAAAA.BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'))process.exit(1)})"
+            node -e "let s='';process.stdin.on('data',x=>s+=x).on('end',()=>{if(!s.trim().split(String.fromCharCode(10)).some(x=>JSON.parse(x).message==='v1.AAAAAAAAAAAAAAAA.BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'))process.exit(1)})"
           echo "Live health, room authentication and D1 encrypted packet round-trip passed." >> "$GITHUB_STEP_SUMMARY"
