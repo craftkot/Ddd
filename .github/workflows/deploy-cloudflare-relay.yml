@@ -1,5 +1,10 @@
 name: Deploy EHTID Relay to Cloudflare
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/deploy-cloudflare-relay.yml
   workflow_dispatch:
 
 jobs:
@@ -11,7 +16,6 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      RELAY_ACCESS_TOKEN: ${{ secrets.EHTID_RELAY_TOKEN }}
     defaults:
       run:
         working-directory: cloudflare-relay
@@ -27,7 +31,6 @@ jobs:
         run: |
           test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo "::error::Missing CLOUDFLARE_API_TOKEN"; exit 1; }
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo "::error::Missing CLOUDFLARE_ACCOUNT_ID"; exit 1; }
-          test "${#RELAY_ACCESS_TOKEN}" -ge 24 || { echo "::error::EHTID_RELAY_TOKEN must contain at least 24 characters"; exit 1; }
           node --check src/index.mjs
           node --test
       - name: Install Wrangler
@@ -43,21 +46,27 @@ jobs:
           node -e "const f=require('fs'); const list=JSON.parse(f.readFileSync(process.argv[1])); const found=list.find(x=>x.name==='ehtid-chat'); if(!found||!found.uuid) throw Error('EHTID D1 not found'); let cfg=f.readFileSync('wrangler.toml','utf8'); cfg=cfg.replace(/database_id = \"[a-f0-9-]+\"/, 'database_id = \"'+found.uuid+'\"'); f.writeFileSync('wrangler.toml',cfg)" "$RUNNER_TEMP/ehtid-d1-list.json"
       - name: Initialize D1 schema (safe to repeat)
         run: npx wrangler d1 execute ehtid-chat --remote --file=./schema.sql --yes
-      - name: Deploy and smoke-test authenticated Worker
+      - name: Deploy and smoke-test room-code Worker
         run: |
           set -euo pipefail
-          trap 'rm -f .env.production' EXIT
-          umask 077
-          printf 'RELAY_ACCESS_TOKEN=%s\n' "$RELAY_ACCESS_TOKEN" > .env.production
-          npx wrangler deploy --secrets-file .env.production | tee "$RUNNER_TEMP/ehtid-deploy.log"
-          URL="$(grep -Eo 'https://[[:alnum:].-]+\.workers\.dev' "$RUNNER_TEMP/ehtid-deploy.log" | head -1 || true)"
-          if [ -z "$URL" ]; then
-            echo "::warning::Worker deployed but public URL could not be parsed from Wrangler output"
-            echo "Copy the HTTPS workers.dev address from the deployment logs."
-          else
-            echo "### EHTID Cloudflare Worker" >> "$GITHUB_STEP_SUMMARY"
-            echo "Server URL: $URL" >> "$GITHUB_STEP_SUMMARY"
-            curl -fsS "$URL/health" | node -e "let s='';process.stdin.on('data',x=>s+=x).on('end',()=>{if(!JSON.parse(s).ok)process.exit(1)})"
-            curl -fsS -H "Authorization: Bearer $RELAY_ACCESS_TOKEN" "$URL/auth" | node -e "let s='';process.stdin.on('data',x=>s+=x).on('end',()=>{if(!JSON.parse(s).authenticated)process.exit(1)})"
-            echo "Deployment and authenticated health checks passed." >> "$GITHUB_STEP_SUMMARY"
-          fi
+          npx wrangler deploy | tee "$RUNNER_TEMP/ehtid-deploy.log"
+          URL="$(grep -Eo 'https://[[:alnum:].-]+\\.workers\\.dev' "$RUNNER_TEMP/ehtid-deploy.log" | head -1 || true)"
+          test -n "$URL" || { echo "::error::No workers.dev URL in deployment logs"; exit 1; }
+          echo "### EHTID Chat v1.0 • code-only Cloudflare" >> "$GITHUB_STEP_SUMMARY"
+          echo "Server URL: $URL" >> "$GITHUB_STEP_SUMMARY"
+          curl -fsS --retry 5 --retry-delay 2 "$URL/health" |
+            node -e "let s='';process.stdin.on('data',x=>s+=x).on('end',()=>{const j=JSON.parse(s);if(!j.ok||j.version!=='1.0'||j.authentication!=='per-room-capability')process.exit(1)})"
+          # Synthetic test room; no real user room codes or API secrets are logged.
+          CHECK_ACCESS="$(node -e 'const c=require("crypto");console.log(c.createHash("sha256").update("EHTID-RELAY-ACCESS-V1:EHTIDTESTROOM88Z99").digest("hex"))')"
+          CHECK_TOPIC="ehtidp2p-$(node -e 'const c=require("crypto");console.log(c.createHash("sha256").update(process.argv[1]).digest("hex").slice(0,40))' "$CHECK_ACCESS")"
+          curl -fsS -H "Authorization: Bearer $CHECK_ACCESS" "$URL/auth?topic=$CHECK_TOPIC" |
+            node -e "let s='';process.stdin.on('data',x=>s+=x).on('end',()=>{if(!JSON.parse(s).authenticated)process.exit(1)})"
+          UNAUTH="$(curl --silent --output /dev/null --write-out '%{http_code}' "$URL/auth?topic=$CHECK_TOPIC")"
+          test "$UNAUTH" = "401" || { echo "::error::Missing token was not rejected"; exit 1; }
+          # Verify real D1 write and subsequent read using a synthetic room.
+          SMOKE_MESSAGE="v1.AAAAAAAAAAAAAAAA.BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+          curl -fsS -X POST -H "Content-Type: text/plain; charset=utf-8" -H "Cache: no" -H "Authorization: Bearer $CHECK_ACCESS" --data-binary "$SMOKE_MESSAGE" "$URL/$CHECK_TOPIC" |
+            node -e "let s='';process.stdin.on('data',x=>s+=x).on('end',()=>{if(!JSON.parse(s).accepted)process.exit(1)})"
+          curl -fsS -H "Authorization: Bearer $CHECK_ACCESS" "$URL/$CHECK_TOPIC/json?since=30m" |
+            node -e "let s='';process.stdin.on('data',x=>s+=x).on('end',()=>{if(!s.split('\\n').filter(Boolean).some(x=>JSON.parse(x).message==='v1.AAAAAAAAAAAAAAAA.BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'))process.exit(1)})"
+          echo "Live health, room authentication and D1 encrypted packet round-trip passed." >> "$GITHUB_STEP_SUMMARY"
