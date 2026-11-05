@@ -7,10 +7,12 @@ const room="EHTIDTESTROOM88Z99"; // public synthetic test room, no user audio
 const hash=s=>createHash("sha256").update(s,"utf8").digest("hex");
 const bearer=hash("EHTID-RELAY-ACCESS-V1:"+room);
 const topic="ehtidp2p-"+hash(bearer).slice(0,40);
-const audio=await readFile(process.argv[2]||"/tmp/ehtid-test-voice.m4a");
+const filename=process.argv[2]||"/tmp/ehtid-test-voice.wav";
+const audio=await readFile(filename);
+const mime=filename.endsWith(".wav")?"audio/wav":"audio/mp4";
 assert.ok(audio.length>=100&&audio.length<2*1024*1024);
 const r=await fetch(ROOT+"/"+topic+"/transcribe",{
- method:"POST",headers:{"Authorization":"Bearer "+bearer,"Content-Type":"audio/mp4"},
+ method:"POST",headers:{"Authorization":"Bearer "+bearer,"Content-Type":mime},
  body:audio,signal:AbortSignal.timeout(100000)
 });
 const result=await r.json();
