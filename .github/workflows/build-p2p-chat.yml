@@ -94,7 +94,7 @@ jobs:
             gh release upload "$TAG" "$RELEASE_APK" --clobber --repo "$GITHUB_REPOSITORY"
             gh release edit "$TAG" --target "$GITHUB_SHA" --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" "$RELEASE_APK" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "EHTID P2P Chat v1.1 (Android beta)" --notes "EHTID Chat v1.1: encrypted file sharing up to 10 MiB, photos and voice notes inline, Cloudflare AI Whisper voice transcription only with explicit consent, private wallpapers, swipe-right participant details with timestamps, swipe-left profile/settings. Code-only Cloudflare Worker. Server and Android v1.1 required for attachments. Permanent signing identity unchanged; installs over v1.0 without deleting local history. Beta: real two-phone media tests pending." --prerelease
+            gh release create "$TAG" "$RELEASE_APK" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "EHTID P2P Chat v1.1 (Android beta)" --notes "EHTID Chat v1.1: encrypted file sharing up to 10 MiB, photos and voice notes inline, Cloudflare AI Whisper voice transcription only with explicit consent, private wallpapers, swipe-right participant details with timestamps, swipe-left profile/settings. Code-only Cloudflare Worker. Server and Android v1.1 required for attachments. Permanent signing identity unchanged; installs over v1.0 without deleting local history. Workers AI Whisper verified with synthetic WAV and Android-format AAC/M4A on live Cloudflare; actual two-phone Android media exchange still requires device testing." --prerelease
           fi
       - name: Smoke test APK in Android emulator
         continue-on-error: true
