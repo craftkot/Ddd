@@ -252,7 +252,7 @@ public final class MediaTransfer {
             throw new java.io.IOException("Повреждённое вложение");
         byte[] clear=decrypt(decode(encrypted.toString()),room);
         if(clear.length!=bytes)throw new java.io.IOException("Размер не совпадает");
-        File temp=new File(cache,id+".tmp");
+        File temp=new File(local.getParentFile(),id+".tmp");
         try(FileOutputStream out=new FileOutputStream(temp)){out.write(clear);}
         if(!temp.renameTo(local)){
             temp.delete();
