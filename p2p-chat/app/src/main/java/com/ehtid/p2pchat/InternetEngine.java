@@ -54,7 +54,7 @@ public final class InternetEngine {
     }
     private static final int MAX_HISTORY = 100;
     private static final long HISTORY_COOLDOWN_MS = RoomPolicy.HISTORY_COOLDOWN_MS;
-    private static final String DEFAULT_RELAY = "";
+    private static final String DEFAULT_RELAY = "https://ehtid-chat-relay.craftkot404.workers.dev";
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newCachedThreadPool();
     private final ExecutorService sender = Executors.newSingleThreadExecutor();
@@ -110,11 +110,11 @@ public final class InternetEngine {
         room = normalize(code);
         appContext = context.getApplicationContext();
         prefs = appContext.getSharedPreferences("internet_p2p", Context.MODE_PRIVATE);
-        meshMode = appContext.getSharedPreferences("ui_settings",Context.MODE_PRIVATE)
-                .getBoolean("mesh_mode",false);
+        // Room-code-only cloud mode: even a legacy setting from a previous
+        // APK must not silently switch new users into manual P2P pairing.
+        meshMode = false;
         relay = getRelayServer(appContext);
-        relayToken = appContext.getSharedPreferences("ui_settings", Context.MODE_PRIVATE)
-                .getString("relay_token", "");
+        relayToken = RoomAccess.bearer(room);
         nextRelaySendAt = prefs.getLong("retry_until_" + relay, 0L);
         String savedId = prefs.getString("device_id", null);
         if (savedId == null) {
@@ -131,9 +131,10 @@ public final class InternetEngine {
         guestMode = "guest".equals(role);
         byte[] digest = sha(room.getBytes(StandardCharsets.UTF_8));
         aes = new SecretKeySpec(digest, "AES");
-        StringBuilder t = new StringBuilder("ehtidp2p-");
-        for (int i = 0; i < 20; i++) t.append(String.format(java.util.Locale.US, "%02x", digest[i] & 0xff));
-        topic = t.toString();
+        // Distinct access-specific topic: Cloudflare checks SHA-256 of the
+        // per-room capability instead of requiring the owner's shared token.
+        // The original AES key is unchanged, so local history remains readable.
+        topic = RoomAccess.topic(room);
         try {
             JSONArray old = new JSONArray(prefs.getString("msgs_" + room, "[]"));
             for (int i = 0; i < old.length(); i++) {
@@ -154,12 +155,9 @@ public final class InternetEngine {
     }
 
     public static String getRelayServer(Context context) {
-        String raw = context.getSharedPreferences("ui_settings",Context.MODE_PRIVATE)
-                .getString("relay_url",DEFAULT_RELAY);
-        String normalized=HomeServerUrl.normalize(raw);
-        // A previous release may have saved the public relay. Do not silently
-        // reconnect to ntfy.sh after the migration to a personal PC server.
-        return "https://ntfy.sh".equals(normalized) ? "" : normalized;
+        // This is public infrastructure configuration, not an API secret.
+        // Never bundle EHTID_RELAY_TOKEN or CLOUDFLARE_API_TOKEN in an APK.
+        return DEFAULT_RELAY;
     }
 
     public static String normalize(String raw) {
@@ -534,11 +532,10 @@ public final class InternetEngine {
                 conn.setConnectTimeout(12000);
                 conn.setReadTimeout(180000);
                 conn.setRequestProperty("Accept", "application/x-ndjson");
-                if (relayToken != null && !relayToken.isEmpty())
-                    conn.setRequestProperty("Authorization", "Bearer " + relayToken);
+                conn.setRequestProperty("Authorization", "Bearer " + relayToken);
                 int http = conn.getResponseCode();
                 if (http != 200) {
-                    if (http == 401) throw new java.io.IOException("HTTP 401: неверный ключ Cloudflare");
+                    if (http == 401) throw new java.io.IOException("HTTP 401: комната не авторизована");
                     if (http == 503) throw new java.io.IOException("HTTP 503: лимиты Cloudflare или сервер недоступен");
                     throw new java.io.IOException("HTTP " + http);
                 }
@@ -566,7 +563,7 @@ public final class InternetEngine {
                 // presence/hello every time: that rapidly exhausts ntfy quota.
                 // D1 provides the recent encrypted history itself. No WebRTC
                 // offer/hello required and no guest can evict another visitor.
-                if (System.currentTimeMillis()-lastPresenceSent > 30*60*1000L)
+                if (System.currentTimeMillis()-lastPresenceSent > 4*60*1000L)
                     announcePresence();
                 try (BufferedReader br = new BufferedReader(new InputStreamReader(
                         conn.getInputStream(), StandardCharsets.UTF_8))) {
@@ -823,8 +820,7 @@ public final class InternetEngine {
             conn.setRequestProperty("Content-Type", "text/plain; charset=utf-8");
             conn.setRequestProperty("Cache", cache ? "yes" : "no");
             conn.setRequestProperty("Priority", "1");
-            if (relayToken != null && !relayToken.isEmpty())
-                conn.setRequestProperty("Authorization", "Bearer " + relayToken);
+            conn.setRequestProperty("Authorization", "Bearer " + relayToken);
             byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
             conn.setFixedLengthStreamingMode(bytes.length);
             try (OutputStream out = conn.getOutputStream()) { out.write(bytes); }
@@ -841,7 +837,7 @@ public final class InternetEngine {
             publishMembers();
             if (response == 429) {
                 long minutes = (delay + 59999L) / 60000L;
-                status("HTTP 429: лимит публичного реле. Повтор через ~" +
+                status("HTTP 429: лимит Cloudflare. Повтор через ~" +
                         Math.max(1,minutes) + " мин; " + queuedCount() + " в очереди");
             } else {
                 status("Реле HTTP " + response + ": повторная отправка позже, очередь " +
