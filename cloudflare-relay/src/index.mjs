@@ -16,6 +16,8 @@ const POLL_SECONDS = 10;
 // Limit plaintext source attachments to 10 MiB. AES-GCM adds 28 bytes
 // (12 byte nonce and 16 byte tag), then base64url uses about 4/3 storage.
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_TRANSCRIBE_BYTES = 2 * 1024 * 1024;
+const MAX_TRANSCRIBE_DAILY = 80;
 const MAX_ENCODED_BYTES = Math.ceil((MAX_FILE_BYTES + 28) * 4 / 3) + 3;
 const MEDIA_CHUNK_BYTES = 196608;
 const MAX_MEDIA_PARTS = Math.ceil(MAX_ENCODED_BYTES / MEDIA_CHUNK_BYTES);
@@ -173,6 +175,58 @@ async function subscribe(request, env, topic, url) {
   });
 }
 
+
+async function transcribeVoice(request,env) {
+  if(!env.AI || typeof env.AI.run!=="function")
+    return responseJson({ok:false,error:"Workers AI not enabled"},503);
+  const ct=(request.headers.get("Content-Type")||"").toLowerCase();
+  if(!/^audio\/(mp4|mpeg|m4a|ogg|webm|wav|x-wav)(;|$)/.test(ct))
+    return responseJson({ok:false,error:"unsupported audio content type"},415);
+  const len=Number(request.headers.get("Content-Length"));
+  if(Number.isFinite(len)&&len>MAX_TRANSCRIBE_BYTES)
+    return responseJson({ok:false,error:"voice note too large for transcription (2 MiB)"},413);
+  const reader=request.body?.getReader();
+  if(!reader)return responseJson({ok:false,error:"missing audio"},400);
+  const chunks=[];
+  let total=0;
+  while(true){
+    const {done,value}=await reader.read();
+    if(done)break;
+    total+=value.byteLength;
+    if(total>MAX_TRANSCRIBE_BYTES){
+      await reader.cancel();
+      return responseJson({ok:false,error:"voice note too large for transcription (2 MiB)"},413);
+    }
+    chunks.push(value);
+  }
+  if(total<100)return responseJson({ok:false,error:"empty voice note"},400);
+  const day=new Date().toISOString().slice(0,10);
+  const limit=await env.DB.prepare(
+    "INSERT INTO ai_usage(day,requests) VALUES(?,1) " +
+    "ON CONFLICT(day) DO UPDATE SET requests=requests+1 WHERE requests<? " +
+    "RETURNING requests"
+  ).bind(day,MAX_TRANSCRIBE_DAILY).first();
+  if(!limit)return responseJson({ok:false,error:"daily voice recognition limit"},429,{"Retry-After":"3600"});
+
+  const raw=new Uint8Array(total);
+  let ptr=0;
+  for(const chunk of chunks){raw.set(chunk,ptr);ptr+=chunk.length;}
+  // Workers AI accepts base64 audio. Copy in bounded slices to avoid
+  // argument-limit errors or huge intermediate function calls.
+  let binary="";
+  for(let i=0;i<raw.length;i+=8192)
+    binary+=String.fromCharCode(...raw.subarray(i,i+8192));
+  try {
+    const result=await env.AI.run("@cf/openai/whisper",{audio:btoa(binary)});
+    const transcript=typeof result?.text==="string"?result.text.trim():"";
+    if(!transcript)return responseJson({ok:false,error:"no speech detected"},422);
+    return responseJson({ok:true,text:transcript.slice(0,3000)});
+  } catch(error) {
+    console.error("Whisper unavailable:",String(error?.message||error).slice(0,150));
+    return responseJson({ok:false,error:"voice recognition temporarily unavailable"},503);
+  }
+}
+
 const FILE_ID = /^[a-f0-9]{32}$/;
 
 async function mediaRoute(request, env, topic, parts) {
@@ -258,7 +312,7 @@ export default {
           storage: "D1",
           version: "1.1",
           authentication: "per-room-capability",
-          features: ["media-chunks-v1"],
+          features: ["media-chunks-v1", ...(env.AI ? ["voice-transcription-opt-in"] : [])],
           publicAccess: false,
         }, env.DB ? 200 : 503);
       }
@@ -275,7 +329,7 @@ export default {
       const parts = url.pathname.split("/").filter(Boolean);
       const topic = parts[0];
       if (!topic || !TOPIC.test(topic) || parts.length>4 ||
-          (parts.length===2 && parts[1]!=="json") ||
+          (parts.length===2 && parts[1]!=="json" && parts[1]!=="transcribe") ||
           (parts.length>2 && parts[1]!=="files")) {
         return responseJson({ ok: false, error: "not found" }, 404);
       }
@@ -285,6 +339,8 @@ export default {
       if (!(await authorizedRoom(request, topic))) {
         return responseJson({ ok: false, error: "room access denied" }, 401);
       }
+      if (parts.length===2 && parts[1]==="transcribe" && request.method==="POST")
+        return await transcribeVoice(request,env);
       if (parts.length===4 && parts[1]==="files")
         return await mediaRoute(request,env,topic,parts);
       if (parts.length === 1 && request.method === "POST") return await publish(request, env, topic);
@@ -306,5 +362,8 @@ export default {
     ctx.waitUntil(env.DB.prepare(
       "DELETE FROM media_files WHERE expires_at <= ?"
     ).bind(Date.now()).run());
+    ctx.waitUntil(env.DB.prepare(
+      "DELETE FROM ai_usage WHERE day < ?"
+    ).bind(new Date(Date.now()-3*86400000).toISOString().slice(0,10)).run());
   },
 };
