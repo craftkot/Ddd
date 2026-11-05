@@ -61,7 +61,7 @@ public final class InternetEngine {
     private final ScheduledExecutorService clock = Executors.newSingleThreadScheduledExecutor();
     private final SharedPreferences prefs;
     private final Listener listener;
-    private final String room, id, topic, relay;
+    private final String room, id, topic, relay, relayToken;
     private final boolean meshMode;
     private volatile PeerMesh mesh;
     private final Map<String, JSONObject> pending = new LinkedHashMap<>();
@@ -113,6 +113,8 @@ public final class InternetEngine {
         meshMode = appContext.getSharedPreferences("ui_settings",Context.MODE_PRIVATE)
                 .getBoolean("mesh_mode",false);
         relay = getRelayServer(appContext);
+        relayToken = appContext.getSharedPreferences("ui_settings", Context.MODE_PRIVATE)
+                .getString("relay_token", "");
         nextRelaySendAt = prefs.getLong("retry_until_" + relay, 0L);
         String savedId = prefs.getString("device_id", null);
         if (savedId == null) {
@@ -308,7 +310,7 @@ public final class InternetEngine {
 
     public void start() {
         if (!meshMode && relay.isEmpty()) {
-            status("Укажи HTTPS-адрес домашнего сервера через кнопку «Сервер ПК»");
+            status("Укажи адрес Cloudflare Workers в настройках сервера");
             publishMembers();
             return;
         }
@@ -390,7 +392,7 @@ public final class InternetEngine {
         // explicit enter/exit status is sent immediately by setChatVisible().
         clock.scheduleAtFixedRate(() -> {
             if (stopped || !relayOnline) return;
-            long interval = chatVisible ? 30*60*1000L : 90*60*1000L;
+            long interval = chatVisible ? 4*60*1000L : 12*60*1000L;
             // No heartbeat publications for an empty room.
             if (snapshotMembers().size() > 1 &&
                     System.currentTimeMillis()-lastPresenceSent >= interval)
@@ -402,9 +404,7 @@ public final class InternetEngine {
         }, 30, 60*60, TimeUnit.SECONDS);
         clock.scheduleAtFixedRate(() -> {
             if (stopped || !relayOnline) return;
-            if (guestMode && !direct() && snapshotMembers().size() > 1 &&
-                    System.currentTimeMillis() - lastHelloSent > 4*60*60*1000L)
-                sendHello();
+            // Cloudflare D1 is authoritative for history; no guest hello needed.
         }, 2, 4*60*60, TimeUnit.SECONDS);
     }
 
@@ -522,9 +522,10 @@ public final class InternetEngine {
     private void readRelay() {
         int failures = 0;
         while (!stopped) {
+            long cloudPollDelayMs = 0;
             HttpURLConnection conn = null;
             try {
-                String suffix = lastRelayId == null ? "30m" : lastRelayId;
+                String suffix = lastRelayId == null ? "7d" : lastRelayId;
                 String endpoint = relay + "/" + topic + "/json?since=" +
                         java.net.URLEncoder.encode(suffix, "UTF-8");
                 conn = (HttpURLConnection) new URL(endpoint).openConnection();
@@ -532,8 +533,24 @@ public final class InternetEngine {
                 conn.setConnectTimeout(12000);
                 conn.setReadTimeout(180000);
                 conn.setRequestProperty("Accept", "application/x-ndjson");
+                if (relayToken != null && !relayToken.isEmpty())
+                    conn.setRequestProperty("Authorization", "Bearer " + relayToken);
                 int http = conn.getResponseCode();
-                if (http != 200) throw new java.io.IOException("HTTP " + http);
+                if (http != 200) {
+                    if (http == 401) throw new java.io.IOException("HTTP 401: неверный ключ Cloudflare");
+                    if (http == 503) throw new java.io.IOException("HTTP 503: лимиты Cloudflare или сервер недоступен");
+                    throw new java.io.IOException("HTTP " + http);
+                }
+                long pollDelayMs = 0;
+                String pollHeader = conn.getHeaderField("X-EHTID-Poll-Seconds");
+                if (pollHeader != null) {
+                    try {
+                        int seconds = Integer.parseInt(pollHeader);
+                        if (seconds >= 5 && seconds <= 120)
+                            pollDelayMs = Math.max(chatVisible ? 10_000L : 30_000L, seconds * 1000L);
+                    } catch (NumberFormatException ignored) {}
+                }
+                cloudPollDelayMs = pollDelayMs;
                 relayOnline = true;
                 failures = 0;
                 publishMembers();
@@ -546,8 +563,8 @@ public final class InternetEngine {
                 }
                 // The HTTP stream reconnects after idle timeouts. Do not send
                 // presence/hello every time: that rapidly exhausts ntfy quota.
-                if (guestMode && System.currentTimeMillis()-lastHelloSent > 4*60*60*1000L)
-                    sendHello();
+                // D1 provides the recent encrypted history itself. No WebRTC
+                // offer/hello required and no guest can evict another visitor.
                 if (System.currentTimeMillis()-lastPresenceSent > 30*60*1000L)
                     announcePresence();
                 try (BufferedReader br = new BufferedReader(new InputStreamReader(
@@ -557,7 +574,13 @@ public final class InternetEngine {
                         if (line.length() > 18000) continue;
                         JSONObject event;
                         try { event = new JSONObject(line); } catch (Exception ignored) { continue; }
-                        if (!"message".equals(event.optString("event"))) continue;
+                        String eventType = event.optString("event");
+                        if ("cursor".equals(eventType)) {
+                            String cursor = event.optString("id");
+                            if (cursor.matches("e[0-9]{1,18}")) lastRelayId = cursor;
+                            continue;
+                        }
+                        if (!"message".equals(eventType)) continue;
                         String eventId = event.optString("id");
                         if (eventId.length() > 0) lastRelayId = eventId;
                         receiveFragment(event.optString("message"));
@@ -576,7 +599,11 @@ public final class InternetEngine {
                 if (streamConnection == conn) streamConnection = null;
             }
             if (stopped) break;
-            try { Thread.sleep(Math.min(12000, 1000L + failures * 1800L)); }
+            long delay = failures > 0
+                ? Math.min(300_000L, 3000L * (1L << Math.min(failures, 6)))
+                : (chatVisible ? 10_000L : 30_000L);
+            if (failures == 0 && cloudPollDelayMs > 0) delay = cloudPollDelayMs;
+            try { Thread.sleep(delay); }
             catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
         }
     }
@@ -795,6 +822,8 @@ public final class InternetEngine {
             conn.setRequestProperty("Content-Type", "text/plain; charset=utf-8");
             conn.setRequestProperty("Cache", cache ? "yes" : "no");
             conn.setRequestProperty("Priority", "1");
+            if (relayToken != null && !relayToken.isEmpty())
+                conn.setRequestProperty("Authorization", "Bearer " + relayToken);
             byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
             conn.setFixedLengthStreamingMode(bytes.length);
             try (OutputStream out = conn.getOutputStream()) { out.write(bytes); }
