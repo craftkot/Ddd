@@ -56,4 +56,10 @@ jobs:
             node -e "let s='';process.stdin.on('data',x=>s+=x).on('end',()=>{if(!JSON.parse(s).authenticated)process.exit(1)})"
           UNAUTH="$(curl --silent --output /dev/null --write-out '%{http_code}' "$URL/auth?topic=$CHECK_TOPIC")"
           test "$UNAUTH" = "401" || { echo "::error::Missing token was not rejected"; exit 1; }
-          echo "Live health check and per-room authentication passed." >> "$GITHUB_STEP_SUMMARY"
+          # Verify real D1 write and subsequent read using a synthetic room.
+          SMOKE_MESSAGE="v1.AAAAAAAAAAAAAAAA.BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+          curl -fsS -X POST -H "Content-Type: text/plain; charset=utf-8" -H "Cache: no" -H "Authorization: Bearer $CHECK_ACCESS" --data-binary "$SMOKE_MESSAGE" "$URL/$CHECK_TOPIC" |
+            node -e "let s='';process.stdin.on('data',x=>s+=x).on('end',()=>{if(!JSON.parse(s).accepted)process.exit(1)})"
+          curl -fsS -H "Authorization: Bearer $CHECK_ACCESS" "$URL/$CHECK_TOPIC/json?since=30m" |
+            node -e "let s='';process.stdin.on('data',x=>s+=x).on('end',()=>{if(!s.split('\\n').filter(Boolean).some(x=>JSON.parse(x).message==='v1.AAAAAAAAAAAAAAAA.BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'))process.exit(1)})"
+          echo "Live health, room authentication and D1 encrypted packet round-trip passed." >> "$GITHUB_STEP_SUMMARY"
