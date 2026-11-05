@@ -243,7 +243,7 @@ test("media rejects attachments larger than 10 MiB, invalid ids and oversized ch
 test("opt-in voice transcription requires room authorization, media type and limits",async()=>{
   const e=environment();
   e.AI={run:async(model,params)=>{
-    assert.equal(model,"@cf/openai/whisper");
+    assert.equal(model,"@cf/openai/whisper-large-v3-turbo");
     assert.ok(params.audio.length>50);
     return {text:"Привет, это тестовая расшифровка"};
   }};
