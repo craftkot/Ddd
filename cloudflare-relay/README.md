@@ -1,117 +1,95 @@
-# EHTID Chat — Cloudflare Workers + D1
+# EHTID Cloudflare Relay v1.0 — join by room code only
 
-**This is the relay backend for EHTID Chat v0.9 (Android).**
-It requires no Windows PC, no public IPv4, no Tailscale and no paid VPS.
-The server is a small Worker exposing the existing encrypted-message protocol.
+Cloudflare Workers + D1 backend for Android EHTID Chat v1.0.
+The public infrastructure URL is baked into the Android APK:
+`https://ehtid-chat-relay.craftkot404.workers.dev`.
 
-## How it works
+**A new participant needs only the APK and a 20-character room code.**
+They do **not** need a Cloudflare account, GitHub account, relay URL or
+owner-wide server token. Cloudflare is operated and billed by the account owner.
 
-- `POST /ehtidp2p-{40-hex}`: accept an encrypted `v1.` message or `frag1:` packet.
-- `GET /ehtidp2p-{40-hex}/json?since=7d|e{seq}`: return up to 150
-  recent events as JSON Lines (compatible with previous Android releases).
-- `GET /health`: check service health (public, no secrets).
-- `GET /auth`: validate a privately shared bearer key.
-- Data is stored **only as ciphertext** in D1. Normal messages have a 7-day
-  server retention; short-lived presence packets expire after 12 minutes.
-  Expired entries are pruned on a six-hour cron.
-- Clients poll no more often than every 10 seconds while the chat is visible,
-  or 30 seconds in the background. Responses include stable cursors.
-- The server expects a secret header `Authorization: Bearer <key>` on all
-  room reads and writes. Anyone without this key receives HTTP 401.
-- Every participant needs the same Worker URL, the same shared relay key and
-  the same **room code**. The room code supplies the AES-GCM key to clients.
-  Server operators and Cloudflare can see metadata and encrypted packets,
-  but the Worker does not decrypt messages.
-- No fallback to the public ntfy.sh service.
+## Security model (no secrets baked into the APK)
 
-## Option 1: deploy from GitHub Actions (no local software)
+Every client independently calculates:
 
-**The Cloudflare account must be yours.** Merely having the source files in
-GitHub does not create a Worker or D1 database.
-
-1. Register or log into [Cloudflare](https://dash.cloudflare.com/).
-   Activate Workers Free and a `workers.dev` subdomain if prompted.
-2. Get your **Cloudflare Account ID** from the account overview.
-3. Create a **Cloudflare API token**, scoped to that account, with
-   Workers product **Admin** (to create the first Worker) and D1 **Admin**
-   (to create the database and run its schema). Limit its lifetime, and
-   later reduce permissions if desired.
-   Documentation:
-   https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/
-4. In GitHub repository `craftkot/Ddd` open
-   **Settings → Secrets and variables → Actions → New repository secret**.
-   Add THREE secrets:
-   - `CLOUDFLARE_API_TOKEN`: the Cloudflare deployment API token.
-   - `CLOUDFLARE_ACCOUNT_ID`: the Cloudflare account ID.
-   - `EHTID_RELAY_TOKEN`: a fresh random secret of at least 24 characters,
-     *different from the Android signing password*. Keep your own copy:
-     you must enter it on every phone. Never publish it in GitHub/chat.
-5. Open [GitHub Actions → Deploy EHTID Relay to Cloudflare](https://github.com/craftkot/Ddd/actions/workflows/deploy-cloudflare-relay.yml) and choose **Run workflow** on the **`main`** branch. The deployment workflow automatically checks out the tested source code from `feature/p2p-chat`.
-   The workflow runs the tests, creates/reuses `ehtid-chat` D1, initializes
-   `schema.sql`, deploys the Worker and uploads the secret.
-6. In the completed log **Deploy authenticated Worker** copy its
-   `https://...workers.dev` address. Open `ADDRESS/health` in a browser.
-   It must return `"ok":true` and `"service":"EHTID Cloudflare Relay"`.
-7. Install the Android APK **v0.9 or newer**, tap **Cloudflare**, paste the
-   Worker URL and `EHTID_RELAY_TOKEN`, tap **Проверить**, then connect.
-   All participants use the same URL and key but never have to use Windows.
-   Share the room code privately to join the same room.
-
-> Do not confuse `CLOUDFLARE_API_TOKEN` (used by GitHub to deploy your
-> Worker) and `EHTID_RELAY_TOKEN` (used by phones to access your relay).
-> Never put the Cloudflare deployment API token into the phone.
-
-## Option 2: deploy via local Wrangler CLI
-
-Requires Node.js 22+ and access to the Cloudflare account:
-
-```powershell
-cd cloudflare-relay
-npm install
-npx wrangler login
-npx wrangler d1 create ehtid-chat --location weur
+```
+room = 20-character random private room code
+aes_key = SHA256(room)                 # Unchanged from v0.9
+token = lowercase_hex(SHA256("EHTID-RELAY-ACCESS-V1:" + room))
+topic = "ehtidp2p-" + lowercase_hex(SHA256(token))[0:40]
 ```
 
-Copy the resulting D1 database UUID into `wrangler.toml` in place of the
-all-zero placeholder. Then:
+Each read and write uses `Authorization: Bearer <token>`. The Worker
+recomputes SHA256 of the supplied token and compares its first 20 bytes
+(40 lowercase hex digits) to the topic in the URL. The server does not
+receive the original room code or `aes_key`. Those are intentionally
+different from the domain-separated room access capability.
 
-```powershell
-npx wrangler d1 execute ehtid-chat --remote --file=./schema.sql --yes
-npx wrangler deploy
-npx wrangler secret put RELAY_ACCESS_TOKEN
-```
+This is capability-based access, not individual account authentication:
+anyone who knows a room code can read that room's *encrypted* events and
+send messages. Traffic is encrypted with AES-GCM in the client, and HTTPS
+to Cloudflare. End-to-end identity verification and key rotation are not
+implemented, and the protocol has not received a security audit.
 
-Set the secret value to the same 24+ character string you will enter on the
-phones. Wrangler prints the public URL after deployment. You can also use
-`npx wrangler d1 list --json` to find an existing database UUID.
+The former `EHTID_RELAY_TOKEN` is **not used** by v1.0 and **must not be
+compiled into the APK**. The `CLOUDFLARE_API_TOKEN` also belongs only in
+GitHub Actions secrets; never put it in Android.
 
-## Running tests without Cloudflare
+## API
+
+- `GET /health`: no authentication, returns `{ok:true, version:"1.0"}`
+  when the D1 database is bound.
+- `GET /auth?topic=ehtidp2p-...`: validate the room-derived bearer
+  without publishing a message.
+- `POST /ehtidp2p-{40-hex}`: publish one opaque `v1.` or `frag1:` packet.
+- `GET /ehtidp2p-{40-hex}/json?since=7d|e{seq}`: retrieve up to 150
+  encrypted events as JSON Lines with stable cursors.
+- 7-day normal message lifetime; 12-minute short-lived presence.
+  Six-hour cron removes expired D1 events.
+
+## Deployment (the owner's Cloudflare account)
+
+The Cloudflare account, D1 `ehtid-chat`, and GitHub connection have
+already been configured for this EHTID server. Run:
+
+[GitHub Actions → Deploy EHTID Relay to Cloudflare](https://github.com/craftkot/Ddd/actions/workflows/deploy-cloudflare-relay.yml)
+
+Use the **main** branch. The action checks out `feature/p2p-chat`,
+runs `node --test`, installs Wrangler, initializes D1 idempotently,
+deploys the Worker and verifies `/health` and room authentication.
+Existing GitHub secrets `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_ACCOUNT_ID` are used ONLY by the deploy job. No additional
+secrets need to be shared with room participants.
+
+The D1 binding is `DB` and configuration is in `wrangler.toml`.
+Existing D1 tables stay intact. The Worker is intended to run on
+`workers.dev` for the owner's account.
+
+### Migration from v0.9
+
+v1.0 uses a different *relay topic* because credentials can now be
+verified per room without revealing the AES key. As a result:
+
+- v0.9 and v1.0 cannot exchange live messages in the same room;
+  upgrade every participant to v1.0.
+- Previously stored cloud messages under the old topic do not appear
+  in v1.0 rooms. Existing on-device chat history is preserved because
+  room codes, AES encryption key and Android package name are unchanged.
+- The old shared `EHTID_RELAY_TOKEN` secret may be rotated or deleted
+  after migration. The v1.0 Worker never accesses it.
+
+### Quotas and abuse
+
+Cloudflare Free Workers / D1 quotas remain finite. 24/7 foreground polling
+every 10 seconds consumes approximately 8,640 requests/day **per phone**.
+Room proofs do not prevent outsiders from creating new rooms on the
+public Worker; malicious request floods can still exhaust the owner's
+free quotas. Use Cloudflare abuse/rate limiting controls as needed and
+monitor dashboard usage. Client-side encryption is not audited.
+
+To run backend tests without Cloudflare:
 
 ```sh
 cd cloudflare-relay
 node --test
 ```
-
-Tests cover authentication, opaque ciphertext, pagination, multi-client
-reads, retention, invalid packets and HTTP responses. GitHub Actions runs
-these on every change.
-
-## Real limits and weaknesses
-
-Cloudflare Workers Free: **100,000 requests/day**. D1 Free:
-**5,000,000 rows read/day; 100,000 rows written/day; 5 GB storage**.
-Limits are enforced, so *this is not an unlimited messenger*.
-For example, a chat open 24/7 consumes approximately 8,640 requests/day
-at 10-second polling (not counting sends), while an always-background phone
-uses about 2,880 requests/day at 30-second polling.
-
-One server-wide relay key is enough for this small private group, but it is
-not individual user authentication; anyone with both the relay token and room
-code can join that room. Leaked tokens can exhaust quotas. Rotation requires
-changing the Worker secret and all Android clients.
-
-No push notification service operates while Android is force-stopped,
-and Worker polling may be delayed by Android background restrictions.
-The server acknowledges ingestion, **not guaranteed recipient delivery**.
-All cryptography in this prototype is unaudited; do not use for high-sensitivity
-communications.
