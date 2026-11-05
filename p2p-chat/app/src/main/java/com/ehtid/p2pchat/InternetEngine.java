@@ -184,11 +184,9 @@ public final class InternetEngine {
         List<Member> list = new ArrayList<>();
         for (Member m : members.values()) {
             if (!m.isMe) {
-                // Mesh participants heartbeat every 30 seconds, and don't consume
-                // public broker quota. Show stale peers as offline promptly.
-                long meshTtl = m.online ? 90000L : 180000L;
-                if (meshMode ? now - m.lastSeen >= meshTtl :
-                        !RoomPolicy.isPresent(now,m.lastSeen,m.online)) continue;
+                long ttl = meshMode ? (m.online ? 90_000L : 180_000L) :
+                        (m.online ? 12*60_000L : 35*60_000L);
+                if (now - m.lastSeen >= ttl) continue;
             }
             list.add(new Member(m.id,m.name,m.lastSeen,m.pingMs,m.isMe,
                     m.isMe ? (chatVisible && (meshMode ? mesh!=null && mesh.connectedCount()>0 :
@@ -226,9 +224,12 @@ public final class InternetEngine {
     private void markMember(String peer, String nickname, Boolean visible) {
         if (peer == null || peer.isEmpty() || peer.length() > 80 || peer.equals(id)) return;
         long now = System.currentTimeMillis();
-        for (Map.Entry<String,Member> entry : members.entrySet())
-            if (!entry.getKey().equals(id) && now-entry.getValue().lastSeen > 180000L)
-                members.remove(entry.getKey(),entry.getValue());
+        for (Map.Entry<String,Member> entry : members.entrySet()) {
+            Member other=entry.getValue();
+            long ttl=meshMode ? 180_000L : (other.online ? 12*60_000L : 35*60_000L);
+            if (!entry.getKey().equals(id) && now-other.lastSeen > ttl)
+                members.remove(entry.getKey(),other);
+        }
         if (members.size() >= 64 && !members.containsKey(peer)) return;
         Member prev = members.get(peer);
         String n = nickname == null || nickname.trim().isEmpty()
