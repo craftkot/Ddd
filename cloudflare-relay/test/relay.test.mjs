@@ -15,6 +15,7 @@ class FakeD1 {
   index = 0;
   mediaParts = [];
   mediaFiles = [];
+  aiUsage = new Map();
   prepare(sql) {
     return {
       bind: (...args) => ({
@@ -45,6 +46,13 @@ class FakeD1 {
           throw new Error("Unhandled run query: " + sql);
         },
         first: async () => {
+          if(sql.includes("INSERT INTO ai_usage")) {
+            const [day,max]=args;
+            const n=this.aiUsage.get(day)||0;
+            if(n>=max)return null;
+            this.aiUsage.set(day,n+1);
+            return {requests:n+1};
+          }
           if (sql.includes("COUNT(*) AS pieces")) {
             const [topic,file_id,now]=args;
             const rows=this.mediaParts.filter(x=>x.topic===topic&&x.file_id===file_id&&x.expires_at>now);
@@ -231,6 +239,28 @@ test("media rejects attachments larger than 10 MiB, invalid ids and oversized ch
     JSON.stringify({parts:1,encodedBytes:20000000})),e)).status,413);
   assert.equal((await worker.fetch(req("POST",base+"/0","ABC".repeat(70000)),e)).status,413);
   assert.equal((await worker.fetch(req("POST","/"+TOPIC+"/files/invalid/0","AAAA"),e)).status,404);
+});
+test("opt-in voice transcription requires room authorization, media type and limits",async()=>{
+  const e=environment();
+  e.AI={run:async(model,params)=>{
+    assert.equal(model,"@cf/openai/whisper");
+    assert.ok(params.audio.length>50);
+    return {text:"Привет, это тестовая расшифровка"};
+  }};
+  const path="/"+TOPIC+"/transcribe";
+  const audio="A".repeat(1000);
+  const without=await worker.fetch(new Request(URL+path,{
+    method:"POST",headers:{"Content-Type":"audio/mp4"},body:audio
+  }),e);
+  assert.equal(without.status,401);
+  const badFormat=await worker.fetch(req("POST",path,audio,{"Content-Type":"application/json"}),e);
+  assert.equal(badFormat.status,415);
+  const tooLarge=await worker.fetch(req("POST",path,"x".repeat(2100000),{"Content-Type":"audio/mp4"}),e);
+  assert.equal(tooLarge.status,413);
+  const accepted=await worker.fetch(req("POST",path,audio,{"Content-Type":"audio/mp4"}),e);
+  assert.equal(accepted.status,200);
+  assert.equal((await accepted.json()).text,"Привет, это тестовая расшифровка");
+  assert.equal([...e.DB.aiUsage.values()][0],1);
 });
 test("history is bounded and paginated without losing later events",async()=>{
   const e=environment();
