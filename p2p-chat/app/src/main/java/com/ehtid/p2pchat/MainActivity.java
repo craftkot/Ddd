@@ -12,11 +12,20 @@ import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.media.MediaRecorder;
+import android.media.MediaPlayer;
+import android.net.Uri;
+import android.provider.OpenableColumns;
+import android.database.Cursor;
+import android.view.MotionEvent;
+import android.widget.FrameLayout;
 import android.text.InputFilter;
 import android.text.InputType;
 import android.view.Gravity;
@@ -28,9 +37,14 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
+import androidx.core.content.FileProvider;
 import org.json.JSONObject;
 import java.security.SecureRandom;
 import java.text.SimpleDateFormat;
+import java.io.File;
+import java.io.InputStream;
+import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -47,7 +61,17 @@ public final class MainActivity extends Activity {
     private EditText input, joinInput;
     private TextView status, codeLabel, profileLabel, membersLabel, homeServerLabel;
     private LinearLayout feed, membersPanel;
-    private ScrollView scroll, membersScroll;
+    private ScrollView scroll, membersScroll, peopleScroll, profileScroll;
+    private LinearLayout peopleContent, profileContent, composer;
+    private ImageView wallpaper;
+    private FrameLayout pages;
+    private TextView micButton;
+    private MediaRecorder recorder;
+    private File recordingFile;
+    private long recordStarted;
+    private MediaPlayer voicePlayer;
+    private int page=0;
+    private static final int PICK_ATTACHMENT=201, PICK_WALLPAPER=202, RECORD_PERMISSION=203;
     private ChatService service;
     private boolean bound;
     private boolean bindRequested;
@@ -70,6 +94,7 @@ public final class MainActivity extends Activity {
             currentMembers.clear();
             currentMembers.addAll(members);
             drawMembers();
+            refreshPeoplePage();
         }
         @Override public void onIncoming(String nick, String text) {}
         @Override public void onManualSignal(String token, String kind) {}
@@ -136,7 +161,7 @@ public final class MainActivity extends Activity {
         brand.addView(profileLabel);
         TextView settings = button("⚙",PANEL,21);
         heading.addView(settings,new LinearLayout.LayoutParams(dp(48),dp(45)));
-        settings.setOnClickListener(v -> settingsDialog());
+        settings.setOnClickListener(v -> showPage(2));
         root.addView(heading);
 
         LinearLayout roomBox = new LinearLayout(this);
@@ -237,16 +262,41 @@ public final class MainActivity extends Activity {
         sp.topMargin = dp(9);
         root.addView(status,sp);
 
+        pages = new SwipePages();
+        LinearLayout.LayoutParams pageLp=new LinearLayout.LayoutParams(-1,0,1f);
+        root.addView(pages,pageLp);
+
+        wallpaper = new ImageView(this);
+        wallpaper.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        pages.addView(wallpaper,new FrameLayout.LayoutParams(-1,-1));
+
         scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         scroll.setVerticalScrollBarEnabled(false);
+        scroll.setBackgroundColor(Color.TRANSPARENT);
         feed = new LinearLayout(this);
         feed.setOrientation(LinearLayout.VERTICAL);
         feed.setPadding(0,dp(11),0,dp(11));
         scroll.addView(feed,new ScrollView.LayoutParams(-1,-2));
-        root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
+        pages.addView(scroll,new FrameLayout.LayoutParams(-1,-1));
 
-        LinearLayout composer = new LinearLayout(this);
+        peopleScroll=new ScrollView(this);
+        peopleScroll.setBackgroundColor(BG);
+        peopleContent=new LinearLayout(this);
+        peopleContent.setOrientation(LinearLayout.VERTICAL);
+        peopleContent.setPadding(dp(10),dp(10),dp(10),dp(20));
+        peopleScroll.addView(peopleContent,new ScrollView.LayoutParams(-1,-2));
+        pages.addView(peopleScroll,new FrameLayout.LayoutParams(-1,-1));
+
+        profileScroll=new ScrollView(this);
+        profileScroll.setBackgroundColor(BG);
+        profileContent=new LinearLayout(this);
+        profileContent.setOrientation(LinearLayout.VERTICAL);
+        profileContent.setPadding(dp(10),dp(10),dp(10),dp(20));
+        profileScroll.addView(profileContent,new ScrollView.LayoutParams(-1,-2));
+        pages.addView(profileScroll,new FrameLayout.LayoutParams(-1,-1));
+
+        composer = new LinearLayout(this);
         composer.setGravity(Gravity.CENTER_VERTICAL);
         composer.setPadding(dp(6),dp(5),dp(5),dp(5));
         composer.setBackground(round(SURFACE,17));
@@ -259,6 +309,14 @@ public final class MainActivity extends Activity {
         input.setPadding(dp(7),dp(4),dp(7),dp(4));
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         input.setMaxLines(4);
+        micButton = button("🎤",PANEL,19);
+        composer.addView(micButton,new LinearLayout.LayoutParams(dp(43),dp(47)));
+        micButton.setOnClickListener(v->toggleRecording());
+        TextView attach=button("＋",PANEL,24);
+        LinearLayout.LayoutParams attachLp=new LinearLayout.LayoutParams(dp(43),dp(47));
+        attachLp.leftMargin=dp(4);
+        composer.addView(attach,attachLp);
+        attach.setOnClickListener(v->chooseAttachment());
         composer.addView(input,new LinearLayout.LayoutParams(0,-2,1f));
         TextView send = button("➤",ACCENT,22);
         composer.addView(send,new LinearLayout.LayoutParams(dp(51),dp(47)));
@@ -279,8 +337,87 @@ public final class MainActivity extends Activity {
         root.addView(composer);
 
         setContentView(root);
+        showPage(0);
+        applyWallpaper();
+        refreshPeoplePage();
+        refreshProfilePage();
         draw(new ArrayList<>());
         drawMembers();
+    }
+
+    private final class SwipePages extends FrameLayout {
+        private float startX,startY;
+        SwipePages(){super(MainActivity.this);}
+        @Override public boolean onInterceptTouchEvent(MotionEvent event) {
+            if(event.getActionMasked()==MotionEvent.ACTION_DOWN) {
+                startX=event.getX();startY=event.getY();
+                return false;
+            }
+            if(event.getActionMasked()==MotionEvent.ACTION_MOVE) {
+                float dx=event.getX()-startX,dy=event.getY()-startY;
+                return Math.abs(dx)>dp(54)&&Math.abs(dx)>Math.abs(dy)*1.6f;
+            }
+            return false;
+        }
+        @Override public boolean onTouchEvent(MotionEvent event) {
+            if(event.getActionMasked()==MotionEvent.ACTION_UP) {
+                float dx=event.getX()-startX;
+                if(dx>dp(65))showPage(page==2?0:1);
+                else if(dx<-dp(65))showPage(page==1?0:2);
+                return true;
+            }
+            return true;
+        }
+    }
+
+    private void showPage(int next) {
+        page=next;
+        if(scroll==null||peopleScroll==null||profileScroll==null||composer==null)return;
+        scroll.setVisibility(page==0?View.VISIBLE:View.GONE);
+        wallpaper.setVisibility(page==0?View.VISIBLE:View.GONE);
+        peopleScroll.setVisibility(page==1?View.VISIBLE:View.GONE);
+        profileScroll.setVisibility(page==2?View.VISIBLE:View.GONE);
+        composer.setVisibility(page==0?View.VISIBLE:View.GONE);
+        if(page==1)refreshPeoplePage();
+        if(page==2)refreshProfilePage();
+    }
+
+    private String fullTime(long epoch) {
+        if(epoch<=0)return "Нет данных";
+        return new SimpleDateFormat("dd.MM.yyyy HH:mm:ss",Locale.getDefault()).format(new Date(epoch));
+    }
+
+    private void refreshPeoplePage() {
+        if(peopleContent==null)return;
+        peopleContent.removeAllViews();
+        TextView title=text("Участники комнаты",21,WHITE,true);
+        peopleContent.addView(title);
+        TextView back=button("← Чат",PANEL,13);
+        peopleContent.addView(back);
+        back.setOnClickListener(v->showPage(0));
+        for(InternetEngine.Member m:currentMembers) {
+            LinearLayout card=new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding(dp(12),dp(12),dp(12),dp(12));
+            card.setBackground(round(SURFACE,14));
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);
+            p.topMargin=dp(12);
+            peopleContent.addView(card,p);
+            card.addView(text((m.online?"● ":"○ ")+m.name+(m.isMe?" (вы)":""),
+                    16,m.online?ONLINE:WHITE,true));
+            card.addView(text("Статус: "+(m.online?"в сети":"не в сети"),13,MUTED,false));
+            card.addView(text("Последний вход: "+fullTime(m.loginAt),13,MUTED,false));
+            card.addView(text("Последний сигнал: "+fullTime(m.lastSeen),13,MUTED,false));
+            card.addView(text("Пинг: "+(m.pingMs<0?"—":m.pingMs+" мс"),13,MUTED,false));
+            String device=m.id.length()>12?m.id.substring(0,12)+"…":m.id;
+            card.addView(text("Устройство: "+device,12,MUTED,false));
+        }
+        if(currentMembers.isEmpty())
+            peopleContent.addView(text("Участники ещё не обнаружены",13,MUTED,false));
+        peopleContent.addView(text(
+                "Время указано до секунды, но это не онлайн-трекинг в реальном времени. "+
+                "Сигналы приходят периодически и зависят от работы Android в фоне.",
+                12,MUTED,false));
     }
 
     private void drawMembers() {
