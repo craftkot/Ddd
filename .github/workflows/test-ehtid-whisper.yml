@@ -27,17 +27,6 @@ jobs:
           sudo apt-get install -y -qq espeak-ng ffmpeg
           espeak-ng -v en -s 130 -w /tmp/ehtid-test-voice.wav "Hello. This is a test voice recording for the EHTID chat application."
           ffmpeg -hide_banner -loglevel error -y -i /tmp/ehtid-test-voice.wav -ar 16000 -ac 1 -c:a aac -b:a 32000 /tmp/ehtid-test-voice.m4a
-      - name: Inspect Cloudflare Workers AI logs during synthetic audio request
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          npm install --no-audit --no-fund
-          (timeout 35s npx wrangler tail ehtid-chat-relay --format json > /tmp/ehtid-tail.log 2>&1) &
-          sleep 5
-          node scripts/voice-smoke.mjs /tmp/ehtid-test-voice.wav || true
-          sleep 8
-          echo "---- Workers trace (synthetic test room) ----"
-          tail -c 15000 /tmp/ehtid-tail.log || true
+      # Deploy now uses base64-compatible @cf/openai/whisper-large-v3-turbo.
       - name: End-to-end Cloudflare Whisper
         run: node scripts/voice-smoke.mjs /tmp/ehtid-test-voice.wav
