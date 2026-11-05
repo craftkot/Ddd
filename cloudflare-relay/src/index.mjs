@@ -91,7 +91,7 @@ function parseSince(raw) {
     const seq = Number(raw.slice(1));
     if (Number.isSafeInteger(seq) && seq >= 0) return { type: "cursor", seq };
   }
-  const match = /^([1-7])d$|^([1-9]|[12]\\d|30)h$/.exec(raw);
+  const match = /^([1-7])d$|^([1-9]|[12][0-9]|30)h$/.exec(raw);
   // Whitespace is not allowed in a client cursor.
   if (match && match[1]) return { type: "period", ms: Number(match[1]) * 86_400_000 };
   if (match && match[2]) return { type: "period", ms: Number(match[2]) * 3_600_000 };
