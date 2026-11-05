@@ -76,6 +76,7 @@ public final class InternetEngine {
     private final Map<String, Long> pingStart = new ConcurrentHashMap<>();
     private final Map<String, String> pingOwner = new ConcurrentHashMap<>();
     private final Map<String, Long> lastGuestHistory = new ConcurrentHashMap<>();
+    private final long sessionLoginAt = System.currentTimeMillis();
     private volatile boolean chatVisible = false;
     private volatile long lastOfferAt = 0L;
     private volatile long lastPresenceSent = 0L;
@@ -86,12 +87,15 @@ public final class InternetEngine {
     private volatile boolean showPeerPings = true;
     public static final class Member {
         public final String id, name;
-        public final long lastSeen;
+        public final long lastSeen, loginAt;
         public final int pingMs;
         public final boolean isMe, online;
-        public Member(String id, String name, long seen, int ping, boolean me, boolean online) {
-            this.id = id; this.name = name; this.lastSeen = seen;
-            this.pingMs = ping; this.isMe = me; this.online = online;
+        public Member(String id,String name,long seen,int ping,boolean me,boolean online) {
+            this(id,name,seen,ping,me,online,0L);
+        }
+        public Member(String id,String name,long seen,int ping,boolean me,boolean online,long loginAt) {
+            this.id=id; this.name=name; this.lastSeen=seen; this.pingMs=ping;
+            this.isMe=me; this.online=online; this.loginAt=loginAt;
         }
     }
     private final Map<String, Fragments> pieces = new HashMap<>();
@@ -135,7 +139,8 @@ public final class InternetEngine {
         id = savedId;
         myName = prefs.getString("nick", "Пользователь");
         myName = cleanName(myName);
-        members.put(id, new Member(id, myName, System.currentTimeMillis(), 0, true, false));
+        members.put(id, new Member(id, myName, System.currentTimeMillis(), 0, true, false, sessionLoginAt));
+        restoreKnownMembers();
         if (join) prefs.edit().putString("role_" + room, "guest").apply();
         String role = prefs.getString("role_" + room, "");
         hostMode = "host".equals(role);
@@ -180,7 +185,7 @@ public final class InternetEngine {
     public void setName(String name) {
         myName = cleanName(name);
         prefs.edit().putString("nick", myName).apply();
-        members.put(id, new Member(id, myName, System.currentTimeMillis(), 0, true, chatVisible));
+        members.put(id, new Member(id, myName, System.currentTimeMillis(), 0, true, chatVisible, sessionLoginAt));
         publishMembers();
         if (meshMode) {
             PeerMesh p=mesh;
@@ -189,28 +194,29 @@ public final class InternetEngine {
     }
     /** Presence is just a roster view; never use it to close network connections. */
     public List<Member> snapshotMembers() {
-        long now = System.currentTimeMillis();
-        List<Member> list = new ArrayList<>();
-        for (Member m : members.values()) {
-            if (!m.isMe) {
-                long ttl = meshMode ? (m.online ? 90_000L : 180_000L) :
-                        (m.online ? 12*60_000L : 35*60_000L);
-                if (now - m.lastSeen >= ttl) continue;
-            }
-            list.add(new Member(m.id,m.name,m.lastSeen,m.pingMs,m.isMe,
-                    m.isMe ? (chatVisible && (meshMode ? mesh!=null && mesh.connectedCount()>0 :
-                        relayOnline && now >= nextRelaySendAt)) :
-                        (m.online && (meshMode || relayOnline))));
+        long now=System.currentTimeMillis();
+        List<Member> list=new ArrayList<>();
+        for(Member m:members.values()) {
+            if(!m.isMe && now-m.lastSeen>30L*24*60*60*1000) continue;
+            long ttl=meshMode ? (m.online?90_000L:180_000L) :
+                    (m.online?12*60_000L:35*60_000L);
+            boolean fresh=now-m.lastSeen<=ttl;
+            boolean online=m.isMe
+                    ? (chatVisible && (meshMode?mesh!=null&&mesh.connectedCount()>0:
+                        relayOnline&&now>=nextRelaySendAt))
+                    : (m.online && fresh && (meshMode||relayOnline));
+            list.add(new Member(m.id,m.name,m.lastSeen,m.pingMs,m.isMe,online,
+                    m.isMe?sessionLoginAt:m.loginAt));
         }
-        list.sort((a,b) -> a.isMe ? -1 : b.isMe ? 1 :
-                a.online != b.online ? Boolean.compare(b.online,a.online) :
+        list.sort((a,b)->a.isMe?-1:b.isMe?1:
+                a.online!=b.online?Boolean.compare(b.online,a.online):
                 a.name.compareToIgnoreCase(b.name));
         return list;
     }
     /** The user is online only while the chat screen is actually open. */
     public void setChatVisible(boolean visible) {
         chatVisible = visible;
-        members.put(id,new Member(id,myName,System.currentTimeMillis(),0,true,visible));
+        members.put(id,new Member(id,myName,System.currentTimeMillis(),0,true,visible,sessionLoginAt));
         publishMembers();
         PeerMesh current=mesh;
         if (meshMode && current!=null) current.setVisible(visible);
@@ -236,7 +242,8 @@ public final class InternetEngine {
         for (Map.Entry<String,Member> entry : members.entrySet()) {
             Member other=entry.getValue();
             long ttl=meshMode ? 180_000L : (other.online ? 12*60_000L : 35*60_000L);
-            if (!entry.getKey().equals(id) && now-other.lastSeen > ttl)
+            if (!entry.getKey().equals(id) &&
+                    now-other.lastSeen > 30L*24*60*60*1000)
                 members.remove(entry.getKey(),other);
         }
         if (members.size() >= 64 && !members.containsKey(peer)) return;
@@ -245,7 +252,9 @@ public final class InternetEngine {
                 ? (prev == null ? "Гость" : prev.name) : cleanName(nickname);
         boolean wasVisible = prev != null && prev.online;
         boolean nowVisible = visible == null ? wasVisible : visible;
-        members.put(peer,new Member(peer,n,now,prev==null?-1:prev.pingMs,false,nowVisible));
+        members.put(peer,new Member(peer,n,now,prev==null?-1:prev.pingMs,
+                false,nowVisible,prev==null?0L:prev.loginAt));
+        persistKnownMembers();
         publishMembers();
         // Reply to a new peer (or a returning one) immediately. Subsequent
         // heartbeats do not trigger replies, avoiding an infinite ping-pong.
@@ -255,6 +264,52 @@ public final class InternetEngine {
             if (chatVisible) pingPeer(peer);
         }
     }
+    private void updateLoginTime(String peer,long loginAt) {
+        if(loginAt<=0||loginAt>System.currentTimeMillis()+5*60_000L ||
+                loginAt<System.currentTimeMillis()-30L*24*60*60*1000) return;
+        Member old=members.get(peer);
+        if(old==null) return;
+        if(old.loginAt!=loginAt) {
+            members.put(peer,new Member(peer,old.name,old.lastSeen,old.pingMs,
+                    false,old.online,loginAt));
+            persistKnownMembers();
+            publishMembers();
+        }
+    }
+
+    private void restoreKnownMembers() {
+        long now=System.currentTimeMillis();
+        try {
+            JSONArray records=new JSONArray(prefs.getString("participants_"+room,"[]"));
+            for(int i=0;i<records.length()&&i<64;i++) {
+                JSONObject row=records.optJSONObject(i);
+                if(row==null)continue;
+                String peer=row.optString("id");
+                long seen=row.optLong("seen",0);
+                if(peer.isEmpty()||peer.equals(id)||peer.length()>80 ||
+                    seen<=0||now-seen>30L*24*60*60*1000)continue;
+                members.put(peer,new Member(peer,cleanName(row.optString("name")),
+                        seen,row.optInt("ping",-1),false,false,row.optLong("login",0)));
+            }
+        } catch(Exception ignored) {}
+    }
+
+    private void persistKnownMembers() {
+        JSONArray records=new JSONArray();
+        for(Member m:members.values()) {
+            if(m.isMe)continue;
+            JSONObject row=new JSONObject();
+            put(row,"id",m.id);
+            put(row,"name",m.name);
+            put(row,"seen",m.lastSeen);
+            put(row,"ping",m.pingMs);
+            put(row,"login",m.loginAt);
+            records.put(row);
+            if(records.length()>=64)break;
+        }
+        prefs.edit().putString("participants_"+room,records.toString()).apply();
+    }
+
     private synchronized void sendHello() {
         if (stopped || !relayOnline || helloInFlight ||
                 System.currentTimeMillis() < nextRelaySendAt) return;
@@ -469,6 +524,28 @@ public final class InternetEngine {
         } else sendUserData(obj("t","msg"),msg);
     }
 
+    /** Attachments are uploaded and verified before this message is queued. */
+    public void sendAttachment(JSONObject media) {
+        if(stopped||media==null||queuedCount()>=100)return;
+        String fileId=media.optString("id");
+        int size=media.optInt("size"),parts=media.optInt("parts");
+        if(!fileId.matches("[a-f0-9]{32}")||size<1||size>MediaTransfer.MAX_FILE_BYTES
+                ||parts<1||parts>MediaTransfer.MAX_PARTS)return;
+        String kind=media.optString("kind","file");
+        String label="voice".equals(kind)?"🎤 Голосовое сообщение":
+                "image".equals(kind)?"🖼 Изображение":"📎 "+media.optString("name","Файл");
+        if(label.length()>1000)label=label.substring(0,1000);
+        JSONObject msg=obj("id",UUID.randomUUID().toString());
+        put(msg,"from",id);
+        put(msg,"name",myName);
+        put(msg,"text",label);
+        put(msg,"media",media);
+        put(msg,"at",System.currentTimeMillis());
+        put(msg,"delivery","pending");
+        append(msg);
+        sendUserData(obj("t","msg"),msg);
+    }
+
     private void sendUserData(JSONObject packet, JSONObject msg) {
         put(packet,"m",msg);
         // Direct path reaches at most one peer. Queue relay publication so it
@@ -676,6 +753,7 @@ public final class InternetEngine {
             if ("ping".equals(type) || "pong".equals(type) || "hello".equals(type))
                 markMember(from, packet.optString("name"));
             if ("msg".equals(type) && Math.abs(System.currentTimeMillis()-ts)<120000L) {
+                updateLoginTime(from,packet.optLong("login_at",0));
                 // Messages act as presence while chatting, reducing heartbeat posts.
                 Boolean senderVisible = packet.has("active") ? packet.optBoolean("active", false) : null;
                 markMember(from,packet.optString("name"),senderVisible);
@@ -683,6 +761,7 @@ public final class InternetEngine {
             switch (type) {
                 case "presence":
                     markMember(from,packet.optString("name"),packet.optBoolean("active",false));
+                    updateLoginTime(from,packet.optLong("login_at",0));
                     break;
                 case "ping":
                     JSONObject pong = obj("t", "pong");
@@ -790,6 +869,7 @@ public final class InternetEngine {
         put(packet, "name", myName);
         put(packet, "active", chatVisible);
         put(packet, "ts", System.currentTimeMillis());
+        put(packet, "login_at", sessionLoginAt);
         String wire;
         try {
             byte[] iv = new byte[12];
