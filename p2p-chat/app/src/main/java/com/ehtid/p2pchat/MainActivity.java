@@ -216,7 +216,7 @@ public final class MainActivity extends Activity {
             launchChat(target,true);
         });
 
-        TextView homeConnect=button("◉ Подключить домашний сервер",ACCENT,14);
+        TextView homeConnect=button("☁ Подключить Cloudflare",ACCENT,14);
         LinearLayout.LayoutParams hp=new LinearLayout.LayoutParams(-1,dp(46));
         hp.topMargin=dp(10);
         roomBox.addView(homeConnect,hp);
@@ -358,9 +358,9 @@ public final class MainActivity extends Activity {
         if (messages.isEmpty()) {
             TextView welcome = text(
                     "Начните разговор\n\n" +
-                    "Запусти EHTID Home Relay на компьютере, подключи HTTPS-адрес " +
-                    "через кнопку «Домашний сервер» и поделись кодом комнаты. " +
-                    "Телефоны смогут общаться через твой ПК, без ntfy.sh.",
+                    "Подключи бесплатный Cloudflare Worker через кнопку «Cloudflare». " +
+                    "Введи адрес workers.dev и общий ключ доступа. " +
+                    "Затем поделись кодом комнаты с участниками.",
                     15,MUTED,false);
             welcome.setGravity(Gravity.CENTER);
             welcome.setPadding(dp(16),dp(50),dp(16),dp(20));
@@ -503,7 +503,7 @@ public final class MainActivity extends Activity {
                     if (which==4 && service!=null) service.restartRelay();
                 })
                 .setNegativeButton("Изменить имя",(d,w)->askName(false))
-                .setNeutralButton("Домашний сервер",(d,w)->relayDialog())
+                .setNeutralButton("Cloudflare",(d,w)->relayDialog())
                 .setPositiveButton("Готово",(d,w)->{})
                 .create();
         dialog.show();
@@ -615,90 +615,132 @@ public final class MainActivity extends Activity {
     private String homeServerDescription() {
         String address=HomeServerUrl.normalize(options().getString("relay_url",""));
         if (address.isEmpty() || "https://ntfy.sh".equals(address))
-            return "Сервер ПК: не настроен";
+            return "Cloudflare: не настроен";
         try {
             java.net.URI uri=new java.net.URI(address);
-            return "Сервер ПК: " + uri.getHost();
-        } catch (Exception ignored) { return "Сервер ПК: адрес сохранён"; }
+            return "Cloudflare: " + uri.getHost();
+        } catch (Exception ignored) { return "Cloudflare: адрес сохранён"; }
     }
 
     private void relayDialog() {
         EditText url=new EditText(this);
         url.setSingleLine(true);
-        url.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_URI);
+        url.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         String previousAddress=options().getString("relay_url","");
         url.setText("https://ntfy.sh".equals(previousAddress)?"":previousAddress);
-        url.setHint("https://имя-компьютера.ts.net");
+        url.setHint("https://ehtid-chat-relay.<account>.workers.dev");
+
+        EditText key=new EditText(this);
+        key.setSingleLine(true);
+        key.setTextSize(14);
+        key.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        key.setText(options().getString("relay_token",""));
+        key.setHint("Общий ключ доступа (не меньше 24 символов)");
+        key.setSelectAllOnFocus(true);
+
         LinearLayout holder=new LinearLayout(this);
-        holder.setPadding(dp(20),dp(9),dp(20),dp(4));
-        holder.addView(url,new LinearLayout.LayoutParams(-1,-2));
+        holder.setOrientation(LinearLayout.VERTICAL);
+        holder.setPadding(dp(18),dp(8),dp(18),dp(6));
+        holder.addView(text("HTTPS-АДРЕС CLOUDFLARE",11,MUTED,true));
+        LinearLayout.LayoutParams urlParams=new LinearLayout.LayoutParams(-1,-2);
+        urlParams.bottomMargin=dp(9);
+        holder.addView(url,urlParams);
+        holder.addView(text("КЛЮЧ ДОСТУПА",11,MUTED,true));
+        holder.addView(key,new LinearLayout.LayoutParams(-1,-2));
+
         AlertDialog dialog=new AlertDialog.Builder(this)
-                .setTitle("Подключение к домашнему серверу")
-                .setMessage("На ПК запусти START-STABLE-TAILSCALE.cmd или START-EHTID.cmd " +
-                        "из архива EHTID Home Relay. Вставь выданный HTTPS-адрес. " +
-                        "На всех телефонах нужен одинаковый адрес и код комнаты. " +
-                        "При выключенном ПК сообщения останутся в очереди.")
+                .setTitle("Cloudflare • EHTID Chat")
+                .setMessage("Разверни EHTID Relay на Cloudflare Workers + D1. " +
+                        "На всех телефонах укажи один HTTPS-адрес и одинаковый ключ. " +
+                        "Старый ntfy.sh больше не требуется.")
                 .setView(holder)
-                .setPositiveButton("Сохранить и подключить",null)
-                .setNeutralButton("Проверить сервер",null)
+                .setPositiveButton("Подключиться",null)
+                .setNeutralButton("Проверить",null)
                 .setNegativeButton("Отмена",null).create();
+
         dialog.setOnShowListener(v->{
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(clicked->{
                 String address=HomeServerUrl.normalize(url.getText().toString());
+                String secret=key.getText().toString().trim();
                 if (address.isEmpty()) {
-                    url.setError("Нужен HTTPS-адрес без пути (например, https://pc.ts.net)");
+                    url.setError("Введи полный HTTPS-адрес workers.dev, без пути");
+                    return;
+                }
+                if (secret.length()<24 || secret.length()>256) {
+                    key.setError("Ключ: 24–256 символов; возьми его из настройки Cloudflare");
                     return;
                 }
                 options().edit().putString("relay_url",address)
+                        .putString("relay_token",secret)
                         .putBoolean("mesh_mode",false).apply();
                 if (homeServerLabel!=null) homeServerLabel.setText(homeServerDescription());
                 if (service!=null) service.restartRelay();
                 else launchChat(code,false);
-                status.setText("● Подключаем сервер " + address);
+                status.setText("● Подключаем Cloudflare: "+address);
                 dialog.dismiss();
             });
+
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(clicked->{
                 String address=HomeServerUrl.normalize(url.getText().toString());
+                String secret=key.getText().toString().trim();
                 if (address.isEmpty()) {
-                    url.setError("Введи HTTPS-адрес из окна сервера");
+                    url.setError("Введи HTTPS-адрес Cloudflare");
                     return;
                 }
-                status.setText("● Проверяем доступность сервера...");
+                if (secret.length()<24) {
+                    key.setError("Введи ключ доступа");
+                    return;
+                }
+                status.setText("● Проверяем Cloudflare…");
                 new Thread(()->{
-                    java.net.HttpURLConnection connection=null;
                     String result;
+                    boolean good=false;
                     try {
-                        connection=(java.net.HttpURLConnection)
+                        java.net.HttpURLConnection health=(java.net.HttpURLConnection)
                                 new java.net.URL(address+"/health").openConnection();
-                        connection.setConnectTimeout(7000);
-                        connection.setReadTimeout(7000);
-                        connection.setRequestProperty("Accept","application/json");
-                        int code=connection.getResponseCode();
+                        health.setConnectTimeout(8000);
+                        health.setReadTimeout(8000);
+                        int healthCode=health.getResponseCode();
                         String body="";
-                        if (code==200) {
-                            try(java.io.InputStream in=connection.getInputStream()) {
-                                byte[] bytes=new byte[1024];
-                                int n=in.read(bytes);
-                                if(n>0) body=new String(bytes,0,n,java.nio.charset.StandardCharsets.UTF_8);
+                        if (healthCode==200) {
+                            try(java.io.InputStream stream=health.getInputStream()) {
+                                byte[] buf=new byte[1024];
+                                int n=stream.read(buf);
+                                if (n>0)
+                                    body=new String(buf,0,n,java.nio.charset.StandardCharsets.UTF_8);
                             }
                         }
-                        result=code==200 && body.contains("EHTID Home Relay") &&
-                                body.contains("true") ?
-                                "EHTID Home Relay доступен; можешь сохранять адрес" :
-                                "Сервер отвечает неверно: HTTP "+code+
-                                ". Проверь запуск EHTID Home Relay";
-                    } catch(Exception e) {
-                        result="Не удалось подключиться к серверу: "+e.getClass().getSimpleName();
-                    } finally {
-                        if(connection!=null) connection.disconnect();
+                        health.disconnect();
+                        if (healthCode!=200 || !body.contains("EHTID Cloudflare Relay")) {
+                            result="Ответ не от EHTID Cloudflare Relay: HTTP "+healthCode;
+                        } else {
+                            java.net.HttpURLConnection auth=(java.net.HttpURLConnection)
+                                    new java.net.URL(address+"/auth").openConnection();
+                            auth.setRequestProperty("Authorization","Bearer "+secret);
+                            auth.setConnectTimeout(8000);
+                            auth.setReadTimeout(8000);
+                            int authCode=auth.getResponseCode();
+                            auth.disconnect();
+                            if (authCode==200) {
+                                good=true;
+                                result="Cloudflare подключён; ключ доступа подходит";
+                            } else if(authCode==401) {
+                                result="Ключ доступа неверный (HTTP 401)";
+                            } else {
+                                result="Cloudflare вернул HTTP "+authCode+" при проверке ключа";
+                            }
+                        }
+                    } catch(Exception error) {
+                        result="Не удалось открыть Cloudflare: "+error.getClass().getSimpleName();
                     }
                     final String message=result;
+                    final boolean valid=good;
                     runOnUiThread(()->{
                         status.setText("● "+message);
-                        if(!isFinishing() && dialog.isShowing())
-                            url.setError(message.startsWith("EHTID Home Relay доступен")?null:message);
+                        if (!valid && !isFinishing() && dialog.isShowing())
+                            key.setError(message);
                     });
-                },"EHTID-Server-Health").start();
+                },"EHTID-Cloudflare-Health").start();
             });
         });
         dialog.show();
