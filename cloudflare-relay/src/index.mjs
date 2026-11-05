@@ -172,6 +172,15 @@ export default {
         }, env.DB && env.RELAY_ACCESS_TOKEN?.length >= 24 ? 200 : 503);
       }
 
+      if (url.pathname === "/auth") {
+        if (request.method !== "GET")
+          return responseJson({ ok: false, error: "method not allowed" }, 405);
+        if (!env.DB || !env.RELAY_ACCESS_TOKEN || env.RELAY_ACCESS_TOKEN.length < 24)
+          return responseJson({ ok: false, error: "relay not configured" }, 503);
+        if (!allowedToken(request.headers.get("Authorization"), env.RELAY_ACCESS_TOKEN))
+          return responseJson({ ok: false, error: "unauthorized" }, 401);
+        return responseJson({ ok: true, authenticated: true });
+      }
       const parts = url.pathname.split("/").filter(Boolean);
       const topic = parts[0];
       if (!topic || !TOPIC.test(topic) || parts.length > 2 ||
