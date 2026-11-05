@@ -420,6 +420,258 @@ public final class MainActivity extends Activity {
                 12,MUTED,false));
     }
 
+    private void refreshProfilePage() {
+        if(profileContent==null)return;
+        profileContent.removeAllViews();
+        profileContent.addView(text("Профиль и настройки",22,WHITE,true));
+        TextView back=button("← Вернуться в чат",PANEL,14);
+        LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,dp(43));
+        bp.topMargin=dp(8);
+        profileContent.addView(back,bp);
+        back.setOnClickListener(v->showPage(0));
+        profileContent.addView(text("Ник: "+profile().getString("nick","Пользователь"),
+                17,WHITE,true));
+        String device=profile().getString("device_id","—");
+        profileContent.addView(text("ID устройства: "+device,11,MUTED,false));
+        profileContent.addView(text("Cloudflare: сервер подключается автоматически",13,ONLINE,false));
+        TextView rename=button("Изменить никнейм",PANEL,14);
+        LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,dp(46));
+        rp.topMargin=dp(12);
+        profileContent.addView(rename,rp);
+        rename.setOnClickListener(v->askName(false));
+        TextView wallpaperChoice=button("Выбрать собственный фон",ACCENT,14);
+        LinearLayout.LayoutParams wp=new LinearLayout.LayoutParams(-1,dp(46));
+        wp.topMargin=dp(10);
+        profileContent.addView(wallpaperChoice,wp);
+        wallpaperChoice.setOnClickListener(v->chooseWallpaper());
+        TextView reset=button("Стандартный тёмный фон",PANEL,13);
+        LinearLayout.LayoutParams rp2=new LinearLayout.LayoutParams(-1,dp(43));
+        rp2.topMargin=dp(8);
+        profileContent.addView(reset,rp2);
+        reset.setOnClickListener(v->{
+            options().edit().remove("wallpaper_uri").apply();
+            applyWallpaper();
+            refreshProfilePage();
+        });
+
+        profileContent.addView(text("Параметры",16,WHITE,true));
+        String[] labels={"Уведомления о сообщениях","Работа чата в фоне",
+                "Показывать текст уведомлений","Звук уведомлений"};
+        String[] keys={"notifications","background","preview","sound"};
+        for(int i=0;i<keys.length;i++) {
+            final int which=i;
+            CheckBox box=new CheckBox(this);
+            box.setText(labels[i]);
+            box.setTextColor(WHITE);
+            box.setChecked(options().getBoolean(keys[i],true));
+            box.setPadding(dp(4),dp(8),dp(4),dp(8));
+            box.setOnCheckedChangeListener((v,checked)->{
+                options().edit().putBoolean(keys[which],checked).apply();
+                if(which==1&&service!=null)service.refreshSettings();
+                if(which==0&&checked)maybeAskNotification();
+            });
+            profileContent.addView(box);
+        }
+        profileContent.addView(text(
+                "Вправо от чата — участники. Влево — профиль. "+
+                "Изображение фона хранится только на этом устройстве. "+
+                "Голосовые расшифровываются через Cloudflare AI только с твоего согласия.",
+                12,MUTED,false));
+    }
+
+    private void chooseWallpaper() {
+        Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.setType("image/*");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION |
+                Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        startActivityForResult(intent,PICK_WALLPAPER);
+    }
+
+    private void applyWallpaper() {
+        if(wallpaper==null)return;
+        String uri=options().getString("wallpaper_uri","");
+        if(uri.isEmpty()){
+            wallpaper.setImageDrawable(null);
+            wallpaper.setBackgroundColor(BG);
+            return;
+        }
+        try {
+            Uri source=Uri.parse(uri);
+            BitmapFactory.Options info=new BitmapFactory.Options();
+            info.inJustDecodeBounds=true;
+            try(InputStream input=getContentResolver().openInputStream(source)){
+                BitmapFactory.decodeStream(input,null,info);
+            }
+            int sample=1;
+            while(info.outWidth/sample>1440||info.outHeight/sample>2560)sample*=2;
+            BitmapFactory.Options opts=new BitmapFactory.Options();
+            opts.inSampleSize=sample;
+            Bitmap bitmap;
+            try(InputStream input=getContentResolver().openInputStream(source)){
+                bitmap=BitmapFactory.decodeStream(input,null,opts);
+            }
+            if(bitmap==null)throw new java.io.IOException("Невозможно открыть изображение");
+            wallpaper.setImageBitmap(bitmap);
+            wallpaper.setBackgroundColor(BG);
+        }catch(Exception error){
+            wallpaper.setImageDrawable(null);
+            wallpaper.setBackgroundColor(BG);
+            if(status!=null)status.setText("● Ошибка открытия фона: "+error.getClass().getSimpleName());
+        }
+    }
+
+    private void chooseAttachment() {
+        Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.setType("*/*");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        startActivityForResult(intent,PICK_ATTACHMENT);
+    }
+
+    private String nameFor(Uri uri){
+        String name="Вложение";
+        try(Cursor cursor=getContentResolver().query(uri,
+                new String[]{OpenableColumns.DISPLAY_NAME},null,null,null)) {
+            if(cursor!=null&&cursor.moveToFirst()){
+                String found=cursor.getString(0);
+                if(found!=null&&!found.trim().isEmpty())name=found;
+            }
+        }catch(Exception ignored){}
+        return name;
+    }
+
+    private void uploadChosen(Uri uri) {
+        final String selectedRoom=code;
+        final String name=nameFor(uri);
+        final String mime=getContentResolver().getType(uri);
+        status.setText("● Подготовка файла…");
+        new Thread(()->{
+            try {
+                byte[] bytes=MediaTransfer.readLimited(getContentResolver().openInputStream(uri));
+                sendFile(bytes,selectedRoom,name,
+                        mime==null?"application/octet-stream":mime,
+                        mime!=null&&mime.startsWith("image/")?"image":"file",0);
+            } catch(Exception error) {
+                runOnUiThread(()->status.setText("● Вложение: "+error.getMessage()));
+            }
+        },"EHTID-Attachment-Prepare").start();
+    }
+
+    private void sendFile(byte[] bytes,String selectedRoom,String name,
+                          String mime,String kind,long duration) throws Exception {
+        JSONObject media=MediaTransfer.upload(bytes,selectedRoom,name,mime,kind,duration,
+                (part,total)->runOnUiThread(()->{
+                    if(selectedRoom.equals(code))
+                        status.setText("● Загрузка "+part+"/"+total);
+                }));
+        MediaTransfer.saveLocal(this,selectedRoom,media,bytes);
+        runOnUiThread(()->{
+            if(!selectedRoom.equals(code)||service==null){
+                status.setText("● Файл загружен, но комната сменилась. Отправка отменена.");
+                return;
+            }
+            service.sendAttachment(media);
+            status.setText("● Файл отправляется через Cloudflare");
+        });
+    }
+
+    private void toggleRecording() {
+        if(recorder!=null){stopRecording(true);return;}
+        if(Build.VERSION.SDK_INT>=23 &&
+                checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},RECORD_PERMISSION);
+            return;
+        }
+        startRecording();
+    }
+
+    private void startRecording() {
+        try {
+            File dir=new File(getCacheDir(),"voice");
+            if(!dir.exists()&&!dir.mkdirs())throw new java.io.IOException("Нет доступа к памяти");
+            recordingFile=new File(dir,"recording-"+System.currentTimeMillis()+".m4a");
+            recorder=Build.VERSION.SDK_INT>=31?new MediaRecorder(this):new MediaRecorder();
+            recorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+            recorder.setAudioChannels(1);
+            recorder.setAudioSamplingRate(16000);
+            recorder.setAudioEncodingBitRate(32000);
+            recorder.setOutputFile(recordingFile.getAbsolutePath());
+            recorder.setMaxDuration(3*60*1000);
+            recorder.setMaxFileSize(2*1024*1024-8192);
+            recorder.setOnInfoListener((mr,what,extra)->runOnUiThread(()->stopRecording(true)));
+            recorder.prepare();
+            recorder.start();
+            recordStarted=System.currentTimeMillis();
+            micButton.setText("■");
+            micButton.setTextColor(Color.rgb(255,170,120));
+            status.setText("● Запись голосового… нажми ■ для отправки");
+        } catch(Exception error) {
+            if(recorder!=null){recorder.release();recorder=null;}
+            status.setText("● Микрофон: "+error.getMessage());
+        }
+    }
+
+    private void stopRecording(boolean send) {
+        if(recorder==null)return;
+        MediaRecorder current=recorder;
+        recorder=null;
+        long duration=System.currentTimeMillis()-recordStarted;
+        File file=recordingFile;
+        micButton.setText("🎤");
+        micButton.setTextColor(WHITE);
+        try{current.stop();}
+        catch(Exception problem){send=false;}
+        finally {current.reset();current.release();}
+        if(!send||duration<400||file==null||!file.isFile()){
+            if(file!=null)file.delete();
+            status.setText("● Запись отменена");
+            return;
+        }
+        final String selectedRoom=code;
+        status.setText("● Отправляем голосовое…");
+        new Thread(()->{
+            try{
+                byte[] audio;
+                try(InputStream input=new FileInputStream(file)){
+                    audio=MediaTransfer.readLimited(input);
+                }
+                sendFile(audio,selectedRoom,"Голосовое.m4a","audio/mp4","voice",duration);
+            }catch(Exception error){
+                runOnUiThread(()->status.setText("● Голосовое: "+error.getMessage()));
+            }finally{file.delete();}
+        },"EHTID-Voice-Upload").start();
+    }
+
+    @Override protected void onActivityResult(int request,int result,Intent data) {
+        super.onActivityResult(request,result,data);
+        if(result!=RESULT_OK||data==null||data.getData()==null)return;
+        Uri uri=data.getData();
+        if(request==PICK_WALLPAPER) {
+            try {
+                getContentResolver().takePersistableUriPermission(uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            }catch(Exception ignored){}
+            options().edit().putString("wallpaper_uri",uri.toString()).apply();
+            applyWallpaper();
+            refreshProfilePage();
+        } else if(request==PICK_ATTACHMENT)uploadChosen(uri);
+    }
+
+    @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] grants){
+        super.onRequestPermissionsResult(request,permissions,grants);
+        if(request==RECORD_PERMISSION&&grants.length>0&&grants[0]==PackageManager.PERMISSION_GRANTED)
+            startRecording();
+        else if(request==RECORD_PERMISSION)status.setText("● Нет разрешения на микрофон");
+    }
+
+    @Override public void onBackPressed(){
+        if(page!=0){showPage(0);return;}
+        super.onBackPressed();
+    }
+
     private void drawMembers() {
         if (membersPanel == null || membersScroll == null) return;
         membersPanel.removeAllViews();
