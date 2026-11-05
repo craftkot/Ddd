@@ -721,9 +721,9 @@ public final class MainActivity extends Activity {
         if (messages.isEmpty()) {
             TextView welcome = text(
                     "Начните разговор\n\n" +
-                    "Подключи бесплатный Cloudflare Worker через кнопку «Cloudflare». " +
-                    "Введи адрес workers.dev и общий ключ доступа. " +
-                    "Затем поделись кодом комнаты с участниками.",
+                    "Создай комнату или передай её код друзьям. " +
+                    "Нажми ＋ для отправки фото или файла до 10 МБ, " +
+                    "🎤 — для голосового. Свайп вправо — участники, влево — профиль.",
                     15,MUTED,false);
             welcome.setGravity(Gravity.CENTER);
             welcome.setPadding(dp(16),dp(50),dp(16),dp(20));
@@ -746,12 +746,41 @@ public final class MainActivity extends Activity {
                 if (author.isEmpty()) author = own ? profile().getString("nick","Вы") : "Собеседник";
                 TextView nick = text(author,11,own?Color.rgb(194,225,255):ONLINE,true);
                 bubble.addView(nick);
-                TextView body = text(m.optString("text"),15,WHITE,false);
-                body.setMaxWidth(dp(287));
+                JSONObject media=m.optJSONObject("media");
+                TextView body=text(m.optString("text"),15,WHITE,false);
+                body.setMaxWidth(dp(290));
                 body.setTextIsSelectable(true);
-                LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-2,-2);
+                LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(-2,-2);
                 tp.topMargin=dp(3);
                 bubble.addView(body,tp);
+                if(media!=null&&media.optString("id").matches("[a-f0-9]{32}")
+                        && media.optInt("size")>0&&media.optInt("size")<=MediaTransfer.MAX_FILE_BYTES) {
+                    String kind=media.optString("kind");
+                    int size=media.optInt("size");
+                    String info=String.format(Locale.getDefault(),"%.2f МБ",size/1048576.0);
+                    if("voice".equals(kind)) {
+                        long duration=media.optLong("duration",0)/1000;
+                        info+=" • "+String.format(Locale.getDefault(),"%02d:%02d",duration/60,duration%60);
+                    }
+                    bubble.addView(text(info,11,MUTED,false));
+                    TextView open=button("voice".equals(kind)?"▶ Прослушать":
+                            "image".equals(kind)?"▣ Посмотреть фото":"⬇ Открыть файл",ACCENT,12);
+                    LinearLayout.LayoutParams mp=new LinearLayout.LayoutParams(-1,dp(39));
+                    mp.topMargin=dp(6);
+                    bubble.addView(open,mp);
+                    open.setOnClickListener(v->openMedia(media));
+                    if("voice".equals(kind)) {
+                        TextView transcript=button("📝 Расшифровать голосовое",PANEL,12);
+                        LinearLayout.LayoutParams trp=new LinearLayout.LayoutParams(-1,dp(39));
+                        trp.topMargin=dp(5);
+                        bubble.addView(transcript,trp);
+                        String cached=options().getString("transcript_"+RoomAccess.topic(code)+"_"+media.optString("id"),"");
+                        TextView output=text(cached.isEmpty()?"":"Расшифровка: "+cached,13,WHITE,false);
+                        output.setMaxWidth(dp(290));
+                        bubble.addView(output);
+                        transcript.setOnClickListener(v->requestTranscription(media,output));
+                    }
+                }
                 String clockText = new SimpleDateFormat("HH:mm",Locale.getDefault())
                         .format(new Date(m.optLong("at",System.currentTimeMillis())));
                 String delivery = m.optString("delivery");
@@ -767,6 +796,130 @@ public final class MainActivity extends Activity {
         scroll.post(() -> scroll.fullScroll(View.FOCUS_DOWN));
     }
 
+    private void openMedia(JSONObject media) {
+        String selectedRoom=code;
+        status.setText("● Загружаем защищённое вложение…");
+        new Thread(()->{
+            try {
+                File local=MediaTransfer.download(this,selectedRoom,media,
+                        (done,total)->runOnUiThread(()->{
+                            if(selectedRoom.equals(code))
+                                status.setText("● Загрузка "+done+"/"+total);
+                        }));
+                runOnUiThread(()->{
+                    if(!selectedRoom.equals(code))return;
+                    status.setText("● Вложение готово");
+                    String kind=media.optString("kind");
+                    if("voice".equals(kind))playVoice(local);
+                    else if("image".equals(kind))showImage(local);
+                    else openOtherFile(local,media.optString("mime","application/octet-stream"));
+                });
+            } catch(Exception error){
+                runOnUiThread(()->status.setText("● Не удалось открыть файл: "+error.getMessage()));
+            }
+        },"EHTID-Download").start();
+    }
+
+    private void playVoice(File local) {
+        if(voicePlayer!=null){
+            voicePlayer.release();
+            voicePlayer=null;
+        }
+        try {
+            voicePlayer=new MediaPlayer();
+            voicePlayer.setDataSource(local.getAbsolutePath());
+            voicePlayer.setOnPreparedListener(mp->{
+                mp.start();
+                status.setText("● Воспроизводится голосовое");
+            });
+            voicePlayer.setOnCompletionListener(mp->{
+                mp.release();
+                if(voicePlayer==mp)voicePlayer=null;
+                status.setText("● Голосовое прослушано");
+            });
+            voicePlayer.setOnErrorListener((mp,what,extra)->{
+                mp.release();
+                if(voicePlayer==mp)voicePlayer=null;
+                status.setText("● Ошибка воспроизведения");
+                return true;
+            });
+            voicePlayer.prepareAsync();
+        } catch(Exception error) {
+            status.setText("● Ошибка аудио: "+error.getMessage());
+        }
+    }
+
+    private void showImage(File imageFile) {
+        try {
+            BitmapFactory.Options dims=new BitmapFactory.Options();
+            dims.inJustDecodeBounds=true;
+            BitmapFactory.decodeFile(imageFile.getAbsolutePath(),dims);
+            int sample=1;
+            while(dims.outWidth/sample>1600||dims.outHeight/sample>2000)sample*=2;
+            BitmapFactory.Options opts=new BitmapFactory.Options();
+            opts.inSampleSize=sample;
+            Bitmap bitmap=BitmapFactory.decodeFile(imageFile.getAbsolutePath(),opts);
+            if(bitmap==null)throw new java.io.IOException("Не удалось декодировать фото");
+            ImageView view=new ImageView(this);
+            view.setImageBitmap(bitmap);
+            view.setAdjustViewBounds(true);
+            view.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            new AlertDialog.Builder(this)
+                    .setTitle("Изображение из чата")
+                    .setView(view)
+                    .setPositiveButton("Закрыть",null).show();
+        }catch(Exception error){status.setText("● Фото: "+error.getMessage());}
+    }
+
+    private void openOtherFile(File local,String mime) {
+        try {
+            Uri uri=FileProvider.getUriForFile(this,
+                    "com.ehtid.p2pchat.files",local);
+            Intent open=new Intent(Intent.ACTION_VIEW);
+            open.setDataAndType(uri,mime==null?"application/octet-stream":mime);
+            open.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(Intent.createChooser(open,"Открыть вложение"));
+        }catch(Exception error){
+            status.setText("● Нет приложения для открытия этого файла");
+        }
+    }
+
+    private void requestTranscription(JSONObject meta,TextView output) {
+        new AlertDialog.Builder(this)
+                .setTitle("Расшифровать голосовое?")
+                .setMessage("Для распознавания аудио в открытом виде будет отправлено "+
+                        "в Cloudflare Workers AI (Whisper). В отличие от хранения "+
+                        "голосовых в чате, это не сквозное шифрование. "+
+                        "Длина записи — до 2 МБ. Отправить на распознавание?")
+                .setNegativeButton("Отмена",null)
+                .setPositiveButton("Расшифровать",(dialog,which)->transcribeMedia(meta,output))
+                .show();
+    }
+
+    private void transcribeMedia(JSONObject meta,TextView output) {
+        final String selectedRoom=code;
+        status.setText("● Расшифровка голосового через Cloudflare AI…");
+        new Thread(()->{
+            try {
+                File file=MediaTransfer.download(this,selectedRoom,meta,null);
+                byte[] audio;
+                try(InputStream in=new FileInputStream(file)){
+                    audio=MediaTransfer.readLimited(in);
+                }
+                String transcript=MediaTransfer.transcribe(audio,selectedRoom);
+                runOnUiThread(()->{
+                    if(!selectedRoom.equals(code))return;
+                    options().edit().putString("transcript_"+RoomAccess.topic(selectedRoom)+"_"+
+                            meta.optString("id"),transcript).apply();
+                    output.setText("Расшифровка: "+transcript);
+                    status.setText("● Расшифровка готова");
+                });
+            }catch(Exception error){
+                runOnUiThread(()->status.setText("● Расшифровка: "+error.getMessage()));
+            }
+        },"EHTID-Whisper").start();
+    }
+
     private void launchChat(String room, boolean joining) {
         if (profile().getString("nick","").trim().isEmpty()) {
             askName(true);
@@ -777,6 +930,9 @@ public final class MainActivity extends Activity {
         getPreferences(MODE_PRIVATE).edit().putString("room",room).apply();
         currentMembers.clear();
         drawMembers();
+        if(peopleContent!=null)refreshPeoplePage();
+        if(profileContent!=null)refreshProfilePage();
+        if(pages!=null)showPage(0);
         status.setText("● Подключение…");
         Intent intent = ChatService.intent(this,room,joining);
         try {
