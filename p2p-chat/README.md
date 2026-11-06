@@ -1,11 +1,48 @@
-# EHTID Chat v1.1 — код комнаты, файлы, голосовые и оформление
+# EHTID Chat v1.2 — автообновление, история и несколько комнат
 
 Public free relay: `https://ehtid-chat-relay.craftkot404.workers.dev`.
 The URL is already integrated into the Android app; participants never
 enter separate Cloudflare settings or server access tokens. Share the
 private 20-character code, install the same Android APK, and join.
 
-## What changed
+## v1.2 — автообновление и несколько комнат
+
+**Комнаты**: кнопка «Комнаты» в верхней части чата открывает
+сохранённые комнаты. Можно переключаться между ними, переименовывать
+закладки и видеть число сохранённых сообщений. При переключении активен
+только один сетевой канал, но локальная история всех комнат остаётся.
+Когда комната снова открыта, клиент подгружает доступные события Cloudflare
+(сервер хранит их до 7 дней). Закладку можно убрать без удаления истории.
+
+**История**: теперь сохраняется в SQLite `ehtid_history.db`, разделённой
+по коду комнаты. При первом открытии v1.2 существующая локальная переписка
+переносится из SharedPreferences в SQLite **без удаления исходных записей**.
+Также восстанавливается список старых комнат по сохранённым ключам
+`msgs_`, `pending_` и `role_`. После обновлений APK база остаётся;
+**удаление приложения** или «Очистить хранилище» Android всё равно
+удаляет её. Обновляйте поверх существующего приложения, не удаляя APK.
+
+**Автообновление**: первый переход **v1.1 → v1.2** надо установить вручную.
+Начиная с v1.2 приложение само проверяет опубликованные EHTID Chat
+Releases (включая beta), при обнаружении более новой версии
+скачивает APK из официального GitHub. Проверяется SHA-256, имя
+пакета `com.ehtid.p2pchat`, более высокий `versionCode`, семантическая
+версия и постоянный сертификат EHTID. Неподходящий файл не предлагается
+для установки. Проверка проводится при открытии приложения и через
+Android WorkManager примерно раз в 12 часов, но Android может задержать
+выполнение задачи из-за Doze и экономии батареи. При скачивании новой
+версии показывается уведомление или окно установки.
+
+**Android не разрешает обычным приложениям устанавливать APK незаметно**:
+потребуется подтвердить установку в системном интерфейсе и, возможно,
+один раз разрешить «Установку из этого источника» для EHTID. В настройках
+можно вручную проверить GitHub или отключить автоматическую загрузку
+(она может потратить примерно 50 МБ мобильного интернета).
+
+Важно: подписание APK выполняется тем же постоянным сертификатом, что и
+у v1.0/v1.1. Не публикуйте обновление с другим сертификатом.
+
+## Что уже было в v1.1
 
 **Chat**
 - Encrypted text and attachment manifests, room-local history and
@@ -47,7 +84,7 @@ private 20-character code, install the same Android APK, and join.
   local media remains cached until Android app storage is cleared or
   the app is uninstalled.
 - Existing room code, chat history and permanent signing key remain.
-  v1.1 installs over v1.0 without deleting app data.
+  v1.2 installs over v1.1 without deleting app data.
 - Cloudflare D1 Free 500 MB per database, Workers Free request quota and
   Workers AI Free daily quotas remain finite. The app is a beta and the
   cryptography has not been independently audited.
