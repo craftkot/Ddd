@@ -291,7 +291,7 @@ public final class AppUpdater {
             return new Result("Обновление "+release.version+" готово",true);
         }
 
-        File temp=new File(ready.getParentFile(),"ehtid-download.part");
+        File temp=new File(ready.getParentFile(),"ehtid-download.tmp.apk");
         if(temp.exists()&&!temp.delete())
             throw new IOException("Не удалось очистить старую загрузку");
         HttpURLConnection c=connect(release.url);
