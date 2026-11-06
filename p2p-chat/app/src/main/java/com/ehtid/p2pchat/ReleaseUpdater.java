@@ -103,7 +103,7 @@ public final class ReleaseUpdater {
                 }
                 if(!target.delete())throw new java.io.IOException("Повреждённый APK не удалён");
             }
-            File temp=new File(dir,"ehtid-update.part");
+            File temp=new File(dir,"ehtid-update.tmp.apk");
             if(temp.exists())temp.delete();
             try {
                 download(candidate,temp);
@@ -175,7 +175,7 @@ public final class ReleaseUpdater {
                 if(version==null||version.compareTo(latest)<=0)continue;
                 JSONArray assets=release.optJSONArray("assets");
                 if(assets==null)continue;
-                String fileName="EHTID-P2P-Chat-v"+version.major+"."+version.minor+".apk";
+                String fileName="EHTID-P2P-Chat-"+tag.substring("ehtid-p2p-chat-".length())+".apk";
                 String expected=REPOSITORY+tag+"/"+fileName;
                 for(int j=0;j<assets.length();j++) {
                     JSONObject asset=assets.optJSONObject(j);
