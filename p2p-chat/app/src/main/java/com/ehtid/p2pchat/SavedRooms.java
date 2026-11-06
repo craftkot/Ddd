@@ -70,6 +70,27 @@ public final class SavedRooms {
         if(!prefs.edit().putString("saved_rooms_v1",data.toString()).commit())
             throw new IllegalStateException("Не удалось сохранить список комнат");
     }
+    /**
+     * Recover room bookmarks from v1.1 and older local message/pending keys.
+     * No message, queue or encryption key is removed.
+     */
+    public synchronized void migrateLegacy(SharedPreferences original) {
+        if(prefs.getBoolean("legacy_room_scan_v1",false))return;
+        List<Room> rooms=parse();
+        for(String prefKey:original.getAll().keySet()){
+            String code="";
+            if(prefKey.startsWith("msgs_"))code=prefKey.substring(5);
+            else if(prefKey.startsWith("pending_"))code=prefKey.substring(8);
+            else if(prefKey.startsWith("role_"))code=prefKey.substring(5);
+            if(!valid(code)||rooms.size()>=LIMIT)continue;
+            boolean existing=false;
+            for(Room room:rooms)if(room.code.equals(code)){existing=true;break;}
+            if(!existing)rooms.add(new Room(code,"",0L));
+        }
+        save(rooms);
+        prefs.edit().putBoolean("legacy_room_scan_v1",true).commit();
+    }
+
     public synchronized List<Room> list(){return parse();}
     public synchronized void remember(String room) {
         if(!valid(room))throw new IllegalArgumentException("Недействительный код комнаты");
