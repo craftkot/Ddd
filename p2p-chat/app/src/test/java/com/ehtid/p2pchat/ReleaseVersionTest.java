@@ -26,8 +26,7 @@ public final class ReleaseVersionTest {
         assertNull(ReleaseVersion.fromTag("ehtid-p2p-chat-v1.2.apk"));
         assertNull(ReleaseVersion.fromTag("ehtid-p2p-chat-v2147483648.0"));
         assertNull(ReleaseVersion.fromTag("ehtid-p2p-chat-v1.100001"));
-        assertNull(ReleaseVersion.fromApp("1.2.0
-"));
+        assertNull(ReleaseVersion.fromApp("1.2.0\\n"));
         assertNull(ReleaseVersion.fromApp("bad"));
     }
 }
