@@ -58,22 +58,29 @@ public final class ChatService extends Service implements InternetEngine.Listene
         }
         refreshSettings();
         String requested = intent == null ? room : intent.getStringExtra(EXTRA_ROOM);
-        if (requested != null && requested.matches("[A-Z2-9]{16,32}") &&
-                (engine == null || !room.equals(requested))) {
-            if (engine != null) engine.stop();
-            room = requested;
-            status = "Подключение…";
-            lastManualCode="";
-            lastManualKind="";
-            messages = new ArrayList<>();
-            members = new ArrayList<>();
-            engine = new InternetEngine(getApplicationContext(), room,
-                    intent.getBooleanExtra(EXTRA_JOIN, false), this);
-            engine.setChatVisible(visible);
-            engine.start();
-            emit();
-        }
+        switchRoom(requested,intent != null && intent.getBooleanExtra(EXTRA_JOIN,false));
         return START_STICKY;
+    }
+
+    /** Switches the single active room without destroying its local history.
+     * Inactive rooms remain in SQLite; their cloud events are loaded on return. */
+    public void switchRoom(String requested,boolean join) {
+        if (requested == null || !requested.matches("[A-Z2-9]{16,32}") ||
+                (engine != null && room.equals(requested)))return;
+        InternetEngine old=engine;
+        engine=null;
+        if(old!=null)old.stop();
+        room=requested;
+        status="Подключение к комнате…";
+        messages=new ArrayList<>();
+        members=new ArrayList<>();
+        lastManualCode="";
+        lastManualKind="";
+        emit(); // Clear the previous room immediately, before loading new data.
+        engine=new InternetEngine(getApplicationContext(),room,join,this);
+        engine.setChatVisible(visible);
+        engine.start();
+        emit();
     }
 
     @Override public IBinder onBind(Intent intent) { return binder; }
