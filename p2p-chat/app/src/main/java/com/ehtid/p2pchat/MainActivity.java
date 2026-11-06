@@ -72,6 +72,8 @@ public final class MainActivity extends Activity {
     private MediaPlayer voicePlayer;
     private int page=0;
     private SavedRooms savedRooms;
+    private ReleaseUpdater.Result readyUpdate;
+    private String lastPromptedUpdate="";
     private int historyViewLimit=300;
     private boolean expandingHistory=false;
     private List<JSONObject> visibleSnapshot=new ArrayList<>();
@@ -129,6 +131,8 @@ public final class MainActivity extends Activity {
         code = getPreferences(MODE_PRIVATE).getString("room", "");
         if (!code.matches("[A-Z2-9]{16,32}")) code = newCode();
         buildUI();
+        UpdateCheckWorker.schedule(this);
+        checkForUpdates(false);
         if (profile().getString("nick", "").trim().isEmpty()) {
             askName(true);
         } else {
@@ -567,6 +571,42 @@ public final class MainActivity extends Activity {
             refreshProfilePage();
         });
 
+        profileContent.addView(text("Автообновление GitHub",16,WHITE,true));
+        profileContent.addView(text("Версия: "+BuildConfig.VERSION_NAME+
+                " · сохранённые комнаты и история останутся после обновления",
+                12,MUTED,false));
+        CheckBox updateMode=new CheckBox(this);
+        updateMode.setText("Автоматически загружать APK (≈50 МБ, включая мобильную сеть)");
+        updateMode.setTextColor(WHITE);
+        updateMode.setChecked(getSharedPreferences("ehtid_updater",MODE_PRIVATE)
+                .getBoolean("automatic",true));
+        updateMode.setOnCheckedChangeListener((v,checked)->{
+            getSharedPreferences("ehtid_updater",MODE_PRIVATE).edit()
+                    .putBoolean("automatic",checked).apply();
+            if(checked) {
+                UpdateCheckWorker.schedule(this);
+                checkForUpdates(false);
+            }
+        });
+        profileContent.addView(updateMode);
+        TextView updateButton=button("Проверить новые версии",PANEL,14);
+        LinearLayout.LayoutParams updateLp=new LinearLayout.LayoutParams(-1,dp(44));
+        updateLp.topMargin=dp(8);
+        profileContent.addView(updateButton,updateLp);
+        updateButton.setOnClickListener(v->checkForUpdates(true));
+        if(readyUpdate!=null&&readyUpdate.ready()) {
+            TextView install=button("Установить EHTID v"+readyUpdate.version,ACCENT,14);
+            LinearLayout.LayoutParams installLp=new LinearLayout.LayoutParams(-1,dp(46));
+            installLp.topMargin=dp(8);
+            profileContent.addView(install,installLp);
+            install.setOnClickListener(v->ReleaseUpdater.requestInstallation(this,readyUpdate));
+        }
+        profileContent.addView(text(
+                "GitHub проверяется при запуске и примерно раз в 12 часов в фоне. "+
+                "Android может отложить фоновую проверку. APK загружается автоматически, "+
+                "установка требует разрешения Android. Удалять старое приложение нельзя.",
+                12,MUTED,false));
+
         profileContent.addView(text("Параметры",16,WHITE,true));
         String[] labels={"Уведомления о сообщениях","Работа чата в фоне",
                 "Показывать текст уведомлений","Звук уведомлений"};
@@ -590,6 +630,53 @@ public final class MainActivity extends Activity {
                 "Изображение фона хранится только на этом устройстве. "+
                 "Голосовые расшифровываются через Cloudflare AI только с твоего согласия.",
                 12,MUTED,false));
+    }
+
+    private void checkForUpdates(boolean manual) {
+        if(manual&&status!=null)status.setText("● Проверяю обновления GitHub…");
+        ReleaseUpdater.checkAsync(this,manual,result->{
+            if(isFinishing()||isDestroyed())return;
+            if(result.ready()){
+                readyUpdate=result;
+                if(status!=null)status.setText("● EHTID v"+result.version+
+                        " загружен. Требуется подтверждение установки.");
+                if(page==2)refreshProfilePage();
+                if(active&&!result.version.equals(lastPromptedUpdate))
+                    showUpdatePrompt(result);
+            } else if(manual) {
+                String message="current".equals(result.status)?"Уже установлена актуальная версия":
+                        result.detail==null?result.status:result.detail;
+                if(status!=null)status.setText("● "+message);
+                new AlertDialog.Builder(this).setTitle("Обновления EHTID")
+                        .setMessage(message)
+                        .setPositiveButton("ОК",null).show();
+            }
+        });
+    }
+
+    private void showUpdatePrompt(ReleaseUpdater.Result ready) {
+        if(ready==null||!ready.ready()||isFinishing()||isDestroyed())return;
+        lastPromptedUpdate=ready.version;
+        new AlertDialog.Builder(this)
+                .setTitle("EHTID v"+ready.version+" готов")
+                .setMessage("Обновление скачано с GitHub и проверено по SHA-256, "+
+                        "пакету и постоянной подписи EHTID. Установка поверх "+
+                        "текущей версии сохраняет чаты, список комнат и настройки. "+
+                        "Android попросит подтвердить установку.")
+                .setNegativeButton("Позже",null)
+                .setPositiveButton("Установить",(dialog,which)->
+                        ReleaseUpdater.requestInstallation(this,ready))
+                .show();
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if(intent!=null&&intent.getBooleanExtra("ehtid_show_update",false)) {
+            intent.removeExtra("ehtid_show_update");
+            lastPromptedUpdate="";
+            checkForUpdates(true);
+        }
     }
 
     private void chooseWallpaper() {
@@ -1215,6 +1302,9 @@ public final class MainActivity extends Activity {
         active=true;
         if (profile().getString("nick","").trim().length()>0 && !bindRequested) launchChat(code,false);
         if(service!=null) service.setVisible(true);
+        if(readyUpdate!=null&&readyUpdate.ready()&&
+                !readyUpdate.version.equals(lastPromptedUpdate))
+            showUpdatePrompt(readyUpdate);
     }
     @Override protected void onStop() {
         active=false;
