@@ -85,6 +85,11 @@ public final class RoomRegistry {
         save(current);
     }
 
+    public synchronized String nameFor(String code) {
+        for(Room room:list())if(room.code.equals(code))return room.name;
+        return "Комната";
+    }
+
     public synchronized void rename(String code,String title) {
         List<Room> current=list();
         int index=find(current,code);
