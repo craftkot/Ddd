@@ -18,7 +18,7 @@ android {
         minSdk 24
         targetSdk 35
         versionCode monotonicCode
-        versionName '1.1.0'
+        versionName '1.2.0'
     }
     signingConfigs {
         permanent {
@@ -50,5 +50,6 @@ android {
 dependencies {
     implementation 'io.github.webrtc-sdk:android:150.7871.01'
     implementation 'androidx.core:core:1.13.1'
+    implementation 'androidx.work:work-runtime:2.9.1'
     testImplementation 'junit:junit:4.13.2'
 }
