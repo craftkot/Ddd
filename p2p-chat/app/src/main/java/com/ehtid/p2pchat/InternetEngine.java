@@ -52,7 +52,7 @@ public final class InternetEngine {
         void onIncoming(String nickname, String message);
         void onManualSignal(String code, String kind);
     }
-    private static final int MAX_HISTORY = 100;
+    private static final int MAX_VISIBLE_MESSAGES = 300;
     private static final long HISTORY_COOLDOWN_MS = RoomPolicy.HISTORY_COOLDOWN_MS;
     private static final String DEFAULT_RELAY = "https://ehtid-chat-relay.craftkot404.workers.dev";
     private final Handler ui = new Handler(Looper.getMainLooper());
@@ -60,6 +60,7 @@ public final class InternetEngine {
     private final ExecutorService sender = Executors.newSingleThreadExecutor();
     private final ScheduledExecutorService clock = Executors.newSingleThreadScheduledExecutor();
     private final SharedPreferences prefs;
+    private final ChatHistory history;
     private final Listener listener;
     private final String room, id, topic, relay, relayToken;
     private final boolean meshMode;
@@ -114,6 +115,7 @@ public final class InternetEngine {
         room = normalize(code);
         appContext = context.getApplicationContext();
         prefs = appContext.getSharedPreferences("internet_p2p", Context.MODE_PRIVATE);
+        history = ChatHistory.get(appContext);
         // Room-code-only cloud mode: even a legacy setting from a previous
         // APK must not silently switch new users into manual P2P pairing.
         meshMode = false;
@@ -151,13 +153,10 @@ public final class InternetEngine {
         // per-room capability instead of requiring the owner's shared token.
         // The original AES key is unchanged, so local history remains readable.
         topic = RoomAccess.topic(room);
-        try {
-            JSONArray old = new JSONArray(prefs.getString("msgs_" + room, "[]"));
-            for (int i = 0; i < old.length(); i++) {
-                JSONObject item = old.optJSONObject(i);
-                if (validMessage(item)) messages.add(item);
-            }
-        } catch (Exception ignored) {}
+        // Migrate legacy messages once, then load only the visible page.
+        // All older rows are kept in private SQLite, not trimmed on receipt.
+        history.migrateLegacy(prefs,room);
+        messages.addAll(history.recent(room,MAX_VISIBLE_MESSAGES));
         try {
             JSONArray oldPending = new JSONArray(prefs.getString("pending_" + room, "[]"));
             for (int i = 0; i < oldPending.length() && i < 100; i++) {
@@ -598,9 +597,12 @@ public final class InternetEngine {
                     break;
                 }
             }
-            JSONArray store = new JSONArray();
-            for (JSONObject item : messages) store.put(item);
-            prefs.edit().putString("msgs_" + room,store.toString()).apply();
+            for (JSONObject item : messages) {
+                if(messageId.equals(item.optString("id"))){
+                    history.update(room,item);
+                    break;
+                }
+            }
         }
         List<JSONObject> list = snapshot();
         ui.post(() -> { if (!stopped) listener.onMessages(list); });
@@ -1203,13 +1205,11 @@ public final class InternetEngine {
         if (!validMessage(item) || stopped) return false;
         if (!id.equals(item.optString("from"))) item.remove("delivery");
         synchronized (messages) {
-            for (JSONObject old : messages)
-                if (old.optString("id").equals(item.optString("id"))) return false;
+            // The database enforces deduplication even for events older than
+            // the limited in-memory view (for example after reconnecting).
+            if(!history.insert(room,item))return false;
             messages.add(item);
-            while (messages.size() > MAX_HISTORY) messages.remove(0);
-            JSONArray store = new JSONArray();
-            for (JSONObject m : messages) store.put(m);
-            prefs.edit().putString("msgs_" + room, store.toString()).apply();
+            while(messages.size()>MAX_VISIBLE_MESSAGES)messages.remove(0);
         }
         List<JSONObject> list = snapshot();
         ui.post(() -> { if (!stopped) listener.onMessages(list); });
