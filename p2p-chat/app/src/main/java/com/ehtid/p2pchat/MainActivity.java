@@ -828,9 +828,29 @@ public final class MainActivity extends Activity {
             membersPanel.addView(text("Ещё "+(count-shown)+" участников",12,MUTED,false));
     }
 
-    private void draw(List<JSONObject> messages) {
+    private void draw(List<JSONObject> latest) {
         if (feed == null) return;
+        visibleSnapshot=new ArrayList<>(latest);
+        final ChatHistory history=ChatHistory.get(this);
+        final List<JSONObject> messages=historyViewLimit>300
+                ? history.recent(code,historyViewLimit) : latest;
+        final int allMessages=history.count(code);
+        final boolean keepOffset=expandingHistory;
+        final int oldFeedHeight=feed.getHeight(),oldY=scroll.getScrollY();
+        expandingHistory=false;
         feed.removeAllViews();
+        if(allMessages>messages.size() && historyViewLimit<5000){
+            TextView older=button("↑ Загрузить ранние сообщения ("+
+                    (allMessages-messages.size())+")",PANEL,13);
+            LinearLayout.LayoutParams olderLp=new LinearLayout.LayoutParams(-1,dp(43));
+            olderLp.bottomMargin=dp(13);
+            feed.addView(older,olderLp);
+            older.setOnClickListener(v->{
+                historyViewLimit=Math.min(historyViewLimit+200,5000);
+                expandingHistory=true;
+                draw(visibleSnapshot);
+            });
+        }
         if (messages.isEmpty()) {
             TextView welcome = text(
                     "Начните разговор\n\n" +
@@ -906,7 +926,10 @@ public final class MainActivity extends Activity {
                 bubble.addView(time);
             }
         }
-        scroll.post(() -> scroll.fullScroll(View.FOCUS_DOWN));
+        scroll.post(()->{
+            if(keepOffset)scroll.scrollTo(0,Math.max(0,oldY+feed.getHeight()-oldFeedHeight));
+            else if(page==0)scroll.fullScroll(View.FOCUS_DOWN);
+        });
     }
 
     private void openMedia(JSONObject media) {
