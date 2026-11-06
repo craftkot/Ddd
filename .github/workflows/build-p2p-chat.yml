@@ -8,6 +8,11 @@ on:
       - '.github/workflows/build-p2p-chat.yml'
   workflow_dispatch:
 
+# Only the newest commit should consume Android CI capacity and publish APKs.
+concurrency:
+  group: ehtid-chat-apk-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
