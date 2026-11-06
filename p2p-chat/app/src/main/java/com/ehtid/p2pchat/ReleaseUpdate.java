@@ -316,6 +316,16 @@ public final class ReleaseUpdate {
         }catch(Exception ignored){return null;}
     }
     public static boolean hasDownloadedUpdate(Context ctx){return readyFile(ctx)!=null;}
+    /** Cheap UI hint; full SHA-256 and signing verification happens before install. */
+    public static boolean markedReady(Context ctx){
+        try{
+            String tag=preferences(ctx).getString("ready_tag","");
+            if(!ReleasePolicy.newer(tag,currentVersion(ctx)))return false;
+            long length=preferences(ctx).getLong("ready_size",0);
+            File file=targetFile(ctx,tag);
+            return length>0&&length<=MAX_APK_BYTES&&file.isFile()&&file.length()==length;
+        }catch(Exception error){return false;}
+    }
     public static String readyVersion(Context ctx){
         String tag=preferences(ctx).getString("ready_tag","");
         return ReleasePolicy.versionFromTag(tag);
