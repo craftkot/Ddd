@@ -61,8 +61,8 @@ public final class MainActivity extends Activity {
     private EditText input, joinInput;
     private TextView status, codeLabel, profileLabel, membersLabel, homeServerLabel;
     private LinearLayout feed, membersPanel;
-    private ScrollView scroll, membersScroll, peopleScroll, profileScroll;
-    private LinearLayout peopleContent, profileContent, composer;
+    private ScrollView scroll, membersScroll, peopleScroll, profileScroll, roomsScroll;
+    private LinearLayout peopleContent, profileContent, roomsContent, composer;
     private ImageView wallpaper;
     private FrameLayout pages;
     private TextView micButton;
@@ -71,6 +71,10 @@ public final class MainActivity extends Activity {
     private long recordStarted;
     private MediaPlayer voicePlayer;
     private int page=0;
+    private SavedRooms savedRooms;
+    private int historyViewLimit=300;
+    private boolean expandingHistory=false;
+    private List<JSONObject> visibleSnapshot=new ArrayList<>();
     private static final int PICK_ATTACHMENT=201, PICK_WALLPAPER=202, RECORD_PERMISSION=203;
     private ChatService service;
     private boolean bound;
@@ -103,6 +107,7 @@ public final class MainActivity extends Activity {
         @Override public void onServiceConnected(ComponentName name, IBinder binder) {
             service = ((ChatService.LocalBinder)binder).service();
             bound = true;
+            if(!code.equals(service.currentRoom()))service.switchRoom(code,false);
             myId = service.myId();
             service.setVisible(true);
             service.setUiListener(callbacks);
@@ -120,6 +125,7 @@ public final class MainActivity extends Activity {
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+        savedRooms=new SavedRooms(this);
         code = getPreferences(MODE_PRIVATE).getString("room", "");
         if (!code.matches("[A-Z2-9]{16,32}")) code = newCode();
         buildUI();
@@ -159,6 +165,11 @@ public final class MainActivity extends Activity {
         brand.addView(title);
         profileLabel = text(profile().getString("nick",""),12,MUTED,false);
         brand.addView(profileLabel);
+        TextView roomsButton=button("Комнаты",PANEL,12);
+        LinearLayout.LayoutParams roomButtonLp=new LinearLayout.LayoutParams(dp(83),dp(45));
+        roomButtonLp.rightMargin=dp(5);
+        heading.addView(roomsButton,roomButtonLp);
+        roomsButton.setOnClickListener(v->showPage(3));
         TextView settings = button("⚙",PANEL,21);
         heading.addView(settings,new LinearLayout.LayoutParams(dp(48),dp(45)));
         settings.setOnClickListener(v -> showPage(2));
@@ -296,6 +307,14 @@ public final class MainActivity extends Activity {
         profileScroll.addView(profileContent,new ScrollView.LayoutParams(-1,-2));
         pages.addView(profileScroll,new FrameLayout.LayoutParams(-1,-1));
 
+        roomsScroll=new ScrollView(this);
+        roomsScroll.setBackgroundColor(BG);
+        roomsContent=new LinearLayout(this);
+        roomsContent.setOrientation(LinearLayout.VERTICAL);
+        roomsContent.setPadding(dp(10),dp(10),dp(10),dp(20));
+        roomsScroll.addView(roomsContent,new ScrollView.LayoutParams(-1,-2));
+        pages.addView(roomsScroll,new FrameLayout.LayoutParams(-1,-1));
+
         composer = new LinearLayout(this);
         composer.setGravity(Gravity.CENTER_VERTICAL);
         composer.setPadding(dp(6),dp(5),dp(5),dp(5));
@@ -341,6 +360,7 @@ public final class MainActivity extends Activity {
         applyWallpaper();
         refreshPeoplePage();
         refreshProfilePage();
+        refreshRoomsPage();
         draw(new ArrayList<>());
         drawMembers();
     }
@@ -372,14 +392,17 @@ public final class MainActivity extends Activity {
 
     private void showPage(int next) {
         page=next;
-        if(scroll==null||peopleScroll==null||profileScroll==null||composer==null)return;
+        if(scroll==null||peopleScroll==null||profileScroll==null||
+                roomsScroll==null||composer==null)return;
         scroll.setVisibility(page==0?View.VISIBLE:View.GONE);
         wallpaper.setVisibility(page==0?View.VISIBLE:View.GONE);
         peopleScroll.setVisibility(page==1?View.VISIBLE:View.GONE);
         profileScroll.setVisibility(page==2?View.VISIBLE:View.GONE);
+        roomsScroll.setVisibility(page==3?View.VISIBLE:View.GONE);
         composer.setVisibility(page==0?View.VISIBLE:View.GONE);
         if(page==1)refreshPeoplePage();
         if(page==2)refreshProfilePage();
+        if(page==3)refreshRoomsPage();
     }
 
     private String fullTime(long epoch) {
@@ -418,6 +441,96 @@ public final class MainActivity extends Activity {
                 "Время указано до секунды, но это не онлайн-трекинг в реальном времени. "+
                 "Сигналы приходят периодически и зависят от работы Android в фоне.",
                 12,MUTED,false));
+    }
+
+    private void refreshRoomsPage() {
+        if(roomsContent==null||savedRooms==null)return;
+        roomsContent.removeAllViews();
+        roomsContent.addView(text("Мои комнаты",22,WHITE,true));
+        roomsContent.addView(text(
+                "Выбирай комнату — её история останется на телефоне. "+
+                "Сейчас сообщения принимаются только в активной комнате; "+
+                "после возвращения подгрузятся доступные события с сервера.",
+                12,MUTED,false));
+        TextView back=button("← Вернуться в чат",PANEL,14);
+        LinearLayout.LayoutParams b=new LinearLayout.LayoutParams(-1,dp(43));
+        b.topMargin=dp(12);
+        roomsContent.addView(back,b);
+        back.setOnClickListener(v->showPage(0));
+
+        TextView create=button("＋ Создать комнату",ACCENT,14);
+        LinearLayout.LayoutParams c=new LinearLayout.LayoutParams(-1,dp(46));
+        c.topMargin=dp(9);
+        roomsContent.addView(create,c);
+        create.setOnClickListener(v->launchChat(newCode(),false));
+
+        ChatHistory history=ChatHistory.get(this);
+        List<SavedRooms.Room> rooms=savedRooms.list();
+        for(SavedRooms.Room room:rooms) {
+            history.migrateLegacy(profile(),room.code);
+            LinearLayout card=new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding(dp(12),dp(11),dp(12),dp(11));
+            card.setBackground(round(SURFACE,15));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
+            lp.topMargin=dp(10);
+            roomsContent.addView(card,lp);
+            String title=room.title.isEmpty()?"Комната "+room.code.substring(0,6):room.title;
+            card.addView(text(title+(room.code.equals(code)?"  ● Активна":""),16,
+                    room.code.equals(code)?ONLINE:WHITE,true));
+            card.addView(text(room.code,11,MUTED,false));
+            card.addView(text(history.preview(room.code),13,WHITE,false));
+            card.addView(text("Сообщений: "+history.count(room.code)+
+                    "  ·  Последний вход: "+fullTime(room.lastOpened),11,MUTED,false));
+
+            LinearLayout controls=new LinearLayout(this);
+            LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(42));
+            cp.topMargin=dp(8);
+            card.addView(controls,cp);
+            TextView open=button(room.code.equals(code)?"Открыть чат":"Перейти",ACCENT,12);
+            controls.addView(open,new LinearLayout.LayoutParams(0,-1,1f));
+            open.setOnClickListener(v->{
+                if(room.code.equals(code))showPage(0);
+                else launchChat(room.code,false);
+            });
+            TextView rename=button("Имя",PANEL,12);
+            LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(dp(64),-1);
+            rp.leftMargin=dp(5);
+            controls.addView(rename,rp);
+            rename.setOnClickListener(v->renameRoom(room));
+            if(!room.code.equals(code)) {
+                TextView hide=button("Скрыть",PANEL,12);
+                LinearLayout.LayoutParams hp=new LinearLayout.LayoutParams(dp(67),-1);
+                hp.leftMargin=dp(5);
+                controls.addView(hide,hp);
+                hide.setOnClickListener(v->new AlertDialog.Builder(this)
+                        .setTitle("Убрать из списка?")
+                        .setMessage("Комната пропадёт из списка, но сообщения и медиа "+
+                                "останутся в памяти телефона. По коду можно вернуться.")
+                        .setNegativeButton("Отмена",null)
+                        .setPositiveButton("Скрыть",(d,w)->{
+                            savedRooms.hide(room.code);
+                            refreshRoomsPage();
+                        }).show());
+            }
+        }
+    }
+
+    private void renameRoom(SavedRooms.Room room){
+        EditText input=new EditText(this);
+        input.setSingleLine(true);
+        input.setText(room.title);
+        input.setHint("Название комнаты");
+        input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(36)});
+        new AlertDialog.Builder(this)
+                .setTitle("Переименовать комнату")
+                .setMessage("Название видишь только ты. Код комнаты не меняется.")
+                .setView(input)
+                .setNegativeButton("Отмена",null)
+                .setPositiveButton("Сохранить",(d,w)->{
+                    savedRooms.rename(room.code,input.getText().toString());
+                    refreshRoomsPage();
+                }).show();
     }
 
     private void refreshProfilePage() {
@@ -925,9 +1038,20 @@ public final class MainActivity extends Activity {
             askName(true);
             return;
         }
-        code = room;
+        if(room==null||!room.matches("[A-Z2-9]{16,32}"))return;
+        boolean changed=!room.equals(code);
+        code=room;
         codeLabel.setText(code);
+        savedRooms.remember(room);
         getPreferences(MODE_PRIVATE).edit().putString("room",room).apply();
+        if(changed){
+            historyViewLimit=300;
+            visibleSnapshot=new ArrayList<>();
+            input.setText("");
+        }
+        ChatHistory history=ChatHistory.get(this);
+        history.migrateLegacy(profile(),room);
+        draw(history.recent(room,historyViewLimit));
         currentMembers.clear();
         drawMembers();
         if(peopleContent!=null)refreshPeoplePage();
@@ -944,11 +1068,13 @@ public final class MainActivity extends Activity {
         }
         if (!bindRequested) {
             try {
-                bindRequested = bindService(new Intent(this,ChatService.class),conn,Context.BIND_AUTO_CREATE);
+                bindRequested = bindService(new Intent(this,ChatService.class),
+                        conn,Context.BIND_AUTO_CREATE);
             } catch (RuntimeException e) {
                 status.setText("● Ошибка привязки: " + e.getMessage());
             }
         } else if (service != null) {
+            service.switchRoom(room,joining);
             myId=service.myId();
             service.setUiListener(callbacks);
         }
