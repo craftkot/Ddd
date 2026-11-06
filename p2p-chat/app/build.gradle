@@ -11,6 +11,9 @@ def actionBuildNumber = System.getenv('GITHUB_RUN_NUMBER')
 def monotonicCode = actionBuildNumber ? 5000 + Integer.parseInt(actionBuildNumber) : 5
 
 android {
+    buildFeatures {
+        buildConfig true
+    }
     namespace 'com.ehtid.p2pchat'
     compileSdk 35
     defaultConfig {
