@@ -128,6 +128,7 @@ public final class MainActivity extends Activity {
         getWindow().setNavigationBarColor(BG);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         savedRooms=new SavedRooms(this);
+        savedRooms.migrateLegacy(profile());
         code = getPreferences(MODE_PRIVATE).getString("room", "");
         if (!code.matches("[A-Z2-9]{16,32}")) code = newCode();
         buildUI();
