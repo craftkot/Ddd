@@ -75,13 +75,31 @@ function cardVisual(c){
    const x=13+(seed+i*71)%210,y=12+((seed>>>i)+i*29)%110;
    return '<circle cx="'+x+'" cy="'+y+'" r="'+(i%3===0?1.4:.8)+'" fill="'+colors[0]+'" opacity=".7"/>';
  }).join("");
- const motif=seed%4;
- const glyph=motif===0?
-   '<path d="M120 26L140 72 120 116 100 72Z" fill="none" stroke="'+colors[0]+'" stroke-width="4"/><path d="M120 38V104M107 70h26" stroke="'+colors[0]+'" stroke-width="2"/>':
-   motif===1?'<circle cx="120" cy="72" r="37" stroke="'+colors[0]+'" stroke-width="3" fill="none"/><path d="M120 34L157 94 84 94Z" fill="none" stroke="'+colors[0]+'" stroke-width="3"/>':
-   motif===2?'<path d="M83 94Q114 6 148 94Q121 120 83 94Z" fill="none" stroke="'+colors[0]+'" stroke-width="4"/><circle cx="120" cy="73" r="15" fill="none" stroke="'+colors[0]+'" stroke-width="3"/>':
-   '<path d="M120 28L155 73 120 115 85 73Z" fill="none" stroke="'+colors[0]+'" stroke-width="3"/><circle cx="120" cy="73" r="25" fill="none" stroke="'+colors[0]+'" stroke-width="3"/>';
- const base='<svg class="fate-art-svg" viewBox="0 0 240 140" aria-hidden="true" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="'+id+'" x1="0" y1="0" x2="1" y2="1"><stop stop-color="'+colors[1]+'"/><stop offset="1" stop-color="'+colors[2]+'"/></linearGradient><radialGradient id="'+id+'halo"><stop stop-color="'+colors[0]+'" stop-opacity=".5"/><stop offset="1" stop-color="'+colors[0]+'" stop-opacity="0"/></radialGradient></defs><rect width="240" height="140" fill="url(#'+id+')"/><circle cx="119" cy="70" r="80" fill="url(#'+id+'halo)"/><path d="M-10 135L38 94 73 117 101 76 149 114 182 83 248 138Z" fill="#0b1627" opacity=".69"/><circle cx="120" cy="72" r="53" fill="none" stroke="'+colors[0]+'" opacity=".38"/><circle cx="120" cy="72" r="46" fill="none" stroke="'+colors[0]+'" opacity=".2" stroke-dasharray="6 11"/>'+stars+glyph+'</svg>';
+ const effects=[String(a.k||""),...(a.effects||[]).map(e=>e.key)].join(" ").toLowerCase();
+ const category= /heal|regen|meditate|лечен|восстан/i.test(effects+" "+a.n)?"heal":
+   /poison|venom|aoepoison|яд|токс/i.test(effects+" "+a.n)?"venom":
+   /burn|fire|ember|огонь|жар|плам/i.test(effects+" "+a.n)?"flame":
+   /block|shield|guard|ward|armor|щита|брон/i.test(effects+" "+a.n)?"shield":
+   /speed|delay|advance|slow|retard|хрон|время|ав/i.test(effects+" "+school+" "+a.n)?"time":
+   /bleed|blood|leech|кров|клин/i.test(effects+" "+a.n)?"blade":
+   /draw|flow|ritual|energy|str|маг|эфир/i.test(effects+" "+school+" "+a.n)?"arcane":
+   /ambush|bow|ranged|hunter|стрел|лук/i.test(effects+" "+a.n)?"bow":
+   a.t==="attack"?"sword":a.t==="power"?"arcane":"crystal";
+ const metal="url(#"+id+"metal)";
+ const ornament={
+  sword:'<path d="M107 91L137 32 147 21 153 37 121 104Z" fill="'+metal+'" stroke="'+colors[0]+'" stroke-width="3"/><path d="M98 91L133 113 M113 103L102 119" stroke="'+colors[0]+'" stroke-width="8" stroke-linecap="round"/><path d="M125 39L116 85" stroke="#fff5d7" stroke-width="2" opacity=".9"/>',
+  blade:'<path d="M86 108Q113 77 126 28Q148 43 136 74Q122 95 86 108Z" fill="'+metal+'" stroke="'+colors[0]+'" stroke-width="4"/><path d="M102 89L140 123 M104 107L145 89" fill="none" stroke="'+colors[0]+'" stroke-width="7"/>',
+  shield:'<path d="M120 26Q144 43 162 43L156 82Q146 105 120 119Q94 105 84 82L78 43Q105 39 120 26Z" fill="'+metal+'" stroke="'+colors[0]+'" stroke-width="5"/><path d="M120 43V105 M95 71H145" stroke="#fff5da" stroke-width="4" opacity=".75"/>',
+  flame:'<path d="M122 17Q103 51 119 69Q139 57 141 38Q177 98 132 122Q90 136 79 98Q72 66 103 47Q99 80 120 86Q111 63 122 17Z" fill="'+metal+'" stroke="'+colors[0]+'" stroke-width="5"/><path d="M122 83Q105 102 123 120Q144 104 122 83Z" fill="#fff1bc" opacity=".9"/>',
+  venom:'<path d="M92 31Q162 30 150 69Q146 84 119 91Q88 100 99 121Q73 104 90 87Q116 66 129 69Q149 58 129 48Q110 42 92 53Z" fill="'+metal+'" stroke="'+colors[0]+'" stroke-width="4"/><circle cx="140" cy="57" r="4" fill="#f7f0be"/><path d="M111 96L105 110 M121 100L120 115 M130 97L136 109" stroke="'+colors[0]+'" stroke-width="3"/>',
+  heal:'<path d="M120 111Q72 82 80 51Q89 22 120 53Q147 21 161 48Q173 76 120 111Z" fill="'+metal+'" stroke="'+colors[0]+'" stroke-width="5"/><path d="M120 53V101 M96 76H144" stroke="#fff8d9" stroke-width="7" stroke-linecap="round"/>',
+  time:'<path d="M89 29H151M91 117H149M94 34L144 34Q141 56 126 68Q140 82 146 114H94Q101 82 114 68Q97 52 94 34Z" fill="'+metal+'" stroke="'+colors[0]+'" stroke-width="4"/><path d="M105 42H136L120 67L107 103H134" fill="none" stroke="#fff6cc" stroke-width="3"/>',
+  arcane:'<path d="M120 21L135 56L170 70L135 84L120 119L105 84L70 70L105 56Z" fill="'+metal+'" stroke="'+colors[0]+'" stroke-width="4"/><circle cx="120" cy="70" r="20" fill="#131c30" stroke="#fff1c7" stroke-width="3"/><path d="M120 48V92M98 70H142" stroke="'+colors[0]+'" stroke-width="2"/>',
+  bow:'<path d="M101 29Q161 69 99 118" fill="none" stroke="'+colors[0]+'" stroke-width="8"/><path d="M101 29L99 118M76 69H169M169 69L156 58M169 69L156 80" stroke="#fff0cf" stroke-width="3" fill="none"/>',
+  crystal:'<path d="M119 19L160 61L134 114H101L79 61Z" fill="'+metal+'" stroke="'+colors[0]+'" stroke-width="4"/><path d="M119 19L120 114M79 61H160M119 19L101 61L120 114L134 61Z" fill="none" stroke="#fff5d7" stroke-width="2" opacity=".9"/>'
+ };
+ const glyph='<g transform="rotate('+((seed%17)-8)+' 120 70)">'+ornament[category]+'</g>';
+ const base='<svg class="fate-art-svg" viewBox="0 0 240 140" aria-hidden="true" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="'+id+'" x1="0" y1="0" x2="1" y2="1"><stop stop-color="'+colors[1]+'"/><stop offset="1" stop-color="'+colors[2]+'"/></linearGradient><radialGradient id="'+id+'halo"><stop stop-color="'+colors[0]+'" stop-opacity=".5"/><stop offset="1" stop-color="'+colors[0]+'" stop-opacity="0"/></radialGradient><linearGradient id="'+id+'metal" x1="0" y1="0" x2="1" y2="1"><stop stop-color="'+colors[0]+'"/><stop offset=".55" stop-color="'+colors[1]+'"/><stop offset="1" stop-color="'+colors[2]+'"/></linearGradient></defs><rect width="240" height="140" fill="url(#'+id+')"/><circle cx="119" cy="70" r="80" fill="url(#'+id+'halo)"/><path d="M-10 135L38 94 73 117 101 76 149 114 182 83 248 138Z" fill="#0b1627" opacity=".69"/><circle cx="120" cy="72" r="53" fill="none" stroke="'+colors[0]+'" opacity=".38"/><circle cx="120" cy="72" r="46" fill="none" stroke="'+colors[0]+'" opacity=".2" stroke-dasharray="6 11"/>'+stars+glyph+'</svg>';
  return '<div class="fate-illustration tone-'+tone+'">'+base+'<span class="fate-art-flourish">✦</span></div>'
 }
 
