@@ -6,6 +6,7 @@ on:
       - feature/ashes-room-art-v08
       - feature/ashes-character-redesign-v09
       - feature/ashes-av-fate-combat-v10
+      - feature/ashes-icon-install-v011
     paths:
       - 'rogue-duel/**'
       - '.github/workflows/build-ashes-duel.yml'
@@ -62,6 +63,12 @@ jobs:
           test -s app/src/main/assets/turn-sequence.js
           grep -q 'turn-sequence.js' app/src/main/assets/index.html
           test -s app/src/main/assets/art/arena.webp
+          test -s app/src/main/assets/art/ashes-cover.webp
+          test -s app/src/main/res/drawable-nodpi/ashes_launcher.webp
+          test -s app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          grep -q 'android:icon="@mipmap/ic_launcher"' app/src/main/AndroidManifest.xml
+          grep -q 'targetSdk 35' app/build.gradle
+          grep -q 'setSafeBrowsingEnabled(true)' app/src/main/java/com/ehtid/ashesduel/MainActivity.java
           test -s app/src/main/assets/art/atlas.webp
           test -s app/src/main/assets/art/kenney/icons/sword.png
           test -s app/src/main/assets/art/kenney/heroes/red_character.png
@@ -83,13 +90,29 @@ jobs:
           test -s app/build/outputs/apk/debug/app-debug.apk
           unzip -tq app/build/outputs/apk/debug/app-debug.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify app/build/outputs/apk/debug/app-debug.apk
-          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/AshesDuel-v0.10-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/AshesDuel-v0.11-debug.apk
       - uses: actions/upload-artifact@v4
         with:
           name: Pepel-i-Karty-Android-APK
-          path: rogue-duel/app/build/outputs/apk/debug/AshesDuel-v0.10-debug.apk
+          path: rogue-duel/app/build/outputs/apk/debug/AshesDuel-v0.11-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish v0.11 updated Android beta
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/feature/ashes-icon-install-v011') || (github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feature/ashes-icon-install-v011' && github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TARGET_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+          cd app/build/outputs/apk/debug
+          sha256sum AshesDuel-v0.11-debug.apk > SHA256SUMS.txt
+          cd -
+          if gh release view ashes-duel-v0.11.0-beta >/dev/null 2>&1; then
+            gh release upload ashes-duel-v0.11.0-beta app/build/outputs/apk/debug/AshesDuel-v0.11-debug.apk#AshesDuel-v0.11-debug.apk app/build/outputs/apk/debug/SHA256SUMS.txt#SHA256SUMS.txt --clobber
+            gh release edit ashes-duel-v0.11.0-beta --target "$TARGET_SHA" || true
+          else
+            gh release create ashes-duel-v0.11.0-beta app/build/outputs/apk/debug/AshesDuel-v0.11-debug.apk#AshesDuel-v0.11-debug.apk app/build/outputs/apk/debug/SHA256SUMS.txt#SHA256SUMS.txt --target "$TARGET_SHA" --prerelease --title "Пепел и карты v0.11 Beta — иконка и Android 15" --notes "Новая оригинальная иконка и обложка Оракула; targetSdk 35 вместо 32; WebView Safe Browsing и запрет загрузки удалённых страниц/скриптов, только INTERNET. APK подписана отладочным ключом и это НЕ гарантирует отсутствие Play Protect Scan: рекомендации сканирования контролирует Android, а для стабильных обновлений нужен отдельный долгосрочный секретный ключ релизной подписи. Установка поверх APK с другой подписью может потребовать переустановку (предварительно сохраните данные)."
+          fi
 
       - name: Publish v0.10 AV combat beta
         if: (github.event_name == 'push' && github.ref == 'refs/heads/feature/ashes-av-fate-combat-v10') || (github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feature/ashes-av-fate-combat-v10' && github.event.pull_request.head.repo.full_name == github.repository)
@@ -98,10 +121,10 @@ jobs:
         run: |
           TARGET_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
           if gh release view ashes-duel-v0.10.0-beta >/dev/null 2>&1; then
-            gh release upload ashes-duel-v0.10.0-beta app/build/outputs/apk/debug/AshesDuel-v0.10-debug.apk#AshesDuel-v0.10-debug.apk --clobber
+            gh release upload ashes-duel-v0.10.0-beta app/build/outputs/apk/debug/AshesDuel-v0.11-debug.apk#AshesDuel-v0.11-debug.apk --clobber
             gh release edit ashes-duel-v0.10.0-beta --target "$TARGET_SHA" || true
           else
-            gh release create ashes-duel-v0.10.0-beta app/build/outputs/apk/debug/AshesDuel-v0.10-debug.apk#AshesDuel-v0.10-debug.apk --target "$TARGET_SHA" --prerelease --title "Пепел и карты v0.10 Beta — AV / 5 очков навыков" --notes "Новая очередь Action Value с отображением ходов, ресурс до 5 очков навыков, базовая атака +1 ОН, карточные действия в PvE и PvP, новая арена для 1–4 мобов без горизонтального скролла, переработанный визуал 161 карт с полным текстом. APK подписан debug-ключом. Интернет-PvP между двумя телефонами требует ручного теста."
+            gh release create ashes-duel-v0.10.0-beta app/build/outputs/apk/debug/AshesDuel-v0.11-debug.apk#AshesDuel-v0.11-debug.apk --target "$TARGET_SHA" --prerelease --title "Пепел и карты v0.10 Beta — AV / 5 очков навыков" --notes "Новая очередь Action Value с отображением ходов, ресурс до 5 очков навыков, базовая атака +1 ОН, карточные действия в PvE и PvP, новая арена для 1–4 мобов без горизонтального скролла, переработанный визуал 161 карт с полным текстом. APK подписан debug-ключом. Интернет-PvP между двумя телефонами требует ручного теста."
           fi
 
       - name: Publish v0.9 beta with redesigned characters
