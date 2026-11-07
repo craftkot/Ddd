@@ -59,9 +59,9 @@ h1,h2,h3,p{margin:0}h1{font-size:clamp(30px,9vw,53px);line-height:1.08;font-weig
 .emphasis{font-size:40px;text-align:center;margin:18px 0}.message{font:13px/1.6 system-ui;color:#d0d4dc;margin:9px 0}
 @media(min-width:550px){.cardgrid{grid-template-columns:repeat(3,1fr)}.grid{grid-template-columns:repeat(2,1fr)}.scrollline .playcard{flex-basis:170px}}
 </style>
-<link rel="stylesheet" href="expansion.css"><link rel="stylesheet" href="atelier.css"><link rel="stylesheet" href="connection-ui.css">
+<link rel="stylesheet" href="expansion.css"><link rel="stylesheet" href="atelier.css"><link rel="stylesheet" href="connection-ui.css"><link rel="stylesheet" href="artbook.css">
 </head>
-<body><div id="shell"><header><div class="logo">✦ ПЕПЕЛ И КАРТЫ <small>ДУЭЛЬ ДВУХ СУДЕБ</small></div><div class="net" id="net">Ожидание комнаты</div></header><section id="roomPanel" class="room-panel" aria-label="Панель соединения"></section><main id="app"></main><div class="footer">Авторские карты и мир · Ранняя версия 0.7</div></div>
+<body><div id="shell"><header><div class="logo">✦ ПЕПЕЛ И КАРТЫ <small>ДУЭЛЬ ДВУХ СУДЕБ</small></div><div class="net" id="net">Ожидание комнаты</div></header><section id="roomPanel" class="room-panel" aria-label="Панель соединения"></section><main id="app"></main><div class="footer">Авторские карты и мир · Сетевая версия 0.8 · Иллюстрации Kenney CC0</div></div>
 <script>
 "use strict";
 const CARDS={
@@ -118,7 +118,7 @@ const STAGES=[
 ];
 const LABEL={fight:["⚔️","Враг","Обычный бой за золото и карту"],elite:["☠️","Элита","Опасный враг и реликвия"],shop:["🛒","Торговец","Карты, лечение и редкости"],event:["❔","Неизвестность","Выбор со скрытой ценой"],rest:["🔥","Привал","Исцеление или улучшение"],treasure:["💎","Сокровище","Выбор из трёх реликвий"]};
 const $=id=>document.getElementById(id); const app=$("app");
-const G={screen:"lobby",role:"",code:"",topic:"",key:null,runner:null,other:null,hero:"",stage:0,map:[],encounter:null,combat:null,shop:null,reward:null,log:[],demo:false,connected:false,duel:null,done:false};
+const G={screen:"lobby",role:"",code:"",topic:"",bearer:"",key:null,runner:null,other:null,hero:"",stage:0,map:[],encounter:null,combat:null,shop:null,reward:null,log:[],demo:false,connected:false,duel:null,done:false};
 let peer=null, channel=null, gotRemote=false, candidates=[], seen=new Set(), pending=new Map(), guestJoinTimer=null, statusMessage="";
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function rnd(n){return Math.floor(Math.random()*n)}
@@ -222,9 +222,38 @@ function statusMessageNow(msg){statusMessage=msg;setNet()}
 const encoder=new TextEncoder();const decoder=new TextDecoder();
 function base64(bytes){let str="";bytes.forEach(x=>str+=String.fromCharCode(x));return btoa(str)}
 function unbase64(x){return Uint8Array.from(atob(x),c=>c.charCodeAt(0))}
-async function setRoom(code,role){G.code=code.toUpperCase();G.role=role;const secret=encoder.encode(G.code);const digest=new Uint8Array(await crypto.subtle.digest("SHA-256",secret));const topicHash=Array.from(digest).map(x=>x.toString(16).padStart(2,"0")).join("").slice(0,30);G.topic="ehtid-duel-"+topicHash;const material=await crypto.subtle.importKey("raw",secret,"PBKDF2",false,["deriveKey"]);G.key=await crypto.subtle.deriveKey({name:"PBKDF2",salt:encoder.encode("EHTID Ashes Duel v1"),iterations:55000,hash:"SHA-256"},material,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);AndroidNet.listen(G.topic);try{setupRTC()}catch(e){}if(role==="guest"){send({type:"join"});guestJoinTimer=setInterval(()=>{if(!G.connected)send({type:"join"});else clearInterval(guestJoinTimer)},5000)}else{setInterval(()=>{if(G.topic&&!G.connected)send({type:"hello"})},7000)}setNet()}
-async function encrypt(obj){const iv=crypto.getRandomValues(new Uint8Array(12));const ct=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv},G.key,encoder.encode(JSON.stringify(obj))));return base64(iv)+"."+base64(ct)}
-async function decrypt(payload){const spl=payload.split(".");if(spl.length!==2)return null;const bytes=await crypto.subtle.decrypt({name:"AES-GCM",iv:unbase64(spl[0])},G.key,unbase64(spl[1]));return JSON.parse(decoder.decode(bytes))}
+function hex(bytes){return Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("")}
+function b64url(bytes){return base64(bytes).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")}
+function fromB64url(value){let x=value.replace(/-/g,"+").replace(/_/g,"/");return unbase64(x+"=".repeat((4-x.length%4)%4))}
+async function setRoom(code,role){
+ G.code=code.toUpperCase();G.role=role;
+ // Match EHTID Chat's Cloudflare room capability protocol, with a separate game code.
+ const proof=new Uint8Array(await crypto.subtle.digest("SHA-256",encoder.encode("EHTID-RELAY-ACCESS-V1:"+G.code)));
+ G.bearer=hex(proof);
+ const hash=new Uint8Array(await crypto.subtle.digest("SHA-256",encoder.encode(G.bearer)));
+ G.topic="ehtidp2p-"+hex(hash).slice(0,40);
+ const secret=encoder.encode(G.code);
+ const material=await crypto.subtle.importKey("raw",secret,"PBKDF2",false,["deriveKey"]);
+ G.key=await crypto.subtle.deriveKey({name:"PBKDF2",salt:encoder.encode("EHTID Ashes Duel v1"),iterations:55000,hash:"SHA-256"},material,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+ if(typeof AndroidNet==="undefined"||!AndroidNet.listen){throw Error("Сеть доступна только в Android-приложении")}
+ AndroidNet.listen(G.topic,G.bearer);
+ try{setupRTC()}catch(e){}
+ if(role==="guest"){send({type:"join"});guestJoinTimer=setInterval(()=>{if(!G.connected)send({type:"join"});else clearInterval(guestJoinTimer)},5000)}
+ else{setInterval(()=>{if(G.topic&&!G.connected)send({type:"hello"})},7000)}
+ setNet()
+}
+async function encrypt(obj){
+ const iv=crypto.getRandomValues(new Uint8Array(12));
+ const data=encoder.encode(JSON.stringify(obj));
+ const ct=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv},G.key,data));
+ return "v1."+b64url(iv)+"."+b64url(ct)
+}
+async function decrypt(payload){
+ const spl=payload.split(".");
+ if(spl.length!==3||spl[0]!=="v1")return null;
+ const bytes=await crypto.subtle.decrypt({name:"AES-GCM",iv:fromB64url(spl[1])},G.key,fromB64url(spl[2]));
+ return JSON.parse(decoder.decode(bytes))
+}
 function toRelay(data){try{AndroidNet.post(G.topic,data)}catch(e){transportWarning("Сетевая отправка недоступна")}}
 async function send(msg){if(!G.key||G.demo)return;let id=Array.from(crypto.getRandomValues(new Uint8Array(8))).map(x=>x.toString(16).padStart(2,"0")).join("");let value=await encrypt({...msg,id,from:G.role,v:1});const force=msg.type==="signal"||msg.type==="join"||msg.type==="welcome"||msg.type==="hello";if(!force&&channel&&channel.readyState==="open"){try{channel.send(value);let timer=setTimeout(()=>{toRelay(value);pending.delete(id)},1800);pending.set(id,timer);return}catch(e){}}toRelay(value)}
 async function receive(payload,via){if(payload.startsWith("ack:")){const id=payload.slice(4);if(pending.has(id)){clearTimeout(pending.get(id));pending.delete(id)}return}let m;try{m=await decrypt(payload)}catch(e){return}if(!m||m.v!==1||m.from===G.role||!m.id)return;if(via==="direct"&&channel&&channel.readyState==="open"){try{channel.send("ack:"+m.id)}catch(e){}}if(seen.has(m.id))return;seen.add(m.id);if(seen.size>1500)seen.clear();m._via=via;handleMessage(m)}
