@@ -408,6 +408,11 @@ public final class PeerMesh {
         return p;
     }
 
+    /** Request fresh RTT samples for all active data channels (UI diagnostics). */
+    public void requestPings() {
+        if(!closed)sendPings();
+    }
+
     private void sendPings() {
         List<Link> copy;
         synchronized (links) { copy=new ArrayList<>(links.values()); }
