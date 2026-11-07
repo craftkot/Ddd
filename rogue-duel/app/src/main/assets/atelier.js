@@ -57,16 +57,10 @@ function figure(kind){
 /* Real offline card illustrations: 12 original painted atlas crops, plus Kenney CC0 item icons.
    This function only changes artwork; effects, cost and card IDs remain untouched. */
 function paintedPortrait(kind){
- const heroKinds=["guard","oracle","hunter"];
- const enemyKinds=["bandit","cultist","skeleton","slime","mage","hound"];
- const hero=heroKinds.indexOf(kind);
- const fallback={knight:"skeleton",boss:"skeleton"};
- const enemy=Math.max(0,enemyKinds.indexOf(fallback[kind]||kind));
- const x=hero>=0?hero:enemy%3;
- const row=hero>=0?0:enemy<3?1:2;
- const xpc=["0%","50%","100%"][x],ypc=["0%","16.7%","30.1%"][row];
- const label=hero>=0?{"guard":"Страж","oracle":"Оракул","hunter":"Ловчий"}[kind]:"Существо из пепла";
- return '<span role="img" aria-label="'+label+'" class="figure artbook-figure" style="--portrait-x:'+xpc+';--portrait-y:'+ypc+'"></span>';
+ const aliases={guard:"guard",oracle:"oracle",hunter:"hunter",bandit:"bandit",cultist:"cultist",skeleton:"skeleton",slime:"slime",hound:"hound",boss:"boss",knight:"skeleton",mage:"cultist"};
+ const imageKind=aliases[kind]||"bandit";
+ const labels={guard:"Страж — бронированный рыцарь",oracle:"Оракул — повелительница эфира",hunter:"Ловчий — лесной следопыт",bandit:"Разбойник",cultist:"Культист",skeleton:"Скелет-воин",slime:"Болотная тварь",hound:"Пепельная гончая",boss:"Король мёртвых"};
+ return '<img class="figure artbook-figure character-'+imageKind+'" src="art/characters/'+imageKind+'.webp" alt="'+labels[imageKind]+'" draggable="false" loading="eager" decoding="async">';
 }
 function cardVisual(c){
  const a=art(c.id);
@@ -234,7 +228,7 @@ function treasureView(){
 }
 function heroView(){
  let intro='<div class="etch-head"><p class="eyebrow">ИЗБЕРИ ПУТЬ</p><h2>Три судьбы</h2><p class="sub">'+(G.demo?"Одиночный тест маршрута":"Код комнаты: "+G.code)+"</p></div>";
- return intro+'<div class="etch-class-grid">'+Object.entries(CLASSES).map(([id,c])=>'<button class="etch-class" data-a="hero" data-x="'+id+'">'+paintedPortrait(id)+'<h3>'+c.name+'</h3><p>❤ '+c.hp+' здоровья</p><p>'+esc(c.desc)+'</p></button>').join("")+'</div>'
+ return intro+'<div class="etch-class-grid">'+Object.entries(CLASSES).map(([id,c])=>'<button class="etch-class hero-choice hero-'+id+'" data-a="hero" data-x="'+id+'"><span class="hero-portrait-wrap">'+paintedPortrait(id)+'</span><span class="hero-choice-info"><span class="hero-role">КЛАСС ГЕРОЯ</span><h3>'+c.name+'</h3><span class="hero-hp">❤ '+c.hp+' здоровья</span><p>'+esc(c.desc)+'</p><span class="hero-select">ВЫБРАТЬ ПЕРСОНАЖА ›</span></span></button>').join("")+'</div>'
 }
 function lobbyView(){
  return '<div class="etch-lobby"><div class="hero-crest">⚔</div><div class="eyebrow">ДВА ПУТИ · ОДНА ДУЭЛЬ</div><h1>Пепел и карты</h1><p class="lead">Собери колоду, пройди разветвлённый путь и сразись с другим игроком. Действия определяются скоростью и контрприёмами.</p>'+
