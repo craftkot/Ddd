@@ -110,6 +110,9 @@ public final class ChatService extends Service implements InternetEngine.Listene
     public int directPeerCount() {
         return engine==null ? 0 : engine.meshPeerCount();
     }
+    public void refreshPings() {
+        if(engine!=null)engine.refreshPings();
+    }
     public void createPeerInvitation() {
         if (engine!=null) engine.makeMeshOffer();
     }

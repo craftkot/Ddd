@@ -12,6 +12,7 @@ import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Typeface;
@@ -67,7 +68,10 @@ public final class MainActivity extends Activity {
     private static final int MUTED = Color.rgb(173, 163, 195);
     private static final int ONLINE = Color.rgb(94, 216, 189);
     private EditText input, joinInput;
-    private TextView status, codeLabel, codePeek, profileLabel, membersLabel, homeServerLabel;
+    private TextView status, codeLabel, codePeek, pingHeader, profileLabel, membersLabel, homeServerLabel;
+    private final ImagePreviews imagePreviews=new ImagePreviews();
+    private final List<PreviewSlot> previewSlots=new ArrayList<>();
+    private boolean previewRefreshQueued;
     private final Set<String> pendingTranscriptions=new HashSet<>();
     private LinearLayout feed, membersPanel;
     private ScrollView scroll, membersScroll, peopleScroll, profileScroll, roomsScroll;
@@ -110,6 +114,7 @@ public final class MainActivity extends Activity {
             currentMembers.addAll(members);
             drawMembers();
             refreshPeoplePage();
+            refreshPingHeader();
         }
         @Override public void onIncoming(String nick, String text) {}
         @Override public void onManualSignal(String token, String kind) {}
@@ -182,6 +187,8 @@ public final class MainActivity extends Activity {
         codePeek = text("Код "+code.substring(0,6)+"… · открыть доступ",11,MUTED,false);
         codePeek.setSingleLine(true);
         brand.addView(codePeek);
+        pingHeader=text("Cloudflare · измеряем задержку…",11,MUTED,false);
+        brand.addView(pingHeader);
         TextView roomsButton=iconButton(R.drawable.ic_ehtid_rooms,PANEL,"Список комнат");
         LinearLayout.LayoutParams roomButtonLp=new LinearLayout.LayoutParams(dp(46),dp(46));
         roomButtonLp.rightMargin=dp(5);
@@ -311,6 +318,7 @@ public final class MainActivity extends Activity {
         feed.setPadding(0,dp(11),0,dp(11));
         scroll.addView(feed,new ScrollView.LayoutParams(-1,-2));
         pages.addView(scroll,new FrameLayout.LayoutParams(-1,-1));
+        scroll.setOnScrollChangeListener((v,x,y,oldX,oldY)->schedulePreviewChecks());
 
         peopleScroll=new ScrollView(this);
         peopleScroll.setBackgroundColor(BG);
@@ -439,6 +447,15 @@ public final class MainActivity extends Activity {
         TextView back=button("← Чат",PANEL,13);
         peopleContent.addView(back);
         back.setOnClickListener(v->showPage(0));
+        TextView refresh=labeledButton("Обновить пинги",R.drawable.ic_ehtid_refresh,PANEL,13);
+        LinearLayout.LayoutParams rf=new LinearLayout.LayoutParams(-1,dp(45));
+        rf.topMargin=dp(9);
+        peopleContent.addView(refresh,rf);
+        refresh.setOnClickListener(v->{
+            if(service==null){status.setText("● Сначала подключитесь к комнате");return;}
+            service.refreshPings();
+            status.setText("● Проверяем задержку сети и участников…");
+        });
         for(InternetEngine.Member m:currentMembers) {
             LinearLayout card=new LinearLayout(this);
             card.setOrientation(LinearLayout.VERTICAL);
@@ -452,15 +469,19 @@ public final class MainActivity extends Activity {
             card.addView(text("Статус: "+(m.online?"в сети":"не в сети"),13,MUTED,false));
             card.addView(text("Последний вход: "+fullTime(m.loginAt),13,MUTED,false));
             card.addView(text("Последний сигнал: "+fullTime(m.lastSeen),13,MUTED,false));
-            card.addView(text("Пинг: "+(m.pingMs<0?"—":m.pingMs+" мс"),13,MUTED,false));
+            TextView latency=text(memberPingText(m),13,pingColor(m),true);
+            latency.setPadding(0,dp(5),0,dp(3));
+            card.addView(latency);
             String device=m.id.length()>12?m.id.substring(0,12)+"…":m.id;
             card.addView(text("Устройство: "+device,12,MUTED,false));
         }
         if(currentMembers.isEmpty())
             peopleContent.addView(text("Участники ещё не обнаружены",13,MUTED,false));
         peopleContent.addView(text(
-                "Время указано до секунды, но это не онлайн-трекинг в реальном времени. "+
-                "Сигналы приходят периодически и зависят от работы Android в фоне.",
+                "Пинг Cloudflare = время HTTPS-запроса до сервера. "+
+                "Пинг участников через реле включает передачу и ожидание опроса сервера; "+
+                "это НЕ прямой пинг до телефона. Значения устаревают, если нет ответа. "+
+                "Время присутствия зависит от фоновой работы Android.",
                 12,MUTED,false));
     }
 
@@ -925,10 +946,9 @@ public final class MainActivity extends Activity {
             row.addView(nick,lp);
             String presence = member.online ? "В сети" :
                     member.isMe ? "Подключение" : "В фоне";
-            String ping = member.isMe ? "" :
-                (member.pingMs < 0 ? " · пинг —" : " · " + member.pingMs + " мс");
+            String ping = member.pingMs<0?" · —":(" · "+member.pingMs+" мс");
             row.addView(text(presence+ping,11,
-                    member.online?ONLINE:MUTED,false));
+                    member.pingMs<0?MUTED:pingColor(member),false));
         }
         if (count > shown)
             membersPanel.addView(text("Ещё "+(count-shown)+" участников",12,MUTED,false));
@@ -944,6 +964,7 @@ public final class MainActivity extends Activity {
         final boolean keepOffset=expandingHistory;
         final int oldFeedHeight=feed.getHeight(),oldY=scroll.getScrollY();
         expandingHistory=false;
+        previewSlots.clear();
         feed.removeAllViews();
         if(allMessages>messages.size() && historyViewLimit<5000){
             TextView older=button("↑ Загрузить ранние сообщения ("+
@@ -1002,14 +1023,32 @@ public final class MainActivity extends Activity {
                         info+=" • "+String.format(Locale.getDefault(),"%02d:%02d",duration/60,duration%60);
                     }
                     bubble.addView(text(info,11,MUTED,false));
-                    TextView open=labeledButton("voice".equals(kind)?"Воспроизвести":
-                            "image".equals(kind)?"Открыть фото":"Открыть файл",
-                            "voice".equals(kind)?R.drawable.ic_ehtid_play:
-                            "image".equals(kind)?R.drawable.ic_ehtid_image:R.drawable.ic_ehtid_attach,ACCENT,12);
-                    LinearLayout.LayoutParams mp=new LinearLayout.LayoutParams(-1,dp(39));
-                    mp.topMargin=dp(6);
-                    bubble.addView(open,mp);
-                    open.setOnClickListener(v->openMedia(media));
+                    if("image".equals(kind)){
+                        ImageView preview=new ImageView(this);
+                        preview.setBackground(round(PANEL,14));
+                        preview.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                        preview.setImageResource(R.drawable.ic_ehtid_image);
+                        preview.setPadding(dp(92),dp(55),dp(92),dp(55));
+                        preview.setContentDescription("Фото: "+media.optString("name","изображение")+". Нажмите для просмотра");
+                        LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(dp(260),dp(174));
+                        ip.topMargin=dp(7);
+                        bubble.addView(preview,ip);
+                        TextView hint=text(size>3*1024*1024?
+                                "Большое фото · нажмите для загрузки":
+                                "Предпросмотр · защищённая загрузка",11,MUTED,false);
+                        hint.setPadding(0,dp(4),0,dp(2));
+                        bubble.addView(hint);
+                        preview.setOnClickListener(v->openMedia(media));
+                        if(size<=3*1024*1024)
+                            previewSlots.add(new PreviewSlot(code,media,preview,hint));
+                    } else {
+                        TextView open=labeledButton("voice".equals(kind)?"Воспроизвести":"Открыть файл",
+                                "voice".equals(kind)?R.drawable.ic_ehtid_play:R.drawable.ic_ehtid_attach,ACCENT,12);
+                        LinearLayout.LayoutParams mp=new LinearLayout.LayoutParams(-1,dp(39));
+                        mp.topMargin=dp(6);
+                        bubble.addView(open,mp);
+                        open.setOnClickListener(v->openMedia(media));
+                    }
                     if("voice".equals(kind)) {
                         String cached=options().getString("transcript_"+RoomAccess.topic(code)+"_"+media.optString("id"),"");
                         TextView transcript=labeledButton(cached.isEmpty()?"Расшифровать":"Расшифровка готова",
@@ -1040,9 +1079,72 @@ public final class MainActivity extends Activity {
         scroll.post(()->{
             if(keepOffset)scroll.scrollTo(0,Math.max(0,oldY+feed.getHeight()-oldFeedHeight));
             else if(page==0)scroll.fullScroll(View.FOCUS_DOWN);
+            schedulePreviewChecks();
         });
     }
 
+    private static final class PreviewSlot {
+        final String room;
+        final JSONObject media;
+        final ImageView image;
+        final TextView hint;
+        boolean started;
+        PreviewSlot(String room,JSONObject media,ImageView image,TextView hint) {
+            this.room=room; this.media=media; this.image=image; this.hint=hint;
+        }
+    }
+    private void schedulePreviewChecks() {
+        if(previewRefreshQueued || scroll==null)return;
+        previewRefreshQueued=true;
+        scroll.postOnAnimation(()->{
+            previewRefreshQueued=false;
+            if(page!=0)return;
+            Rect visible=new Rect();
+            for(PreviewSlot slot:previewSlots) {
+                if(slot.started || !slot.room.equals(code) ||
+                        !slot.image.getGlobalVisibleRect(visible) ||
+                        visible.width()<32 || visible.height()<32)continue;
+                slot.started=true;
+                imagePreviews.load(getApplicationContext(),slot.room,slot.media,(bitmap,error)->{
+                    if(!slot.room.equals(code) || !slot.image.isAttachedToWindow())return;
+                    if(bitmap!=null){
+                        slot.image.setPadding(0,0,0,0);
+                        slot.image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                        slot.image.setImageBitmap(bitmap);
+                        slot.hint.setText("Нажмите для просмотра");
+                    }else{
+                        slot.hint.setText("Не удалось загрузить миниатюру · нажмите для открытия");
+                    }
+                });
+            }
+        });
+    }
+    private int pingColor(InternetEngine.Member member) {
+        if(member.pingMs<0)return MUTED;
+        if(member.pingMs<120)return ONLINE;
+        if(member.pingMs<400)return Color.rgb(246,199,112);
+        return Color.rgb(244,137,140);
+    }
+    private String memberPingText(InternetEngine.Member member) {
+        String route=member.isMe?"Cloudflare · HTTPS RTT":
+                service!=null&&service.isPeerMesh()?"Участник · P2P RTT":"Участник · RTT через реле";
+        if(member.pingMs<0||member.pingAt<=0)return route+": нет свежего замера";
+        long seconds=Math.max(0,(System.currentTimeMillis()-member.pingAt)/1000);
+        String age=seconds<60?seconds+" с назад":((seconds+30)/60)+" мин назад";
+        return route+": "+member.pingMs+" мс · "+age;
+    }
+    private void refreshPingHeader() {
+        if(pingHeader==null)return;
+        for(InternetEngine.Member member:currentMembers) if(member.isMe) {
+            pingHeader.setText(member.pingMs<0?
+                    "Cloudflare · пинг —":
+                    "Cloudflare · "+member.pingMs+" мс");
+            pingHeader.setTextColor(pingColor(member));
+            return;
+        }
+        pingHeader.setText("Cloudflare · пинг —");
+        pingHeader.setTextColor(MUTED);
+    }
     private void openMedia(JSONObject media) {
         String selectedRoom=code;
         status.setText("● Загружаем защищённое вложение…");
@@ -1053,12 +1155,14 @@ public final class MainActivity extends Activity {
                             if(selectedRoom.equals(code))
                                 status.setText("● Загрузка "+done+"/"+total);
                         }));
+                final String kind=media.optString("kind");
+                final Bitmap expanded="image".equals(kind)?
+                        ImagePreviews.decode(local,1600,2000):null;
                 runOnUiThread(()->{
                     if(!selectedRoom.equals(code))return;
                     status.setText("● Вложение готово");
-                    String kind=media.optString("kind");
                     if("voice".equals(kind))playVoice(local);
-                    else if("image".equals(kind))showImage(local);
+                    else if("image".equals(kind))showImage(expanded);
                     else openOtherFile(local,media.optString("mime","application/octet-stream"));
                 });
             } catch(Exception error){
@@ -1096,26 +1200,16 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private void showImage(File imageFile) {
-        try {
-            BitmapFactory.Options dims=new BitmapFactory.Options();
-            dims.inJustDecodeBounds=true;
-            BitmapFactory.decodeFile(imageFile.getAbsolutePath(),dims);
-            int sample=1;
-            while(dims.outWidth/sample>1600||dims.outHeight/sample>2000)sample*=2;
-            BitmapFactory.Options opts=new BitmapFactory.Options();
-            opts.inSampleSize=sample;
-            Bitmap bitmap=BitmapFactory.decodeFile(imageFile.getAbsolutePath(),opts);
-            if(bitmap==null)throw new java.io.IOException("Не удалось декодировать фото");
-            ImageView view=new ImageView(this);
-            view.setImageBitmap(bitmap);
-            view.setAdjustViewBounds(true);
-            view.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            new AlertDialog.Builder(this)
-                    .setTitle("Изображение из чата")
-                    .setView(view)
-                    .setPositiveButton("Закрыть",null).show();
-        }catch(Exception error){status.setText("● Фото: "+error.getMessage());}
+    private void showImage(Bitmap bitmap) {
+        if(bitmap==null){status.setText("● Не удалось открыть изображение");return;}
+        ImageView view=new ImageView(this);
+        view.setImageBitmap(bitmap);
+        view.setAdjustViewBounds(true);
+        view.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        new AlertDialog.Builder(this)
+                .setTitle("Изображение из чата")
+                .setView(view)
+                .setPositiveButton("Закрыть",null).show();
     }
 
     private void openOtherFile(File local,String mime) {
@@ -1385,6 +1479,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        imagePreviews.close();
         if(recorder!=null)stopRecording(false);
         if(voicePlayer!=null) {
             try {voicePlayer.release();} catch(Exception ignored){}

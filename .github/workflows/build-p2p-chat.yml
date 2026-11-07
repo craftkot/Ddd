@@ -87,9 +87,9 @@ jobs:
         run: |
           set -euo pipefail
           APK="app/build/outputs/apk/debug/app-debug.apk"
-          RELEASE_APK="EHTID-P2P-Chat-v1.3.apk"
+          RELEASE_APK="EHTID-P2P-Chat-v1.4.apk"
           cp "$APK" "$RELEASE_APK"
-          TAG="ehtid-p2p-chat-v1.3"
+          TAG="ehtid-p2p-chat-v1.4"
           LATEST="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/feature/p2p-chat" --jq '.object.sha')"
           if [ "$LATEST" != "$GITHUB_SHA" ]; then
             echo "::warning::Skipping stale APK: branch head is $LATEST but build is $GITHUB_SHA"
@@ -99,7 +99,7 @@ jobs:
             gh release upload "$TAG" "$RELEASE_APK" --clobber --repo "$GITHUB_REPOSITORY"
             gh release edit "$TAG" --target "$GITHUB_SHA" --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" "$RELEASE_APK" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "EHTID P2P Chat v1.3 (Android beta)" --notes "EHTID Chat v1.3: redesigned compact violet messenger UI, vector action icons, selectable Russian/English voice transcription, better error handling and local transcripts. Keeps saved rooms, SQLite history, Cloudflare/P2P transport, app ID and permanent signing certificate. Install over old APK; never uninstall." --prerelease
+            gh release create "$TAG" "$RELEASE_APK" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "EHTID P2P Chat v1.4 (Android beta)" --notes "EHTID Chat v1.4: inline lazy photo previews, Cloudflare HTTPS RTT, named participant relay RTT with sample timestamps and on-demand refresh. Retains v1.3 violet theme, encrypted attachments, SQLite chat history, rooms, and permanent signing identity." --prerelease
           fi
       - name: Smoke test APK in Android emulator
         continue-on-error: true

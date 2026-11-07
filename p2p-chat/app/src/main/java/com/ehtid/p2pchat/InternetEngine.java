@@ -43,6 +43,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class InternetEngine {
     public interface Listener {
@@ -76,6 +77,10 @@ public final class InternetEngine {
     private final Map<String, Member> members = new ConcurrentHashMap<>();
     private final Map<String, Long> pingStart = new ConcurrentHashMap<>();
     private final Map<String, String> pingOwner = new ConcurrentHashMap<>();
+    private final Map<String, Long> peerPingTimes = new ConcurrentHashMap<>();
+    private final AtomicBoolean relayProbeActive=new AtomicBoolean(false);
+    private volatile int relayPingMs=-1;
+    private volatile long relayPingAt;
     private final Map<String, Long> lastGuestHistory = new ConcurrentHashMap<>();
     private final long sessionLoginAt = System.currentTimeMillis();
     private volatile boolean chatVisible = false;
@@ -88,15 +93,18 @@ public final class InternetEngine {
     private volatile boolean showPeerPings = true;
     public static final class Member {
         public final String id, name;
-        public final long lastSeen, loginAt;
+        public final long lastSeen, loginAt, pingAt;
         public final int pingMs;
         public final boolean isMe, online;
         public Member(String id,String name,long seen,int ping,boolean me,boolean online) {
             this(id,name,seen,ping,me,online,0L);
         }
         public Member(String id,String name,long seen,int ping,boolean me,boolean online,long loginAt) {
+            this(id,name,seen,ping,me,online,loginAt,0L);
+        }
+        public Member(String id,String name,long seen,int ping,boolean me,boolean online,long loginAt,long pingAt) {
             this.id=id; this.name=name; this.lastSeen=seen; this.pingMs=ping;
-            this.isMe=me; this.online=online; this.loginAt=loginAt;
+            this.isMe=me; this.online=online; this.loginAt=loginAt;this.pingAt=pingAt;
         }
     }
     private final Map<String, Fragments> pieces = new HashMap<>();
@@ -204,8 +212,12 @@ public final class InternetEngine {
                     ? (chatVisible && (meshMode?mesh!=null&&mesh.connectedCount()>0:
                         relayOnline&&now>=nextRelaySendAt))
                     : (m.online && fresh && (meshMode||relayOnline));
-            list.add(new Member(m.id,m.name,m.lastSeen,m.pingMs,m.isMe,online,
-                    m.isMe?sessionLoginAt:m.loginAt));
+            long measuredAt=m.isMe?relayPingAt:peerPingTimes.getOrDefault(m.id,0L);
+            long maxAge=meshMode?120_000L:(m.isMe?420_000L:660_000L);
+            boolean fresh=measuredAt>0&&now-measuredAt<=maxAge&&now>=measuredAt;
+            int freshPing=fresh?(m.isMe?relayPingMs:m.pingMs):-1;
+            list.add(new Member(m.id,m.name,m.lastSeen,freshPing,m.isMe,online,
+                    m.isMe?sessionLoginAt:m.loginAt,fresh?measuredAt:0L));
         }
         list.sort((a,b)->a.isMe?-1:b.isMe?1:
                 a.online!=b.online?Boolean.compare(b.online,a.online):
@@ -368,6 +380,42 @@ public final class InternetEngine {
         publishMembers();
     }
 
+    /** User-requested refresh; never blocks Android's main thread. */
+    public void refreshPings() {
+        if(stopped)return;
+        if(meshMode){
+            PeerMesh current=mesh;
+            if(current!=null)current.requestPings();
+            return;
+        }
+        io.execute(this::probeRelay);
+        sender.execute(this::sendPings);
+    }
+    private void probeRelay() {
+        if(stopped||meshMode||!chatVisible||!relayProbeActive.compareAndSet(false,true))return;
+        HttpURLConnection c=null;
+        try {
+            c=(HttpURLConnection)new URL(relay+"/health").openConnection();
+            c.setRequestMethod("GET");
+            c.setConnectTimeout(6000);
+            c.setReadTimeout(6000);
+            c.setUseCaches(false);
+            long start=System.nanoTime();
+            int http=c.getResponseCode();
+            int elapsed=(int)Math.max(0L,Math.min(60_000L,
+                    TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start)));
+            relayPingMs=http==200?elapsed:-1;
+            relayPingAt=http==200?System.currentTimeMillis():0L;
+        }catch(Exception ignored){
+            relayPingMs=-1;
+            relayPingAt=0L;
+        }finally{
+            if(c!=null)c.disconnect();
+            relayProbeActive.set(false);
+        }
+        if(!stopped)publishMembers();
+    }
+
     public List<JSONObject> snapshot() {
         synchronized (messages) { return new ArrayList<>(messages); }
     }
@@ -406,6 +454,7 @@ public final class InternetEngine {
                         @Override public void peerPing(String peer,int ping) {
                             Member old=members.get(peer);
                             if (old!=null) {
+                                peerPingTimes.put(peer,System.currentTimeMillis());
                                 members.put(peer,new Member(peer,old.name,System.currentTimeMillis(),
                                         ping,false,old.online));
                                 publishMembers();
@@ -463,9 +512,14 @@ public final class InternetEngine {
                 announcePresence();
             publishMembers();
         }, 45, 45, TimeUnit.SECONDS);
+        // One rotating participant RTT every 3 minutes only while chat is visible.
         clock.scheduleAtFixedRate(() -> {
             if (!stopped) sendPings();
-        }, 30, 60*60, TimeUnit.SECONDS);
+        }, 20, 180, TimeUnit.SECONDS);
+        // HTTPS RTT to Cloudflare is separate from participant relay RTT.
+        clock.scheduleAtFixedRate(() -> {
+            if(!stopped && !meshMode && chatVisible) io.execute(this::probeRelay);
+        }, 4, 180, TimeUnit.SECONDS);
         clock.scheduleAtFixedRate(() -> {
             if (stopped || !relayOnline) return;
             // Cloudflare D1 is authoritative for history; no guest hello needed.
@@ -779,6 +833,7 @@ public final class InternetEngine {
                         int rtt = (int)Math.max(0,Math.min(60000,System.currentTimeMillis()-sent));
                         Member old = members.get(from);
                         if (old != null) {
+                            peerPingTimes.put(from,System.currentTimeMillis());
                             members.put(from,new Member(from,old.name,System.currentTimeMillis(),rtt,false,old.online));
                             publishMembers();
                         }
