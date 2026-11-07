@@ -208,3 +208,22 @@ header .net{color:#d0b6a4;font:11px/1.4 system-ui}
  background:url("art/kenney/ui/frame.png") center/contain no-repeat;
  opacity:.27;
 }
+
+/* v0.11 original Oracle cover: identical game artwork and launcher identity. */
+.etch-lobby .hero-crest{
+  width:min(355px,92vw);
+  height:clamp(190px,61vw,275px);
+  margin:4px auto 12px;
+  display:block;
+  background:
+    linear-gradient(180deg,#09091800 0%,#080b1860 86%,#090d17ce 100%),
+    url("art/ashes-cover.webp") center 26% / cover no-repeat;
+  border:1px solid #9d7bc173;
+  border-radius:20px;
+  box-shadow:0 6px 35px #50306b85,inset 0 1px #e9d9f05c;
+  -webkit-mask-image:linear-gradient(180deg,#000 0%,#000 81%,transparent 100%);
+  mask-image:linear-gradient(180deg,#000 0%,#000 81%,transparent 100%);
+  filter:none;
+}
+.etch-lobby .hero-crest:after{content:none}
+.etch-lobby h1{color:#f4e9ff;text-shadow:0 2px 16px #b776cb85}
