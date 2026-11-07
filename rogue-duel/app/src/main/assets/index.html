@@ -254,9 +254,38 @@ async function decrypt(payload){
  const bytes=await crypto.subtle.decrypt({name:"AES-GCM",iv:fromB64url(spl[1])},G.key,fromB64url(spl[2]));
  return JSON.parse(decoder.decode(bytes))
 }
-function toRelay(data){try{AndroidNet.post(G.topic,data)}catch(e){transportWarning("Сетевая отправка недоступна")}}
+const wireParts=new Map();
+function toRelay(data){
+ try{
+  if(data.length<=11800){AndroidNet.post(G.topic,data);return}
+  const unit=1850,total=Math.ceil(data.length/unit);
+  if(total>24){transportWarning("Слишком большой сетевой пакет");return}
+  const token=hex(crypto.getRandomValues(new Uint8Array(16)));
+  for(let i=0;i<total;i++)AndroidNet.post(G.topic,"frag1:"+token+":"+i+":"+total+":"+data.slice(i*unit,(i+1)*unit));
+ }catch(e){transportWarning("Сетевая отправка недоступна")}
+}
+async function reassembleWire(payload,via){
+ const parts=payload.split(":",5);
+ if(parts.length!==5)return;
+ const [kind,token,iText,nText,chunk]=parts;
+ if(kind!=="frag1"||!/^[0-9a-f]{32}$/.test(token)||!/^[A-Za-z0-9_.-]{1,2100}$/.test(chunk))return;
+ const i=Number(iText),n=Number(nText);
+ if(!Number.isInteger(i)||!Number.isInteger(n)||n<2||n>24||i<0||i>=n)return;
+ const now=Date.now();
+ for(const [id,v] of wireParts)if(now-v.created>90000)wireParts.delete(id);
+ if(wireParts.size>12)wireParts.delete(wireParts.keys().next().value);
+ let item=wireParts.get(token);
+ if(!item){item={parts:Array(n),count:0,n,created:now};wireParts.set(token,item)}
+ if(item.n!==n)return;
+ if(item.parts[i]===undefined){item.parts[i]=chunk;item.count++}
+ if(item.count===n){
+  wireParts.delete(token);
+  const full=item.parts.join("");
+  if(full.startsWith("v1."))await receive(full,via)
+ }
+}
 async function send(msg){if(!G.key||G.demo)return;let id=Array.from(crypto.getRandomValues(new Uint8Array(8))).map(x=>x.toString(16).padStart(2,"0")).join("");let value=await encrypt({...msg,id,from:G.role,v:1});const force=msg.type==="signal"||msg.type==="join"||msg.type==="welcome"||msg.type==="hello";if(!force&&channel&&channel.readyState==="open"){try{channel.send(value);let timer=setTimeout(()=>{toRelay(value);pending.delete(id)},1800);pending.set(id,timer);return}catch(e){}}toRelay(value)}
-async function receive(payload,via){if(payload.startsWith("ack:")){const id=payload.slice(4);if(pending.has(id)){clearTimeout(pending.get(id));pending.delete(id)}return}let m;try{m=await decrypt(payload)}catch(e){return}if(!m||m.v!==1||m.from===G.role||!m.id)return;if(via==="direct"&&channel&&channel.readyState==="open"){try{channel.send("ack:"+m.id)}catch(e){}}if(seen.has(m.id))return;seen.add(m.id);if(seen.size>1500)seen.clear();m._via=via;handleMessage(m)}
+async function receive(payload,via){if(payload.startsWith("frag1:")){await reassembleWire(payload,via);return}if(payload.startsWith("ack:")){const id=payload.slice(4);if(pending.has(id)){clearTimeout(pending.get(id));pending.delete(id)}return}let m;try{m=await decrypt(payload)}catch(e){return}if(!m||m.v!==1||m.from===G.role||!m.id)return;if(via==="direct"&&channel&&channel.readyState==="open"){try{channel.send("ack:"+m.id)}catch(e){}}if(seen.has(m.id))return;seen.add(m.id);if(seen.size>1500)seen.clear();m._via=via;handleMessage(m)}
 window.onWire=function(s){receive(s,"relay")};
 window.transportWarning=function(s){statusMessageNow(s)};
 function setupRTC(){if(!window.RTCPeerConnection)return;peer=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun.cloudflare.com:3478"}]});peer.onicecandidate=e=>{if(e.candidate)send({type:"signal",signal:"ice",data:e.candidate.toJSON()})};peer.ondatachannel=e=>attachChannel(e.channel)}
