@@ -63,3 +63,19 @@
  window.ASH_SAVES={KEY,VERSION,read,capture,restore,clear};
  render();
 })();
+/* Signal native startup only after every game module has executed and the
+   initial lobby has actual DOM content. This detects blank WebView launches.
+   Browser/unit-test environments need no Android bridge. */
+(function(){
+  if(typeof AndroidNet==="undefined"||typeof AndroidNet.ready!=="function")return;
+  try{
+    const app=document.getElementById("app");
+    if(!app||app.children.length===0||app.innerHTML.length<60){
+      if(typeof AndroidNet.error==="function")AndroidNet.error("Игровой экран не отрисовался.");
+      return;
+    }
+    AndroidNet.ready();
+  }catch(e){
+    if(typeof AndroidNet.error==="function")AndroidNet.error(String(e));
+  }
+})();
