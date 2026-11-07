@@ -31,7 +31,7 @@ const numCards=run("Object.keys(CARDS).length");
 assert(numCards>=161,"Old card library missing");
 assert.equal(run("ASH_AV.MAX_SP"),5);
 assert.equal(run("ASH_AV.BASE_GAUGE"),10000);
-run("G.demo=true;G.role='host';G.runner=newRun('guard');G.stage=12;makeMap();createFight(false)");
+run("G.demo=true;G.role='host';G.runner=newRun('guard');makeMap();G.stage=12;createFight(false)");
 assert.equal(run("G.combat.enemies.length"),4);
 assert.equal(run("G.combat.av.actors.length"),5);
 assert.equal(run("G.combat.av.sp"),3);
