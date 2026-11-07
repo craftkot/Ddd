@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/card-roguelike-pvp
+      - feature/ashes-room-art-v08
     paths:
       - 'rogue-duel/**'
       - '.github/workflows/build-ashes-duel.yml'
@@ -11,6 +12,10 @@ on:
       - 'rogue-duel/**'
       - '.github/workflows/build-ashes-duel.yml'
   workflow_dispatch:
+
+concurrency:
+  group: ashes-duel-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -49,6 +54,14 @@ jobs:
           Path('/tmp/ashes-duel-syntax.js').write_text(js[0])
           PY
           node --check /tmp/ashes-duel-syntax.js
+          test -s app/src/main/assets/artbook.css
+          test -s app/src/main/assets/art/arena.webp
+          test -s app/src/main/assets/art/atlas.webp
+          test -s app/src/main/assets/art/kenney/icons/sword.png
+          test -s app/src/main/assets/art/kenney/heroes/red_character.png
+          grep -q 'EHTID-RELAY-ACCESS-V1:' app/src/main/assets/index.html
+          grep -q 'ehtid-chat-relay.craftkot404.workers.dev' app/src/main/java/com/ehtid/ashesduel/MainActivity.java
+          if grep -q 'ntfy.sh' app/src/main/java/com/ehtid/ashesduel/MainActivity.java; then echo "Old transport remains"; exit 1; fi
           for file in app/src/main/assets/expansion-{data,relics,combat,visual}.js app/src/main/assets/pvp-balance.js app/src/main/assets/atelier.js app/src/main/assets/route-tree.js app/src/main/assets/connection-ui.js app/src/main/assets/encounter-director.js app/src/main/assets/run-economy.js app/src/main/assets/run-save.js; do node --check "$file"; done
       - name: Test deck engine and relic interactions
         run: |
@@ -62,16 +75,28 @@ jobs:
           test -s app/build/outputs/apk/debug/app-debug.apk
           unzip -tq app/build/outputs/apk/debug/app-debug.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify app/build/outputs/apk/debug/app-debug.apk
-          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/AshesDuel-v0.7-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/AshesDuel-v0.8-debug.apk
       - uses: actions/upload-artifact@v4
         with:
           name: Pepel-i-Karty-Android-APK
-          path: rogue-duel/app/build/outputs/apk/debug/AshesDuel-v0.7-debug.apk
+          path: rogue-duel/app/build/outputs/apk/debug/AshesDuel-v0.8-debug.apk
           if-no-files-found: error
           retention-days: 30
 
+      - name: Publish v0.8 beta APK for testers
+        if: github.event_name == 'push' && github.ref == 'refs/heads/feature/ashes-room-art-v08'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view ashes-duel-v0.8.0-beta >/dev/null 2>&1; then
+            gh release upload ashes-duel-v0.8.0-beta app/build/outputs/apk/debug/AshesDuel-v0.8-debug.apk#AshesDuel-v0.8-debug.apk --clobber
+            gh release edit ashes-duel-v0.8.0-beta --target "$GITHUB_SHA" || true
+          else
+            gh release create ashes-duel-v0.8.0-beta app/build/outputs/apk/debug/AshesDuel-v0.8-debug.apk#AshesDuel-v0.8-debug.apk --target "$GITHUB_SHA" --prerelease --title "Пепел и карты v0.8 Beta — комнаты EHTID / Artbook" --notes "Тестовая Android APK. Подключение через EHTID Cloudflare Relay с четырёхзначным игровым кодом, новая офлайн-графика Kenney CC0 и оригинальный арт. Сборка с debug-сертификатом: обновление поверх старого APK может не пройти. Проверка сети на двух устройствах не завершена. Имеются ограничения безопасности короткого кода."
+          fi
+
       - name: Publish installable APK on GitHub Releases
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/feature/card-roguelike-pvp'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
