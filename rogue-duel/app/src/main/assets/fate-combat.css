@@ -206,3 +206,28 @@
  .fate-stage .fate-riser.rear{top:49.6%;left:30%;right:0}
  .fate-stage .fate-riser.front{left:29%;bottom:3%}
 }
+
+/* v0.10 QA correction: ground belongs under *sprite feet*, not under its
+   HP/intent labels. Verified at widths 320/390/430: rear feet ≈35% of
+   stage height, front feet ≈80%. */
+.fate-stage .fate-riser.rear{
+ top:34.7%;height:23px;left:32%;right:.5%;
+ border-top:5px solid #d9b18b;border-bottom:5px solid #171825;
+ background:linear-gradient(180deg,#9c8276 0%,#65565a 33%,#35313f 100%);
+ box-shadow:0 -5px 20px #f0bb9b55,0 11px 26px #090b15ec;
+}
+.fate-stage .fate-riser.rear:after{
+ top:20px;height:350px;opacity:.87;
+ background:repeating-linear-gradient(90deg,#20202def 0 9%,#4e4451e6 10% 16%,#1a1d2be9 18% 31%);
+ border-left:4px solid #6b5553
+}
+.fate-stage .fate-riser.front{
+ bottom:18.7%;height:14px;
+ border-top:4px solid #c19b7a;
+ background:linear-gradient(180deg,#846e68,#242332);
+ box-shadow:0 -5px 15px #c7a17d59,0 9px 19px #030511d5;
+}
+@media(max-width:520px){
+ .fate-stage .fate-riser.rear{top:34.8%;left:30%}
+ .fate-stage .fate-riser.front{bottom:19.2%}
+}
