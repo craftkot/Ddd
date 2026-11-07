@@ -13,6 +13,10 @@ on:
       - '.github/workflows/build-ashes-duel.yml'
   workflow_dispatch:
 
+concurrency:
+  group: ashes-duel-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 jobs:
