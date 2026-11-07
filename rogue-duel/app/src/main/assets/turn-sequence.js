@@ -165,6 +165,7 @@
     return basicAttack();
   };
   dispatch=window.dispatch=async function(action,x){
+    if(action==="duelBasic"&&G.screen==="duel"){commandDuel({action:"basic"});return}
     if(action==="basicAttack"&&G.screen==="fight"){basicAttack();return}
     if(action==="endTurn"&&G.screen==="fight"&&valid(G.combat)){basicAttack();return}
     await oldDispatch(action,x);
@@ -180,12 +181,12 @@
     const f=oldPvMake(build);f.sp=START_SP;f.maxSp=MAX_SP;return f
   };
   pvNext=function(d){
-    const taxSide=d.turn,foe=d.fighters[taxSide],prevTax=foe?.nextTax||0;
+    const taxes={host:d.fighters.host.nextTax||0,guest:d.fighters.guest.nextTax||0};
     const result=oldPvNext(d);
     if(d.turn&&d.fighters[d.turn]){
       const f=d.fighters[d.turn];
       f.sp=bounded(f.sp??START_SP,0,MAX_SP);
-      f.energy=bounded(f.sp-(f===foe?prevTax:0),0,MAX_SP);
+      f.energy=bounded(f.sp-(taxes[d.turn]||0),0,MAX_SP);
     }
     return result;
   };
