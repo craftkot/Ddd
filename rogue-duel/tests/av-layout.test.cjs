@@ -60,7 +60,7 @@ assert(ccss.includes("grid-template-columns:repeat(2,minmax(0,1fr))"),"enemy gri
 assert(ccss.includes("max-height:none!important"),"card description clipping still enabled");
 assert(ccss.includes("overflow-wrap:anywhere"),"long words must wrap");
 assert(ccss.includes("min-height:530px"),"four-enemy stage is too short");
-const allCards=run("Object.keys(CARDS).map(id=>({id,html:playcard(inst(id),'reward',0),desc:esc(desc(inst(id)))}))");
+const allCards=run("Object.keys(CARDS).map(id=>({id,html:ASH_UI_DEBUG.playcard(inst(id),'reward',0),desc:esc(desc(inst(id)))}))");
 for(const {id,html:markup,desc} of allCards){
  assert(markup.includes('class="card-desc"'),"description container missing for "+id);
  assert(markup.includes(desc),"FULL description absent/truncated on "+id);
