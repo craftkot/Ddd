@@ -86,6 +86,15 @@ function cardVisual(c){
   '<img class="artbook-symbol" src="art/kenney/icons/'+icon+'.png" alt="" draggable="false">'+
   '</div>';
 }
+function relicPainting(r){
+ const id=String(r?.id||"");
+ const icons={sword:"sword",shield:"shield",chain:"shield",spark:"staff",rose:"staff",scroll:"staff",gem:"staff",heart:"shield",coin:"axe",sun:"hammer",venom:"dagger",flask:"staff"};
+ const icon=icons[id]||(["sword","shield","bow","staff","axe","dagger","hammer"][id.length%7]);
+ return '<img class="kenney-relic" src="art/kenney/icons/'+icon+'.png" alt="" draggable="false">';
+}
+function paintedScene(name,label){
+ return '<img class="artbook-scene" src="art/kenney/scene/'+name+'.png" alt="'+esc(label)+'" draggable="false">';
+}
 function playcard(c,act,i,disabled=false){
  const a=art(c.id),t=toneOf(a),rarity=a.rarity||"common";
  return '<button type="button" style="--deal:'+i+'" class="etch-card '+t+' '+rarity+'" data-cast-action="'+act+'" data-cast-index="'+i+'" aria-label="'+esc(a.n)+'"'+(disabled?" disabled":"")+'><span class="card-etched"></span><span class="cost">'+a.c+'</span><div class="card-title">'+esc(a.n)+upgraded(c)+'</div><div class="card-art">'+cardVisual(c)+'</div><div class="card-desc">'+esc(desc(c))+'</div><div class="card-type">'+longType(a.t)+'</div></button>'
@@ -199,13 +208,13 @@ function mapView(){
  '<div class="etch-actions"><button data-a="inventory" class="etch-btn plain">Посмотреть свою сборку</button></div>'
 }
 function rewardView(){
- return eventHead(G.reward.title,G.reward.desc)+'<div class="etch-story"><div class="story-symbol">🏆</div><div class="center money">◈ Получено '+G.reward.gold+' золота</div><div class="etch-catalog">'+G.reward.choices.map((c,i)=>'<div>'+playcard(c,"reward",i)+'</div>').join("")+'</div><div class="etch-actions"><button class="etch-btn plain" data-a="skipReward">Пропустить награду</button></div></div>'
+ return eventHead(G.reward.title,G.reward.desc)+'<div class="etch-story"><div class="story-symbol">'+paintedScene("chest","Сундук с наградой")+'</div><div class="center money">◈ Получено '+G.reward.gold+' золота</div><div class="etch-catalog">'+G.reward.choices.map((c,i)=>'<div>'+playcard(c,"reward",i)+'</div>').join("")+'</div><div class="etch-actions"><button class="etch-btn plain" data-a="skipReward">Пропустить награду</button></div></div>'
 }
 function shopView(){
  let s=G.shop;
  return eventHead("Лавка под пеплом","Торговец принимает золото. Купленные карты остаются в колоде.")+
  '<div class="etch-catalog">'+s.cards.map((c,i)=>c?'<div>'+playcard(c,"buyCard",i,G.runner.gold<(s.prices?.[i]??55))+'<div class="center money">'+ASH_RUN.RARITY_LABEL[art(c.id).rarity]+' · ◈ '+(s.prices?.[i]??55)+'</div></div>':'<div class="etch-offer">Продано</div>').join("")+'</div>'+
- '<div class="etch-catalog">'+s.relics.map(id=>{let r=RELICS.find(x=>x.id===id);return'<div class="etch-offer"><span class="offer-art">'+r.e+'</span><strong>'+esc(r.n)+'</strong><p>'+esc(r.d)+'</p><button data-a="buyRelic" data-x="'+id+'" class="etch-btn" '+(G.runner.gold<115?'disabled':'')+'>◈ 115 · Купить</button></div>'}).join("")+'</div>'+
+ '<div class="etch-catalog">'+s.relics.map(id=>{let r=RELICS.find(x=>x.id===id);return'<div class="etch-offer"><span class="offer-art">'+relicPainting(r)+'</span><strong>'+esc(r.n)+'</strong><p>'+esc(r.d)+'</p><button data-a="buyRelic" data-x="'+id+'" class="etch-btn" '+(G.runner.gold<115?'disabled':'')+'>◈ 115 · Купить</button></div>'}).join("")+'</div>'+
  '<div class="etch-catalog">'+ASH_RUN.shopPotion()+'</div>'+ '<div class="etch-actions"><button data-a="buyHeal" class="etch-btn cool" '+(G.runner.gold<40?'disabled':'')+'>Лечение +20 · ◈ 40</button><button data-a="buyRemove" class="etch-btn" '+(G.runner.gold<75?'disabled':'')+'>Удалить карту · ◈ 75</button></div>'+
  '<div class="etch-actions"><button data-a="next" class="etch-btn cta">Покинуть магазин</button></div>'
 }
@@ -215,13 +224,13 @@ function eventView(){
  e.options.map((x,i)=>'<button class="etch-decision" data-a="event" data-x="'+i+'"><b>'+String.fromCharCode(8544+i)+'</b> · '+esc(x[0])+'</button>').join("")+'</div>'
 }
 function restView(){
- return '<div class="etch-story"><div class="eyebrow center">ТИШИНА МЕЖДУ БИТВАМИ</div><div class="story-symbol">🔥</div><h2>Ночной привал</h2><p class="sub">Пламя не отвечает на вопросы. Можно вернуть силы или закалить карту.</p>'+
+ return '<div class="etch-story"><div class="eyebrow center">ТИШИНА МЕЖДУ БИТВАМИ</div><div class="story-symbol">'+paintedScene("campfire","Ночной привал")+'</div><h2>Ночной привал</h2><p class="sub">Пламя не отвечает на вопросы. Можно вернуть силы или закалить карту.</p>'+
  '<button data-a="restHeal" class="etch-decision">❤ Отдохнуть · восстановить '+Math.ceil(G.runner.maxHp*.3)+' здоровья</button>'+
  '<button data-a="restUpgrade" class="etch-decision">⚒ Закалить · улучшить карту</button></div>'
 }
 function treasureView(){
  return eventHead("Забытый тайник","Одну из трёх реликвий можно взять без платы.")+
- '<div class="etch-catalog">'+G.encounter.choices.map(id=>{let r=RELICS.find(x=>x.id===id);return '<div class="etch-offer"><span class="offer-art">'+r.e+'</span><strong>'+esc(r.n)+'</strong><p>'+esc(r.d)+'</p><button data-a="takeRelic" data-x="'+r.id+'" class="etch-btn cool">Взять реликвию</button></div>'}).join("")+'</div>'
+ '<div class="etch-catalog">'+G.encounter.choices.map(id=>{let r=RELICS.find(x=>x.id===id);return '<div class="etch-offer"><span class="offer-art">'+relicPainting(r)+'</span><strong>'+esc(r.n)+'</strong><p>'+esc(r.d)+'</p><button data-a="takeRelic" data-x="'+r.id+'" class="etch-btn cool">Взять реликвию</button></div>'}).join("")+'</div>'
 }
 function heroView(){
  let intro='<div class="etch-head"><p class="eyebrow">ИЗБЕРИ ПУТЬ</p><h2>Три судьбы</h2><p class="sub">'+(G.demo?"Одиночный тест маршрута":"Код комнаты: "+G.code)+"</p></div>";
