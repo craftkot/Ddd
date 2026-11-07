@@ -183,3 +183,28 @@ header .net{color:#d0b6a4;font:11px/1.4 system-ui}
   .etch-fighters .etch-person .figure.artbook-figure{animation:none}
   .etch-class{transition:none}
 }
+
+/* Kenney item silhouettes are local, with pixel-perfect upscale and clear rarity framing. */
+.etch-offer .offer-art{display:grid;place-items:center;min-height:82px}
+.etch-offer .offer-art .kenney-relic{
+ width:clamp(58px,10vw,82px);height:clamp(58px,10vw,82px);
+ object-fit:contain;image-rendering:pixelated;
+ filter:drop-shadow(0 0 12px #eac18381) drop-shadow(0 6px 5px #080c16);
+}
+.etch-story .story-symbol .artbook-scene{
+ display:block;max-width:100%;width:clamp(88px,16vw,118px);
+ height:clamp(88px,16vw,118px);margin:0 auto;
+ object-fit:contain;image-rendering:pixelated;
+ filter:drop-shadow(0 0 23px #e6945b9e);
+}
+.etch-class:before{
+ content:"";display:block;width:20px;height:20px;margin:0 auto 2px;
+ background:url("art/kenney/ui/ornate.png") center/contain no-repeat;
+ filter:sepia(1) saturate(1.5) drop-shadow(0 0 5px #cfb57d);
+ opacity:.7;
+}
+.etch-offer:after{
+ content:"";display:block;width:22px;height:22px;margin:8px auto 0;
+ background:url("art/kenney/ui/frame.png") center/contain no-repeat;
+ opacity:.27;
+}
