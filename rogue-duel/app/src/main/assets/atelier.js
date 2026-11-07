@@ -54,22 +54,37 @@ function figure(kind){
  (helmet?'<path d="M62 48 L99 48 L107 39 L94 26 L71 27 L61 39Z" fill="#c7c4b3"/>':'')+
  '<path d="M42 205 L74 209 M91 209 L123 205" stroke="'+glow+'" opacity=".5" stroke-width="4"/></svg>'
 }
+/* Real offline card illustrations: 12 original painted atlas crops, plus Kenney CC0 item icons.
+   This function only changes artwork; effects, cost and card IDs remain untouched. */
+function paintedPortrait(kind){
+ const heroKinds=["guard","oracle","hunter"];
+ const enemyKinds=["bandit","cultist","skeleton","slime","mage","hound"];
+ const hero=heroKinds.indexOf(kind);
+ const fallback={knight:"skeleton",boss:"skeleton"};
+ const enemy=Math.max(0,enemyKinds.indexOf(fallback[kind]||kind));
+ const x=hero>=0?hero:enemy%3;
+ const row=hero>=0?0:enemy<3?1:2;
+ const xpc=["0%","50%","100%"][x],ypc=["0%","16.7%","30.1%"][row];
+ const label=hero>=0?{"guard":"Страж","oracle":"Оракул","hunter":"Ловчий"}[kind]:"Существо из пепла";
+ return '<span role="img" aria-label="'+label+'" class="figure artbook-figure" style="--portrait-x:'+xpc+';--portrait-y:'+ypc+'"></span>';
+}
 function cardVisual(c){
- const a=art(c.id),seed=(c.id.charCodeAt(0)||45)+[...a.n].reduce((s,ch)=>s+ch.charCodeAt(0),0);
- const t=a.t;
- const palette=t==="attack"?["#eb7867","#773039","#271925"]:t==="skill"?["#a3d8fa","#2f6e95","#17283b"]:t==="power"?["#d2a5f8","#704d8d","#241932"]:["#97e4bd","#327867","#142b2a"];
- if(a.school==="Яд"||a.school==="Лечение"){palette[0]="#b5d989";palette[1]="#56723c"}
- const choice=seed%5,base='<defs><radialGradient id="a'+seed+'"><stop stop-color="'+palette[1]+'"/><stop offset="1" stop-color="'+palette[2]+'"/></radialGradient><linearGradient id="b'+seed+'" x2=".8" y2="1"><stop stop-color="'+palette[0]+'"/><stop offset="1" stop-color="'+palette[1]+'"/></linearGradient></defs>'+
- '<rect width="150" height="115" fill="url(#a'+seed+')"/><circle cx="115" cy="28" r="24" fill="'+palette[0]+'" opacity=".12"/><path d="M0 97 L30 63 L58 82 L83 57 L130 94 L150 69 L150 115 L0 115Z" fill="#090e19" opacity=".7"/>';
- const forms=[
- '<path d="M78 14 L91 66 L117 88 L98 98 L81 77 L62 96 L44 88 L70 67Z" fill="url(#b'+seed+')" stroke="#fff3d0" stroke-width="2"/><path d="M75 18 L75 81" stroke="#ffe8b7" stroke-width="2"/>',
- '<path d="M70 20 Q107 42 105 69 Q98 89 74 104 Q47 88 43 65 Q49 35 70 20Z" fill="url(#b'+seed+')" stroke="#fff2c9" stroke-width="3"/><path d="M49 66 L69 84 L97 45" stroke="#f2f8ee" stroke-width="5" fill="none"/>',
- '<path d="M73 15 Q48 34 63 53 Q77 71 54 85 Q89 101 109 77 Q124 45 89 37 Q99 60 79 60 Q60 52 73 15Z" fill="url(#b'+seed+')" stroke="#f6dec2" stroke-width="3"/><path d="M75 68 Q87 77 78 91" stroke="#f9c48b" stroke-width="3" fill="none"/>',
- '<circle cx="76" cy="64" r="35" fill="none" stroke="'+palette[0]+'" stroke-width="6"/><path d="M74 16 L87 47 L121 60 L91 78 L83 107 L67 78 L34 61 L65 48Z" fill="url(#b'+seed+')" stroke="#fff6d9" stroke-width="2"/>',
- '<path d="M75 20 L92 42 L75 66 L55 43Z" fill="url(#b'+seed+')" stroke="#fff6d9" stroke-width="2"/><path d="M37 79 L58 53 L84 68 L112 49 L127 88 L85 105Z" fill="'+palette[1]+'" stroke="'+palette[0]+'" stroke-width="4"/><circle cx="75" cy="65" r="7" fill="#fce4bc"/>'
- ];
- const rays=Array.from({length:7},(_,i)=>{let angle=(seed*13+i*57)*Math.PI/180,x=76+Math.cos(angle)*59,y=64+Math.sin(angle)*42;return '<path d="M76 64 L'+x.toFixed(1)+' '+y.toFixed(1)+'" stroke="'+palette[0]+'" opacity=".35" stroke-width="2"/>'}).join("");
- return '<svg viewBox="0 0 150 115" preserveAspectRatio="xMidYMid slice" aria-hidden="true">'+base+rays+forms[choice]+'</svg>'
+ const a=art(c.id);
+ const name=String(a.n||c.id);
+ const seed=Array.from(String(c.id)).reduce((n,ch)=>((n*33+ch.charCodeAt(0))>>>0),5381);
+ const school=String(a.school||"").toLowerCase();
+ const spell=school.includes("маг")||school.includes("тень")||a.t==="power";
+ const protect=a.k==="block"||a.k==="ward"||school.includes("защит");
+ const ranged=a.k==="poison"||school.includes("яд")||school.includes("лук");
+ let icon=spell?"staff":protect?"shield":ranged?"bow":a.t==="attack"?(seed%4===0?"axe":seed%4===1?"dagger":"sword"):"hammer";
+ const col=seed%6,row=Math.floor(seed/6)%2;
+ const pcx=["0%","20%","40%","60%","80%","100%"][col];
+ const pcy=row===0?"41.4%":"48.1%";
+ const tone=(school.includes("яд")||school.includes("лечен"))?"poison":(a.t||"skill");
+ return '<div class="artbook-art '+tone+'" title="'+esc(name)+'">'+
+  '<span class="artbook-card-paint" style="--card-x:'+pcx+';--card-y:'+pcy+'"></span>'+
+  '<img class="artbook-symbol" src="art/kenney/icons/'+icon+'.png" alt="" draggable="false">'+
+  '</div>';
 }
 function playcard(c,act,i,disabled=false){
  const a=art(c.id),t=toneOf(a),rarity=a.rarity||"common";
@@ -91,7 +106,7 @@ function intentOf(f){
 function unit(f,kind,i,isEnemy,clickable){
  return '<button type="button" '+(clickable?'data-foe-index="'+i+'" ':"")+'class="etch-person '+(isEnemy?"enemy":"hero")+' '+(f.hp<=0?"dead":"")+' '+(isEnemy&&G.combat?.target===i?"is-target":"")+'"'+(isEnemy&&f.hp<=0?" disabled":"")+'>'
  +(isEnemy?'<div class="etch-intent">'+esc(intentOf(f))+'</div>':"")+
- figure(kind)+'<div class="fig-name">'+esc(f.name)+'</div>'+health(f)+stateIcons(f)+'</button>'
+ paintedPortrait(kind)+'<div class="fig-name">'+esc(f.name)+'</div>'+health(f)+stateIcons(f)+'</button>'
 }
 function stage(hero,foes,target,clickable){
  return '<div class="etch-stage"><div class="etch-moon"></div><div class="etch-spires"></div><div class="etch-fighters">'+unit(hero,hero.hero||G.runner?.hero||"guard",-1,false,false)+
@@ -210,7 +225,7 @@ function treasureView(){
 }
 function heroView(){
  let intro='<div class="etch-head"><p class="eyebrow">ИЗБЕРИ ПУТЬ</p><h2>Три судьбы</h2><p class="sub">'+(G.demo?"Одиночный тест маршрута":"Код комнаты: "+G.code)+"</p></div>";
- return intro+'<div class="etch-class-grid">'+Object.entries(CLASSES).map(([id,c])=>'<button class="etch-class" data-a="hero" data-x="'+id+'">'+figure(id)+'<h3>'+c.name+'</h3><p>❤ '+c.hp+' здоровья</p><p>'+esc(c.desc)+'</p></button>').join("")+'</div>'
+ return intro+'<div class="etch-class-grid">'+Object.entries(CLASSES).map(([id,c])=>'<button class="etch-class" data-a="hero" data-x="'+id+'">'+paintedPortrait(id)+'<h3>'+c.name+'</h3><p>❤ '+c.hp+' здоровья</p><p>'+esc(c.desc)+'</p></button>').join("")+'</div>'
 }
 function lobbyView(){
  return '<div class="etch-lobby"><div class="hero-crest">⚔</div><div class="eyebrow">ДВА ПУТИ · ОДНА ДУЭЛЬ</div><h1>Пепел и карты</h1><p class="lead">Собери колоду, пройди разветвлённый путь и сразись с другим игроком. Действия определяются скоростью и контрприёмами.</p>'+
