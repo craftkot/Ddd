@@ -7,6 +7,7 @@ on:
       - feature/ashes-character-redesign-v09
       - feature/ashes-av-fate-combat-v10
       - feature/ashes-icon-install-v011
+      - fix/ashes-android-startup-v012
     paths:
       - 'rogue-duel/**'
       - '.github/workflows/build-ashes-duel.yml'
@@ -25,7 +26,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 22
+    timeout-minutes: 42
     defaults:
       run:
         working-directory: rogue-duel
@@ -68,7 +69,11 @@ jobs:
           test -s app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
           grep -q 'android:icon="@mipmap/ic_launcher"' app/src/main/AndroidManifest.xml
           grep -q 'targetSdk 35' app/build.gradle
-          grep -q 'setSafeBrowsingEnabled(true)' app/src/main/java/com/ehtid/ashesduel/MainActivity.java
+          grep -q 'loadDataWithBaseURL' app/src/main/java/com/ehtid/ashesduel/MainActivity.java
+          grep -q 'appassets.androidplatform.net' app/src/main/java/com/ehtid/ashesduel/MainActivity.java
+          grep -q 'ASHES_READY' app/src/main/java/com/ehtid/ashesduel/MainActivity.java
+          grep -q 'AndroidNet.ready()' app/src/main/assets/run-save.js
+          grep -q "applicationIdSuffix '.trial'" app/build.gradle
           test -s app/src/main/assets/art/atlas.webp
           test -s app/src/main/assets/art/kenney/icons/sword.png
           test -s app/src/main/assets/art/kenney/heroes/red_character.png
@@ -90,13 +95,41 @@ jobs:
           test -s app/build/outputs/apk/debug/app-debug.apk
           unzip -tq app/build/outputs/apk/debug/app-debug.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify app/build/outputs/apk/debug/app-debug.apk
-          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/AshesDuel-v0.11-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/AshesDuel-v0.12-trial.apk
+      - name: Enable Android emulator acceleration
+        run: |
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+      - name: Smoke test real Android app launch (API 34)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_4
+          disable-animations: true
+          script: bash "$GITHUB_WORKSPACE/.github/scripts/ashes-smoke.sh"
       - uses: actions/upload-artifact@v4
         with:
           name: Pepel-i-Karty-Android-APK
-          path: rogue-duel/app/build/outputs/apk/debug/AshesDuel-v0.11-debug.apk
+          path: rogue-duel/app/build/outputs/apk/debug/AshesDuel-v0.12-trial.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish validated v0.12 Android startup fix
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/fix/ashes-android-startup-v012') || (github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'fix/ashes-android-startup-v012' && github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TARGET_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+          cd app/build/outputs/apk/debug
+          sha256sum AshesDuel-v0.12-trial.apk > SHA256SUMS.txt
+          cd -
+          if gh release view ashes-duel-v0.12.0-test >/dev/null 2>&1; then
+            gh release upload ashes-duel-v0.12.0-test app/build/outputs/apk/debug/AshesDuel-v0.12-trial.apk#AshesDuel-v0.12-trial.apk app/build/outputs/apk/debug/SHA256SUMS.txt#SHA256SUMS.txt --clobber
+            gh release edit ashes-duel-v0.12.0-test --target "$TARGET_SHA" || true
+          else
+            gh release create ashes-duel-v0.12.0-test app/build/outputs/apk/debug/AshesDuel-v0.12-trial.apk#AshesDuel-v0.12-trial.apk app/build/outputs/apk/debug/SHA256SUMS.txt#SHA256SUMS.txt --target "$TARGET_SHA" --prerelease --title "Пепел и карты v0.12 — исправление запуска" --notes "Игровой HTML загружается непосредственно из APK с безопасным appassets HTTPS origin; видимый экран ошибки и кнопка повтора при сбое WebView; Android-эмулятор smoke-test запускает приложение и проверяет ASHES_READY. Установка рядом с v0.11 под отдельным пробным package, старые данные не удаляются. Play Protect по-прежнему может проверять не-магазинные APK. Только тестовая подпись."
+          fi
 
       - name: Publish v0.11 updated Android beta
         if: (github.event_name == 'push' && github.ref == 'refs/heads/feature/ashes-icon-install-v011') || (github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feature/ashes-icon-install-v011' && github.event.pull_request.head.repo.full_name == github.repository)

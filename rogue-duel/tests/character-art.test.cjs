@@ -16,7 +16,10 @@ assert(css.includes(".etch-fighters .etch-person"),"Battle artwork layout missin
 assert(atelier.includes("function paintedPortrait"),"Sprite renderer missing");
 assert(atelier.includes('src="art/characters/'),"Renderer must load new offline art");
 assert(!atelier.includes("portrait-x:"),"Old compressed character atlas still used");
-assert(java.includes("art/characters/(guard|oracle|hunter|bandit|cultist|skeleton|slime|hound|boss)"),"Android WebView must intercept all character assets");
+assert(java.includes('LOCAL_HOST = "appassets.androidplatform.net"'),"Use reserved HTTPS origin for APK assets");
+assert(java.includes('getAssets().open(filename)'),"Android WebView must read all character art directly from APK");
+assert(java.includes('filename.contains("..")'),"Path traversal protection missing");
+assert(java.includes('return blocked()'),"Remote asset blocking missing");
 for(const id of characters){
  const file=path.join(root,"art","characters",id+".webp");
  assert(fs.existsSync(file),id+": missing bundled WebP");
