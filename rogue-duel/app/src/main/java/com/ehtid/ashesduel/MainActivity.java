@@ -114,7 +114,8 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface public void post(String topic, String message) {
-            if (!topic.equals(activeTopic) || message == null || message.length() > 11850 || !message.startsWith("v1.")) return;
+            if (!topic.equals(activeTopic) || message == null || message.length() > 11850) return;
+            if (!(message.startsWith("v1.") || message.matches("frag1:[0-9a-f]{32}:[0-9]{1,2}:[0-9]{1,2}:[A-Za-z0-9_.-]{1,2100}"))) return;
             final String bearer = activeBearer;
             pool.execute(() -> {
                 HttpURLConnection c = null;
