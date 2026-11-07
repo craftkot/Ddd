@@ -63,23 +63,28 @@ function paintedPortrait(kind){
  return '<img class="figure artbook-figure character-'+imageKind+'" src="art/characters/'+imageKind+'.webp" alt="'+labels[imageKind]+'" draggable="false" loading="eager" decoding="async">';
 }
 function cardVisual(c){
- const a=art(c.id);
- const name=String(a.n||c.id);
- const seed=Array.from(String(c.id)).reduce((n,ch)=>((n*33+ch.charCodeAt(0))>>>0),5381);
- const school=String(a.school||"").toLowerCase();
- const spell=school.includes("маг")||school.includes("тень")||a.t==="power";
- const protect=a.k==="block"||a.k==="ward"||school.includes("защит");
- const ranged=a.k==="poison"||school.includes("яд")||school.includes("лук");
- let icon=spell?"staff":protect?"shield":ranged?"bow":a.t==="attack"?(seed%4===0?"axe":seed%4===1?"dagger":"sword"):"hammer";
- const col=seed%6,row=Math.floor(seed/6)%2;
- const pcx=["0%","20%","40%","60%","80%","100%"][col];
- const pcy=row===0?"41.4%":"48.1%";
- const tone=(school.includes("яд")||school.includes("лечен"))?"poison":(a.t||"skill");
- return '<div class="artbook-art '+tone+'" title="'+esc(name)+'">'+
-  '<span class="artbook-card-paint" style="--card-x:'+pcx+';--card-y:'+pcy+'"></span>'+
-  '<img class="artbook-symbol" src="art/kenney/icons/'+icon+'.png" alt="" draggable="false">'+
-  '</div>';
+ const a=art(c.id),school=String(a.school||""),seed=[...String(c.id)].reduce((s,ch)=>(s*37+ch.charCodeAt(0))>>>0,17);
+ const isFire=/огонь|fire|плам|жар/i.test(school+" "+a.n);
+ const isPoison=/яд|лечен|природ|venom|poison/i.test(school+" "+a.n);
+ const isArcane=a.t==="power"||/маг|астр|ритуал|эфир|темн|хрон|time/i.test(school+" "+a.n);
+ const isGuard=/щит|оборон|защит|block/i.test(school+" "+a.n)||a.k==="block";
+ const tone=isFire?"ember":isPoison?"moss":isArcane?"violet":isGuard?"steel":a.t==="attack"?"scarlet":"azure";
+ const palettes={ember:["#e6aa68","#923f38","#2a1623"],moss:["#bbcf8e","#49644d","#15272c"],violet:["#d3a5f7","#684881","#211b40"],steel:["#c5dfef","#5483a1","#172c45"],scarlet:["#f0a286","#8b3d4c","#241929"],azure:["#9fd3e8","#336d89","#172f42"]};
+ const colors=palettes[tone],id="fate"+seed;
+ const stars=Array.from({length:8},(_,i)=>{
+   const x=13+(seed+i*71)%210,y=12+((seed>>>i)+i*29)%110;
+   return '<circle cx="'+x+'" cy="'+y+'" r="'+(i%3===0?1.4:.8)+'" fill="'+colors[0]+'" opacity=".7"/>';
+ }).join("");
+ const motif=seed%4;
+ const glyph=motif===0?
+   '<path d="M120 26L140 72 120 116 100 72Z" fill="none" stroke="'+colors[0]+'" stroke-width="4"/><path d="M120 38V104M107 70h26" stroke="'+colors[0]+'" stroke-width="2"/>':
+   motif===1?'<circle cx="120" cy="72" r="37" stroke="'+colors[0]+'" stroke-width="3" fill="none"/><path d="M120 34L157 94 84 94Z" fill="none" stroke="'+colors[0]+'" stroke-width="3"/>':
+   motif===2?'<path d="M83 94Q114 6 148 94Q121 120 83 94Z" fill="none" stroke="'+colors[0]+'" stroke-width="4"/><circle cx="120" cy="73" r="15" fill="none" stroke="'+colors[0]+'" stroke-width="3"/>':
+   '<path d="M120 28L155 73 120 115 85 73Z" fill="none" stroke="'+colors[0]+'" stroke-width="3"/><circle cx="120" cy="73" r="25" fill="none" stroke="'+colors[0]+'" stroke-width="3"/>';
+ const base='<svg class="fate-art-svg" viewBox="0 0 240 140" aria-hidden="true" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="'+id+'" x1="0" y1="0" x2="1" y2="1"><stop stop-color="'+colors[1]+'"/><stop offset="1" stop-color="'+colors[2]+'"/></linearGradient><radialGradient id="'+id+'halo"><stop stop-color="'+colors[0]+'" stop-opacity=".5"/><stop offset="1" stop-color="'+colors[0]+'" stop-opacity="0"/></radialGradient></defs><rect width="240" height="140" fill="url(#'+id+')"/><circle cx="119" cy="70" r="80" fill="url(#'+id+'halo)"/><path d="M-10 135L38 94 73 117 101 76 149 114 182 83 248 138Z" fill="#0b1627" opacity=".69"/><circle cx="120" cy="72" r="53" fill="none" stroke="'+colors[0]+'" opacity=".38"/><circle cx="120" cy="72" r="46" fill="none" stroke="'+colors[0]+'" opacity=".2" stroke-dasharray="6 11"/>'+stars+glyph+'</svg>';
+ return '<div class="fate-illustration tone-'+tone+'">'+base+'<span class="fate-art-flourish">✦</span></div>'
 }
+
 function relicPainting(r){
  const id=String(r?.id||"");
  const icons={sword:"sword",shield:"shield",chain:"shield",spark:"staff",rose:"staff",scroll:"staff",gem:"staff",heart:"shield",coin:"axe",sun:"hammer",venom:"dagger",flask:"staff"};
@@ -90,9 +95,16 @@ function paintedScene(name,label){
  return '<img class="artbook-scene" src="art/kenney/scene/'+name+'.png" alt="'+esc(label)+'" draggable="false">';
 }
 function playcard(c,act,i,disabled=false){
- const a=art(c.id),t=toneOf(a),rarity=a.rarity||"common";
- return '<button type="button" style="--deal:'+i+'" class="etch-card '+t+' '+rarity+'" data-cast-action="'+act+'" data-cast-index="'+i+'" aria-label="'+esc(a.n)+'"'+(disabled?" disabled":"")+'><span class="card-etched"></span><span class="cost">'+a.c+'</span><div class="card-title">'+esc(a.n)+upgraded(c)+'</div><div class="card-art">'+cardVisual(c)+'</div><div class="card-desc">'+esc(desc(c))+'</div><div class="card-type">'+longType(a.t)+'</div></button>'
+ const a=art(c.id),tone=toneOf(a),rarity=a.rarity||"common";
+ const description=String(desc(c));
+ const textClass=description.length>165?" copy-very-long":description.length>98?" copy-long":"";
+ const label=a.n+" — "+description+". Стоимость "+a.c+" ОН";
+ return '<button type="button" style="--deal:'+i+'" class="etch-card fate-card '+tone+' '+rarity+textClass+'" data-cast-action="'+act+'" data-cast-index="'+i+'" aria-label="'+esc(label)+'"'+(disabled?" disabled":"")+'>'+
+  '<span class="card-etched"></span><div class="fate-card-top"><span class="cost" aria-hidden="true">'+a.c+'</span><span class="card-title">'+esc(a.n)+upgraded(c)+'</span></div>'+
+  '<div class="card-art">'+cardVisual(c)+'</div><div class="card-desc">'+esc(description)+'</div>'+
+  '<div class="card-type"><span>'+longType(a.t)+'</span><span>'+(rarity==="rare"?"◆ РЕДКАЯ":rarity==="uncommon"?"◇ НЕОБЫЧНАЯ":"✧ ОБЫЧНАЯ")+'</span></div></button>'
 }
+
 function eventHead(title,subtitle){return '<div class="etch-head"><p class="eyebrow">✦ ПЕПЕЛ И КАРТЫ ✦</p><h2>'+esc(title)+'</h2><p class="sub">'+esc(subtitle||"")+'</p></div>'}
 function health(f){return '<span class="fig-hp">❤ '+trim(f.hp)+'/'+trim(f.maxHp)+'</span><span class="fig-track"><span style="width:'+pct(f.hp,f.maxHp)+'%"></span></span>'}
 function stateIcons(f){
@@ -107,31 +119,54 @@ function intentOf(f){
  return mode===0?"⚔ "+(f.attack||9):mode===1?"🛡 Броня":mode===2?"☠ Яд":"🩸 Кровь"
 }
 function unit(f,kind,i,isEnemy,clickable){
- return '<button type="button" '+(clickable?'data-foe-index="'+i+'" ':"")+'class="etch-person '+(isEnemy?"enemy":"hero")+' '+(f.hp<=0?"dead":"")+' '+(isEnemy&&G.combat?.target===i?"is-target":"")+'"'+(isEnemy&&f.hp<=0?" disabled":"")+'>'
- +(isEnemy?'<div class="etch-intent">'+esc(intentOf(f))+'</div>':"")+
- paintedPortrait(kind)+'<div class="fig-name">'+esc(f.name)+'</div>'+health(f)+stateIcons(f)+'</button>'
+ const alive=f.hp>0,chosen=isEnemy&&G.combat?.target===i;
+ const intent=isEnemy&&alive?'<div class="etch-intent" title="'+esc(intentOf(f))+'">'+esc(intentOf(f))+'</div>':"";
+ return '<button type="button" '+(clickable?'data-foe-index="'+i+'" ':"")+
+  'class="etch-person '+(isEnemy?"enemy":"hero")+' '+(alive?"":"dead")+' '+(chosen?"is-target":"")+'"'+(isEnemy&&!alive?' disabled':"")+'>'+
+  '<span class="fate-ground-shadow"></span>'+paintedPortrait(kind)+
+  '<div class="fig-name">'+esc(f.name)+'</div>'+health(f)+stateIcons(f)+intent+'</button>'
 }
+
 function stage(hero,foes,target,clickable){
- return '<div class="etch-stage"><div class="etch-moon"></div><div class="etch-spires"></div><div class="etch-fighters">'+unit(hero,hero.hero||G.runner?.hero||"guard",-1,false,false)+
- '<div class="etch-team count-'+foes.length+'">'+foes.map((f,i)=>unit(f,f.kind||f.hero||"boss",i,true,clickable)).join("")+'</div></div><div class="etch-groundline"></div></div>'
+ const num=foes.length;
+ return '<div class="etch-stage fate-stage count-'+num+'"><div class="etch-moon"></div><div class="etch-spires"></div>'+
+  '<div class="etch-fighters"><div class="fate-player-platform">'+unit(hero,hero.hero||G.runner?.hero||"guard",-1,false,false)+'</div>'+
+  '<div class="etch-team count-'+num+'">'+foes.map((f,i)=>unit(f,f.kind||f.hero||"boss",i,true,clickable)).join("")+'</div></div>'+
+  '<div class="etch-groundline"></div></div>'
 }
+
 function hud(hero,other=""){
  return '<div class="etch-battle-hud"><span>❤ <strong class="hp">'+trim(hero.hp)+' / '+trim(hero.maxHp)+'</strong></span><span>'+esc(hero.name)+'</span>'+other+'</div>'
 }
 function hand(f,action,disabled){
- const cards=f.hand||[];
- return '<div class="etch-resourcebar"><div class="etch-energy">'+trim(f.energy)+'/3</div><div class="etch-metrics"><span>▣ Колода '+trim(f.deck?.length)+'</span><span>↺ Сброс '+trim(f.discard?.length)+'</span><span>В руке '+cards.length+'</span></div></div>'+
- '<div class="etch-hand-shell"><div class="etch-hand count-'+Math.min(10,cards.length)+'">'+cards.map((c,i)=>'<div style="--fan:'+(i-(cards.length-1)/2)+';display:contents">'+playcard(c,action,i,disabled||art(c.id).c>f.energy||art(c.id).t==="reaction")+'</div>').join("")+'</div></div>'
+ const cards=f.hand||[],c=G.combat,s=action==="play"&&c?.av&&window.ASH_AV?.valid(c)?c.av:null;
+ const energy=s?s.sp:f.energy,limit=s?5:3;
+ return '<div class="etch-resourcebar"><div class="etch-energy">'+trim(energy)+'/'+limit+'</div><div class="etch-metrics">'+
+  '<span>▣ Колода '+trim(f.deck?.length)+'</span><span>↺ Сброс '+trim(f.discard?.length)+'</span><span>В руке '+cards.length+'</span></div></div>'+
+  '<div class="etch-hand-shell"><div class="etch-hand count-'+Math.min(10,cards.length)+'">'+
+  cards.map((c,i)=>playcard(c,action,i,disabled||art(c.id).c>energy||art(c.id).t==="reaction")).join("")+'</div></div>'
 }
+
 function fightView(){
- const c=G.combat,p=c.player;
- return hud(p,'<span class="coin">◈ '+G.runner.gold+'</span>')+
- stage({...p,hero:G.runner.hero},c.enemies,c.target,true)+ASH_RUN.potionBar()+
- '<div class="etch-hint">Перетащи атакующую карту на врага или нажми карту и выбери цель.</div>'+
- hand(p,"play",false)+
- '<div class="etch-actions"><button class="etch-btn cta" data-a="endTurn">Завершить ход</button></div>'+
- '<div class="logs">'+G.log.slice(-4).map(esc).join("\n")+'</div>'
+ const c=G.combat,p=c.player,av=c.av&&window.ASH_AV?.valid(c)?c.av:null;
+ const ready=!av||av.current==="hero";
+ const turns=av?ASH_AV.preview(c,7):[];
+ const order=av?'<div class="fate-av-bar" aria-label="Очередь действий"><div class="fate-av-label">ОЧЕРЕДЬ · ACTION VALUE</div>'+
+  '<div class="fate-av-scroll">'+turns.map((a,i)=>'<span class="fate-av-token '+(a.kind==="hero"?"ally":"hostile")+' '+(a.active?"current":"")+'" title="'+esc(a.name)+'">'+
+   '<strong>'+(a.kind==="hero"?"ТЫ":esc(a.name))+'</strong><small>AV '+a.av+'</small></span>').join("")+'</div></div>':"";
+ const points=av?'<div class="fate-sp-tray" aria-label="Очки навыков"><strong>ОЧКИ НАВЫКОВ</strong><div class="fate-sp-points">'+
+  Array.from({length:5},(_,i)=>'<span class="'+(i<av.sp?"filled":"empty")+'"></span>').join("")+'</div><b>'+av.sp+' / 5</b></div>':"";
+ const stageHeader='<div class="fate-battle-caption"><strong>БОЙ · ЭТАП '+(G.stage+1)+'</strong><small>Выбери цель · ходы определяет скорость</small></div>';
+ return stageHeader+hud(p,'<span class="coin">◈ '+G.runner.gold+'</span>')+order+
+  stage({...p,hero:G.runner.hero},c.enemies,c.target,true)+points+ASH_RUN.potionBar()+
+  '<div class="fate-combat-controls"><button type="button" class="etch-btn cool fate-basic" data-a="basicAttack" '+(ready?"":"disabled")+'>'+
+  '<strong>⚔ Базовая атака</strong><span>+1 ОН · 6 урона · передать ход</span></button>'+
+  '<span class="etch-hint">'+(ready?"Выбери одну карту: после её применения очередь AV продвинется.":"Враг действует.")+'</span></div>'+
+  '<div class="fate-hand-label">ТВОЯ РУКА <small>Все эффекты написаны на картах</small></div>'+
+  hand(p,"play",!ready)+
+  '<div class="logs">'+G.log.slice(-5).map(esc).join("\\n")+'</div>'
 }
+
 function timeline(d){
  let forecast=[];try{forecast=pvPreview(d,5)}catch(e){}
  return '<div class="etch-timeline"><small>AV · СКОРОСТЬ</small>'+forecast.map((s,i)=>'<span class="next '+(i===0?"active":"")+'">'+(s===G.role?"ТЫ":"СОПЕРНИК")+'</span>').join("")+
