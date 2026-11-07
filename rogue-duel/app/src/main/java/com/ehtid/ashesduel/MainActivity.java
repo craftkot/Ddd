@@ -1,6 +1,10 @@
 package com.ehtid.ashesduel;
 
 import android.app.Activity;
+import android.os.Build;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
+import android.webkit.WebSettings;
 import android.os.Bundle;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
@@ -29,20 +33,45 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        getWindow().getDecorView().setSystemUiVisibility(5894 | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+        // Modern immersive mode: keep the game below no system controls on Android 15+.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            getWindow().setDecorFitsSystemWindows(false);
+            WindowInsetsController bars = getWindow().getInsetsController();
+            if (bars != null) {
+                bars.hide(WindowInsets.Type.systemBars());
+                bars.setSystemBarsBehavior(
+                    WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            }
+        } else {
+            getWindow().getDecorView().setSystemUiVisibility(
+                5894 | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+        }
         web = new WebView(this);
         web.setBackgroundColor(0xFF0C1019);
         web.getSettings().setJavaScriptEnabled(true);
         web.getSettings().setDomStorageEnabled(true);
         web.getSettings().setMediaPlaybackRequiresUserGesture(false);
+        web.getSettings().setAllowFileAccess(false);
+        web.getSettings().setAllowContentAccess(false);
+        web.getSettings().setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        web.getSettings().setJavaScriptCanOpenWindowsAutomatically(false);
+        web.getSettings().setSupportMultipleWindows(false);
+        web.getSettings().setSafeBrowsingEnabled(true);
         web.addJavascriptInterface(new NetworkBridge(), "AndroidNet");
         web.setWebViewClient(new WebViewClient() {
+            // The native JS bridge must never be reachable by arbitrary websites.
+            @Override public boolean shouldOverrideUrlLoading(
+                    WebView view, WebResourceRequest request) {
+                Uri u = request.getUrl();
+                return !("game.ehtid".equals(u.getHost()) &&
+                         "https".equals(u.getScheme()));
+            }
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
                 if ("game.ehtid".equals(u.getHost()) && "https".equals(u.getScheme())) {
                     String filename = u.getPath().replaceFirst("^/", "");
                     if (filename.isEmpty()) filename = "index.html";
-                    if (!filename.matches("index\\.html|expansion-data\\.js|expansion-relics\\.js|expansion-combat\\.js|expansion-visual\\.js|pvp-balance\\.js|atelier\\.js|connection-ui\\.js|run-save\\.js|run-economy\\.js|turn-sequence\\.js|encounter-director\\.js|route-tree\\.js|atelier\\.css|connection-ui\\.css|expansion\\.css|artbook\\.css|fate-combat\\.css|character-redesign\\.css|art/arena\\.webp|art/atlas\\.webp|art/characters/(guard|oracle|hunter|bandit|cultist|skeleton|slime|hound|boss)\\.webp|art/kenney/(ui|icons|scene|heroes)/[a-z_-]+\\.png")) return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream(new byte[0]));
+                    if (!filename.matches("index\\.html|expansion-data\\.js|expansion-relics\\.js|expansion-combat\\.js|expansion-visual\\.js|pvp-balance\\.js|atelier\\.js|connection-ui\\.js|run-save\\.js|run-economy\\.js|turn-sequence\\.js|encounter-director\\.js|route-tree\\.js|atelier\\.css|connection-ui\\.css|expansion\\.css|artbook\\.css|fate-combat\\.css|character-redesign\\.css|art/arena\\.webp|art/atlas\\.webp|art/ashes-cover\\.webp|art/characters/(guard|oracle|hunter|bandit|cultist|skeleton|slime|hound|boss)\\.webp|art/kenney/(ui|icons|scene|heroes)/[a-z_-]+\\.png")) return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream(new byte[0]));
                     String mime = filename.endsWith(".js") ? "application/javascript" : filename.endsWith(".css") ? "text/css" : filename.endsWith(".png") ? "image/png" : filename.endsWith(".webp") ? "image/webp" : "text/html";
                     try {
                         return new WebResourceResponse(mime, "UTF-8", getAssets().open(filename));
@@ -50,7 +79,9 @@ public class MainActivity extends Activity {
                         return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream(new byte[0]));
                     }
                 }
-                return null;
+                // Remote scripts/content cannot access this app's Android bridge.
+                return new WebResourceResponse("text/plain", "UTF-8",
+                    new ByteArrayInputStream(new byte[0]));
             }
         });
         setContentView(web);
