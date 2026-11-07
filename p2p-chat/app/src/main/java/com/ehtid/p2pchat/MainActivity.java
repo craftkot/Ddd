@@ -38,6 +38,8 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -1145,13 +1147,32 @@ public final class MainActivity extends Activity {
         final String[] languages={"Автоматически","Русский","English"};
         final String[] codes={"auto","ru","en"};
         final int[] selected={0};
+        LinearLayout panel=new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(22),dp(8),dp(22),dp(7));
+        TextView explanation=text("Голосовое будет отправлено в Cloudflare Workers AI "+
+                "без сквозного шифрования. Текст останется только на вашем телефоне.",13,MUTED,false);
+        panel.addView(explanation);
+        RadioGroup choices=new RadioGroup(this);
+        for(int i=0;i<languages.length;i++){
+            RadioButton item=new RadioButton(this);
+            item.setText(languages[i]);
+            item.setTextColor(WHITE);
+            item.setTextSize(14);
+            item.setId(1000+i);
+            item.setPadding(0,dp(5),0,dp(5));
+            choices.addView(item);
+        }
+        choices.check(1000);
+        choices.setOnCheckedChangeListener((group,checked)->selected[0]=Math.max(0,Math.min(2,checked-1000)));
+        LinearLayout.LayoutParams choiceLp=new LinearLayout.LayoutParams(-1,-2);
+        choiceLp.topMargin=dp(8);
+        panel.addView(choices,choiceLp);
         new AlertDialog.Builder(this)
                 .setTitle("Распознавание речи")
-                .setMessage("Аудио будет отправлено в Cloudflare Workers AI без сквозного шифрования. "+
-                        "Оно не публикуется в чате. Выберите язык речи (до 2 МБ).")
-                .setSingleChoiceItems(languages,0,(dialog,which)->selected[0]=which)
+                .setView(panel)
                 .setNegativeButton("Отмена",null)
-                .setPositiveButton("Распознать",(dialog,which)->
+                .setPositiveButton("Отправить и распознать",(dialog,which)->
                         transcribeMedia(meta,output,selectedRoom,codes[selected[0]]))
                 .show();
     }
