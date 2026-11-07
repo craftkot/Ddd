@@ -1,0 +1,158 @@
+/* PEPЕЛ И КАРТЫ v0.9 — Character Art Direction
+ * Nine original full-body transparent RGBA WebP sprites, no remote image requests.
+ * Sprite source: original project-generated illustration, NOT Kenney CC0.
+ */
+:root{--figure-gold:#e9c993;--figure-ink:#0c0e18;--figure-red:#b65c58}
+.etch-stage{
+ min-height:clamp(335px,48vw,520px);
+ background:
+   radial-gradient(ellipse at 66% 26%,#c95d4e45 0%,transparent 42%),
+   linear-gradient(180deg,#0d102044,#0608119e 78%,#050710dd),
+   url("art/arena.webp") center 60%/cover no-repeat;
+}
+.etch-fighters{inset:12% 1.5% 8%;align-items:flex-end;gap:5px}
+.etch-fighters .etch-person{
+ overflow:visible;justify-content:flex-end;isolation:isolate;
+ padding:2px 3px 5px;border-radius:14px;
+ transition:background .16s,border-color .16s,filter .16s;
+}
+.etch-fighters .etch-person:before{
+ content:"";position:absolute;left:8%;right:8%;bottom:13px;height:18px;z-index:-1;
+ border-radius:50%;pointer-events:none;
+ background:radial-gradient(ellipse,#b78b6a57,transparent 72%);filter:blur(8px)
+}
+.etch-fighters .etch-person img.figure.artbook-figure{
+ display:block;position:relative;flex:0 1 auto;margin:0 auto;
+ width:100%;max-width:225px;height:clamp(176px,25vw,292px);
+ object-fit:contain;object-position:center bottom;
+ background:none!important;opacity:1;
+ image-rendering:auto;-webkit-user-drag:none;user-select:none;
+ filter:drop-shadow(0 14px 9px #01030bd9) drop-shadow(0 0 11px #b579592a);
+ animation:character-breathe 3.9s ease-in-out infinite;
+ pointer-events:none;transform-origin:50% 100%;
+}
+.etch-fighters .etch-person.enemy img.figure.artbook-figure{
+ height:clamp(150px,20vw,252px);max-width:215px
+}
+.etch-fighters .etch-person.enemy:active{background:#df76552b}
+.etch-fighters .etch-person.enemy.is-target,.etch-fighters .etch-person.enemy.aimed{
+ background:#ae5e3f30;border:1px solid #f5ba7c;
+ box-shadow:0 0 0 2px #edb67738,inset 0 0 30px #bb674733,0 0 23px #e79f6b4e
+}
+.etch-fighters .etch-person.enemy.is-target img.figure.artbook-figure,
+.etch-fighters .etch-person.enemy.aimed img.figure.artbook-figure{
+ filter:drop-shadow(0 14px 9px #01030bd9) drop-shadow(0 0 18px #ec895da8)
+}
+.etch-fighters .etch-person .fig-name{
+ font:700 clamp(10px,1.35vw,13px)/1.3 system-ui,sans-serif;
+ color:#fff3df;letter-spacing:.15px;
+ max-width:100%;white-space:normal;overflow:visible;text-overflow:clip;
+ padding:3px 0;text-shadow:0 2px 6px #000,0 0 12px #000
+}
+.etch-fighters .etch-person .fig-hp{font:700 11px/1.3 system-ui;color:#ffbfba}
+.etch-fighters .etch-person .fig-track{
+ height:8px;border:1px solid #dc9c86;box-shadow:0 2px 6px #0009
+}
+.etch-fighters .etch-person .fig-status small{
+ border:1px solid #9f867fb8;background:#121827e5;
+ font:700 9px/1.2 system-ui;padding:3px 4px
+}
+.etch-fighters .etch-intent{
+ top:-8px;max-width:98%;padding:5px 7px;line-height:1.2;
+ border-radius:7px;background:linear-gradient(140deg,#28202be9,#141723f3);
+ color:#ffe5bf;border:1px solid #b18c68;box-shadow:0 4px 10px #0008
+}
+.etch-fighters .etch-team.count-4 .etch-person img.figure.artbook-figure{
+ height:clamp(93px,13vw,155px);max-width:138px
+}
+.etch-fighters .etch-team.count-4 .etch-person .fig-name{font-size:9px}
+.etch-fighters .etch-person.dead img.figure.artbook-figure{
+ filter:grayscale(1) brightness(.4);animation:none;opacity:.5
+}
+@keyframes character-breathe{
+ 0%,100%{transform:translateY(0) scale(1)}
+ 50%{transform:translateY(-4px) scale(1.012)}
+}
+.etch-class-grid{
+ max-width:1080px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+ gap:14px;align-items:stretch;margin:18px auto 25px
+}
+.etch-class-grid .etch-class.hero-choice{
+ display:flex;flex-direction:column;align-items:stretch;gap:0;
+ min-height:390px;width:100%;overflow:hidden;
+ position:relative;border:1px solid #86644f;border-radius:15px;
+ background:linear-gradient(180deg,#332b32 0%,#161b28 72%,#0f141f 100%);
+ box-shadow:inset 0 1px 0 #f8dcb035,0 13px 24px #000b;
+ text-align:center;padding:0 12px 14px;color:#f1e4d2;
+ touch-action:manipulation;transition:transform .15s,border-color .15s,box-shadow .15s
+}
+.etch-class-grid .etch-class.hero-choice:hover,
+.etch-class-grid .etch-class.hero-choice:focus-visible{
+ border-color:#f6cf95;box-shadow:0 0 0 1px #f5ce8a5a,0 15px 33px #000b;
+ transform:translateY(-3px)
+}
+.etch-class-grid .etch-class.hero-choice:active{transform:scale(.985)}
+.etch-class-grid .etch-class.hero-choice:before{display:none}
+.hero-portrait-wrap{
+ position:relative;display:flex;align-items:flex-end;justify-content:center;
+ width:calc(100% + 24px);margin:0 -12px 10px;height:260px;overflow:hidden;
+ background:radial-gradient(ellipse at center bottom,#ad6a5144,transparent 64%),
+ linear-gradient(155deg,#40313e,#171b29 72%,#141a27)
+}
+.hero-portrait-wrap:after{
+ content:"";pointer-events:none;position:absolute;inset:0;
+ background:linear-gradient(180deg,transparent 73%,#151a26eb 100%)
+}
+.hero-portrait-wrap .artbook-figure{
+ display:block;width:100%;max-width:260px;height:100%;margin:0 auto;
+ object-fit:contain;object-position:center bottom;
+ background:none!important;image-rendering:auto;
+ filter:drop-shadow(0 18px 11px #02030bce) drop-shadow(0 0 20px #eb9c6b32);
+ animation:character-breathe 4.2s ease-in-out infinite;
+}
+.hero-oracle .hero-portrait-wrap{background:radial-gradient(ellipse at 50% 58%,#8c51b671,transparent 63%),linear-gradient(#30213c,#141625)}
+.hero-hunter .hero-portrait-wrap{background:radial-gradient(ellipse at 50% 59%,#5c77544e,transparent 68%),linear-gradient(#263329,#141a23)}
+.hero-choice-info{display:flex;align-items:center;flex:1;flex-direction:column;gap:5px}
+.hero-role{font:700 9px/1.2 system-ui;letter-spacing:2.1px;color:#aa9ba3}
+.etch-class-grid .hero-choice h3{font:600 24px/1.15 Georgia,serif;color:#f4d7a9;text-align:center;margin:1px 0 2px}
+.etch-class-grid .hero-choice .hero-hp{font:700 12px system-ui;color:#e9a19b}
+.etch-class-grid .hero-choice p{font:12px/1.45 system-ui;color:#c6c6cc;margin:2px 0 8px;text-align:center}
+.hero-select{
+ display:block;margin-top:auto;padding-top:8px;border-top:1px solid #9b78576b;width:100%;
+ font:700 10px/1.35 system-ui;letter-spacing:1.4px;color:#f2c48b;text-align:center
+}
+@media(max-width:600px){
+ .etch-stage{min-height:335px}
+ .etch-fighters{inset:15% 1% 7%}
+ .etch-fighters .etch-person img.figure.artbook-figure{height:219px;max-width:150px}
+ .etch-fighters .etch-person.enemy img.figure.artbook-figure{height:198px;max-width:164px}
+ .etch-fighters .etch-team.count-4 .etch-person img.figure.artbook-figure{height:103px;max-width:76px}
+ .etch-fighters .etch-person .fig-name{font-size:10px}
+ .etch-fighters .etch-person .fig-hp{font-size:10px}
+ .etch-class-grid{grid-template-columns:1fr;gap:11px;max-width:540px}
+ .etch-class-grid .etch-class.hero-choice{
+   min-height:194px;flex-direction:row;align-items:stretch;text-align:left;
+   gap:12px;padding:0 12px 0 0
+ }
+ .hero-portrait-wrap{
+  width:42%;min-width:138px;max-width:175px;height:auto;min-height:194px;
+  flex:0 0 42%;margin:0
+ }
+ .hero-portrait-wrap .artbook-figure{height:200px;max-width:180px;object-position:center bottom}
+ .hero-choice-info{align-items:flex-start;text-align:left;justify-content:center;padding:8px 0 10px}
+ .etch-class-grid .hero-choice h3{font-size:23px;text-align:left}
+ .etch-class-grid .hero-choice p{font-size:11px;text-align:left;margin:2px 0 5px}
+ .hero-select{text-align:left}
+}
+@media(max-width:360px){
+ .etch-fighters .etch-person img.figure.artbook-figure{height:190px}
+ .etch-fighters .etch-person.enemy img.figure.artbook-figure{height:163px}
+ .etch-fighters .etch-team.count-4 .etch-person img.figure.artbook-figure{height:88px}
+ .hero-portrait-wrap{min-width:124px}
+ .hero-portrait-wrap .artbook-figure{height:178px}
+ .etch-class-grid .hero-choice h3{font-size:20px}
+}
+@media(prefers-reduced-motion:reduce){
+ .etch-fighters .etch-person img.figure.artbook-figure,
+ .hero-portrait-wrap .artbook-figure{animation:none;transition:none}
+}
