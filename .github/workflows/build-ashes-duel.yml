@@ -88,8 +88,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete ashes-duel-v0.8.0-beta --yes --cleanup-tag || true
-          gh release create ashes-duel-v0.8.0-beta app/build/outputs/apk/debug/AshesDuel-v0.8-debug.apk#AshesDuel-v0.8-debug.apk --target "$GITHUB_SHA" --prerelease --title "Пепел и карты v0.8 Beta — комнаты EHTID / Artbook" --notes "Тестовая Android APK. Подключение через EHTID Cloudflare Relay с четырёхзначным игровым кодом, новая офлайн-графика Kenney CC0 и оригинальный арт. Сборка с debug-сертификатом: обновление поверх старого APK может не пройти. Проверка сети на двух устройствах не завершена. Имеются ограничения безопасности короткого кода."
+          if gh release view ashes-duel-v0.8.0-beta >/dev/null 2>&1; then
+            gh release upload ashes-duel-v0.8.0-beta app/build/outputs/apk/debug/AshesDuel-v0.8-debug.apk#AshesDuel-v0.8-debug.apk --clobber
+            gh release edit ashes-duel-v0.8.0-beta --target "$GITHUB_SHA" || true
+          else
+            gh release create ashes-duel-v0.8.0-beta app/build/outputs/apk/debug/AshesDuel-v0.8-debug.apk#AshesDuel-v0.8-debug.apk --target "$GITHUB_SHA" --prerelease --title "Пепел и карты v0.8 Beta — комнаты EHTID / Artbook" --notes "Тестовая Android APK. Подключение через EHTID Cloudflare Relay с четырёхзначным игровым кодом, новая офлайн-графика Kenney CC0 и оригинальный арт. Сборка с debug-сертификатом: обновление поверх старого APK может не пройти. Проверка сети на двух устройствах не завершена. Имеются ограничения безопасности короткого кода."
+          fi
 
       - name: Publish installable APK on GitHub Releases
         if: github.event_name == 'push' && github.ref == 'refs/heads/feature/card-roguelike-pvp'
