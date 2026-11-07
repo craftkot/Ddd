@@ -75,7 +75,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Pepel-i-Karty-Android-APK
-          path: rogue-duel/app/build/outputs/apk/debug/AshesDuel-v0.7-debug.apk
+          path: rogue-duel/app/build/outputs/apk/debug/AshesDuel-v0.8-debug.apk
           if-no-files-found: error
           retention-days: 30
 
