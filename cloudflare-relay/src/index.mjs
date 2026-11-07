@@ -182,6 +182,9 @@ async function transcribeVoice(request,env) {
   const ct=(request.headers.get("Content-Type")||"").toLowerCase();
   if(!/^audio\/(mp4|mpeg|m4a|ogg|webm|wav|x-wav)(;|$)/.test(ct))
     return responseJson({ok:false,error:"unsupported audio content type"},415);
+  const language=(request.headers.get("X-EHTID-Language")||"auto").toLowerCase();
+  if(!["auto","ru","en"].includes(language))
+    return responseJson({ok:false,error:"unsupported transcription language"},400);
   const len=Number(request.headers.get("Content-Length"));
   if(Number.isFinite(len)&&len>MAX_TRANSCRIBE_BYTES)
     return responseJson({ok:false,error:"voice note too large for transcription (2 MiB)"},413);
@@ -217,7 +220,11 @@ async function transcribeVoice(request,env) {
   for(let i=0;i<raw.length;i+=8192)
     binary+=String.fromCharCode(...raw.subarray(i,i+8192));
   try {
-    const result=await env.AI.run("@cf/openai/whisper-large-v3-turbo",{audio:btoa(binary),task:"transcribe"});
+    // VAD reduces silence-driven hallucinations, explicit language avoids auto-detect mistakes.
+    const params={audio:btoa(binary),task:"transcribe",vad_filter:true,
+      condition_on_previous_text:false};
+    if(language!=="auto")params.language=language;
+    const result=await env.AI.run("@cf/openai/whisper-large-v3-turbo",params);
     const transcript=typeof result?.text==="string"?result.text.trim():"";
     if(!transcript)return responseJson({ok:false,error:"no speech detected"},422);
     return responseJson({ok:true,text:transcript.slice(0,3000)});

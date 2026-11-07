@@ -16,6 +16,9 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.RippleDrawable;
+import android.content.res.ColorStateList;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -49,17 +52,21 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.HashSet;
 
 public final class MainActivity extends Activity {
-    private static final int BG = Color.rgb(11, 17, 29);
-    private static final int SURFACE = Color.rgb(24, 33, 51);
-    private static final int PANEL = Color.rgb(34, 45, 67);
-    private static final int ACCENT = Color.rgb(66, 151, 255);
-    private static final int WHITE = Color.rgb(241, 246, 255);
-    private static final int MUTED = Color.rgb(157, 172, 196);
-    private static final int ONLINE = Color.rgb(88, 223, 174);
+    // EHTID violet — high-contrast, deliberately restrained chat surfaces.
+    private static final int BG = Color.rgb(16, 13, 27);
+    private static final int SURFACE = Color.rgb(33, 26, 50);
+    private static final int PANEL = Color.rgb(48, 37, 68);
+    private static final int ACCENT = Color.rgb(139, 92, 246);
+    private static final int WHITE = Color.rgb(245, 241, 255);
+    private static final int MUTED = Color.rgb(173, 163, 195);
+    private static final int ONLINE = Color.rgb(94, 216, 189);
     private EditText input, joinInput;
-    private TextView status, codeLabel, profileLabel, membersLabel, homeServerLabel;
+    private TextView status, codeLabel, codePeek, profileLabel, membersLabel, homeServerLabel;
+    private final Set<String> pendingTranscriptions=new HashSet<>();
     private LinearLayout feed, membersPanel;
     private ScrollView scroll, membersScroll, peopleScroll, profileScroll, roomsScroll;
     private LinearLayout peopleContent, profileContent, roomsContent, composer;
@@ -152,31 +159,34 @@ public final class MainActivity extends Activity {
     private void buildUI() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(14), dp(13), dp(14), dp(11));
+        root.setPadding(dp(10), dp(9), dp(10), dp(8));
         root.setBackgroundColor(BG);
 
         LinearLayout heading = new LinearLayout(this);
         heading.setGravity(Gravity.CENTER_VERTICAL);
         ImageView logo = new ImageView(this);
         logo.setImageResource(R.drawable.ic_chat_logo);
-        heading.addView(logo,new LinearLayout.LayoutParams(dp(54), dp(54)));
+        heading.addView(logo,new LinearLayout.LayoutParams(dp(44), dp(44)));
         LinearLayout brand = new LinearLayout(this);
         brand.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0,-2,1);
         bp.leftMargin = dp(8);
         heading.addView(brand,bp);
-        TextView title = text("EHTID  CHAT",22,WHITE,true);
-        title.setLetterSpacing(0.07f);
+        TextView title = text("EHTID",20,WHITE,true);
+        title.setLetterSpacing(0.04f);
         brand.addView(title);
-        profileLabel = text(profile().getString("nick",""),12,MUTED,false);
+        profileLabel = text(profile().getString("nick",""),11,MUTED,false);
         brand.addView(profileLabel);
-        TextView roomsButton=button("Комнаты",PANEL,12);
-        LinearLayout.LayoutParams roomButtonLp=new LinearLayout.LayoutParams(dp(83),dp(45));
+        codePeek = text("Код "+code.substring(0,6)+"… · открыть доступ",11,MUTED,false);
+        codePeek.setSingleLine(true);
+        brand.addView(codePeek);
+        TextView roomsButton=iconButton(R.drawable.ic_ehtid_rooms,PANEL,"Список комнат");
+        LinearLayout.LayoutParams roomButtonLp=new LinearLayout.LayoutParams(dp(46),dp(46));
         roomButtonLp.rightMargin=dp(5);
         heading.addView(roomsButton,roomButtonLp);
         roomsButton.setOnClickListener(v->showPage(3));
-        TextView settings = button("⚙",PANEL,21);
-        heading.addView(settings,new LinearLayout.LayoutParams(dp(48),dp(45)));
+        TextView settings = iconButton(R.drawable.ic_ehtid_settings,PANEL,"Профиль и настройки");
+        heading.addView(settings,new LinearLayout.LayoutParams(dp(46),dp(46)));
         settings.setOnClickListener(v -> showPage(2));
         root.addView(heading);
 
@@ -187,6 +197,8 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(-1,-2);
         rp.topMargin = dp(13);
         root.addView(roomBox,rp);
+        roomBox.setVisibility(View.GONE);
+        brand.setOnClickListener(v->roomBox.setVisibility(roomBox.getVisibility()==View.VISIBLE?View.GONE:View.VISIBLE));
 
         TextView hint = text("КОМНАТА  ·  КОД ДОСТУПА",11,MUTED,true);
         hint.setLetterSpacing(0.06f);
@@ -199,14 +211,14 @@ public final class MainActivity extends Activity {
 
         LinearLayout actions = new LinearLayout(this);
         roomBox.addView(actions);
-        TextView copy = button("Копировать",ACCENT,13);
+        TextView copy = labeledButton("Копировать",R.drawable.ic_ehtid_copy,ACCENT,13);
         actions.addView(copy);
         copy.setOnClickListener(v -> {
             ((ClipboardManager)getSystemService(Context.CLIPBOARD_SERVICE))
                     .setPrimaryClip(ClipData.newPlainText("EHTID room",code));
             status.setText("● Код скопирован");
         });
-        TextView newRoom = button("Новая комната",PANEL,13);
+        TextView newRoom = labeledButton("Новая комната",R.drawable.ic_ehtid_plus,PANEL,13);
         LinearLayout.LayoutParams nr = new LinearLayout.LayoutParams(-2,-2);
         nr.leftMargin = dp(8);
         actions.addView(newRoom,nr);
@@ -232,7 +244,7 @@ public final class MainActivity extends Activity {
         joinInput.setPadding(dp(8),dp(4),dp(8),dp(4));
         joinInput.setBackground(round(PANEL,11));
         join.addView(joinInput,new LinearLayout.LayoutParams(0,dp(45),1));
-        TextView joinButton = button("Войти",ACCENT,13);
+        TextView joinButton = labeledButton("Войти",R.drawable.ic_ehtid_join,ACCENT,13);
         LinearLayout.LayoutParams jb = new LinearLayout.LayoutParams(-2,dp(45));
         jb.leftMargin = dp(7);
         join.addView(joinButton,jb);
@@ -258,6 +270,8 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(-1,-2);
         mp.topMargin = dp(10);
         root.addView(memberCard,mp);
+        // Participants have a dedicated full page; do not steal chat height.
+        memberCard.setVisibility(View.GONE);
         membersLabel = text("УЧАСТНИКИ · 0 В СЕТИ",11,MUTED,true);
         membersLabel.setLetterSpacing(0.05f);
         memberCard.addView(membersLabel);
@@ -272,10 +286,10 @@ public final class MainActivity extends Activity {
         memberCard.addView(membersScroll,pp);
 
         status = text("● Ожидание подключения…",12,ONLINE,false);
-        status.setPadding(dp(10),dp(10),dp(10),dp(10));
-        status.setBackground(round(SURFACE,12));
+        status.setPadding(dp(5),dp(3),dp(5),dp(5));
+        status.setBackgroundColor(Color.TRANSPARENT);
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1,-2);
-        sp.topMargin = dp(9);
+        sp.topMargin = dp(2);
         root.addView(status,sp);
 
         pages = new SwipePages();
@@ -322,8 +336,8 @@ public final class MainActivity extends Activity {
 
         composer = new LinearLayout(this);
         composer.setGravity(Gravity.CENTER_VERTICAL);
-        composer.setPadding(dp(6),dp(5),dp(5),dp(5));
-        composer.setBackground(round(SURFACE,17));
+        composer.setPadding(dp(5),dp(5),dp(5),dp(5));
+        composer.setBackground(round(SURFACE,24));
         input = new EditText(this);
         input.setTextColor(WHITE);
         input.setHintTextColor(MUTED);
@@ -333,17 +347,17 @@ public final class MainActivity extends Activity {
         input.setPadding(dp(7),dp(4),dp(7),dp(4));
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         input.setMaxLines(4);
-        micButton = button("🎤",PANEL,19);
-        composer.addView(micButton,new LinearLayout.LayoutParams(dp(43),dp(47)));
-        micButton.setOnClickListener(v->toggleRecording());
-        TextView attach=button("＋",PANEL,24);
-        LinearLayout.LayoutParams attachLp=new LinearLayout.LayoutParams(dp(43),dp(47));
-        attachLp.leftMargin=dp(4);
-        composer.addView(attach,attachLp);
+        TextView attach=iconButton(R.drawable.ic_ehtid_attach,PANEL,"Добавить вложение");
+        composer.addView(attach,new LinearLayout.LayoutParams(dp(43),dp(46)));
         attach.setOnClickListener(v->chooseAttachment());
         composer.addView(input,new LinearLayout.LayoutParams(0,-2,1f));
-        TextView send = button("➤",ACCENT,22);
-        composer.addView(send,new LinearLayout.LayoutParams(dp(51),dp(47)));
+        micButton = iconButton(R.drawable.ic_ehtid_mic,PANEL,"Записать голосовое сообщение");
+        composer.addView(micButton,new LinearLayout.LayoutParams(dp(43),dp(46)));
+        micButton.setOnClickListener(v->toggleRecording());
+        TextView send = iconButton(R.drawable.ic_ehtid_send,ACCENT,"Отправить сообщение");
+        LinearLayout.LayoutParams sendLp=new LinearLayout.LayoutParams(dp(47),dp(46));
+        sendLp.leftMargin=dp(4);
+        composer.addView(send,sendLp);
         send.setOnClickListener(v -> {
             String message = input.getText().toString().trim();
             if (message.isEmpty()) return;
@@ -806,8 +820,9 @@ public final class MainActivity extends Activity {
             recorder.prepare();
             recorder.start();
             recordStarted=System.currentTimeMillis();
-            micButton.setText("■");
-            micButton.setTextColor(Color.rgb(255,170,120));
+            setIcon(micButton,R.drawable.ic_ehtid_stop,Color.rgb(255,195,205));
+            micButton.setContentDescription("Завершить и отправить голосовое");
+            micButton.setBackground(ripple(Color.rgb(106,45,78),14));
             status.setText("● Запись голосового… нажми ■ для отправки");
         } catch(Exception error) {
             if(recorder!=null){recorder.release();recorder=null;}
@@ -821,8 +836,9 @@ public final class MainActivity extends Activity {
         recorder=null;
         long duration=System.currentTimeMillis()-recordStarted;
         File file=recordingFile;
-        micButton.setText("🎤");
-        micButton.setTextColor(WHITE);
+        setIcon(micButton,R.drawable.ic_ehtid_mic,WHITE);
+        micButton.setContentDescription("Записать голосовое сообщение");
+        micButton.setBackground(ripple(PANEL,14));
         try{current.stop();}
         catch(Exception problem){send=false;}
         finally {current.reset();current.release();}
@@ -961,11 +977,11 @@ public final class MainActivity extends Activity {
                 LinearLayout bubble = new LinearLayout(this);
                 bubble.setOrientation(LinearLayout.VERTICAL);
                 bubble.setPadding(dp(12),dp(9),dp(12),dp(8));
-                bubble.setBackground(round(own?Color.rgb(34,97,184):SURFACE,16));
+                bubble.setBackground(round(own?Color.rgb(77,55,123):SURFACE,18));
                 row.addView(bubble);
                 String author = m.optString("name");
                 if (author.isEmpty()) author = own ? profile().getString("nick","Вы") : "Собеседник";
-                TextView nick = text(author,11,own?Color.rgb(194,225,255):ONLINE,true);
+                TextView nick = text(author,11,own?Color.rgb(218,204,255):ONLINE,true);
                 bubble.addView(nick);
                 JSONObject media=m.optJSONObject("media");
                 TextView body=text(m.optString("text"),15,WHITE,false);
@@ -984,20 +1000,25 @@ public final class MainActivity extends Activity {
                         info+=" • "+String.format(Locale.getDefault(),"%02d:%02d",duration/60,duration%60);
                     }
                     bubble.addView(text(info,11,MUTED,false));
-                    TextView open=button("voice".equals(kind)?"▶ Прослушать":
-                            "image".equals(kind)?"▣ Посмотреть фото":"⬇ Открыть файл",ACCENT,12);
+                    TextView open=labeledButton("voice".equals(kind)?"Воспроизвести":
+                            "image".equals(kind)?"Открыть фото":"Открыть файл",
+                            "voice".equals(kind)?R.drawable.ic_ehtid_play:
+                            "image".equals(kind)?R.drawable.ic_ehtid_image:R.drawable.ic_ehtid_attach,ACCENT,12);
                     LinearLayout.LayoutParams mp=new LinearLayout.LayoutParams(-1,dp(39));
                     mp.topMargin=dp(6);
                     bubble.addView(open,mp);
                     open.setOnClickListener(v->openMedia(media));
                     if("voice".equals(kind)) {
-                        TextView transcript=button("📝 Расшифровать голосовое",PANEL,12);
-                        LinearLayout.LayoutParams trp=new LinearLayout.LayoutParams(-1,dp(39));
+                        String cached=options().getString("transcript_"+RoomAccess.topic(code)+"_"+media.optString("id"),"");
+                        TextView transcript=labeledButton(cached.isEmpty()?"Расшифровать":"Расшифровка готова",
+                                R.drawable.ic_ehtid_transcript,PANEL,12);
+                        LinearLayout.LayoutParams trp=new LinearLayout.LayoutParams(-1,dp(41));
                         trp.topMargin=dp(5);
                         bubble.addView(transcript,trp);
-                        String cached=options().getString("transcript_"+RoomAccess.topic(code)+"_"+media.optString("id"),"");
-                        TextView output=text(cached.isEmpty()?"":"Расшифровка: "+cached,13,WHITE,false);
+                        TextView output=text(cached.isEmpty()?"":"«"+cached+"»",13,WHITE,false);
                         output.setMaxWidth(dp(290));
+                        output.setTextIsSelectable(true);
+                        output.setPadding(dp(3),dp(6),dp(3),dp(3));
                         bubble.addView(output);
                         transcript.setOnClickListener(v->requestTranscription(media,output));
                     }
@@ -1109,20 +1130,37 @@ public final class MainActivity extends Activity {
     }
 
     private void requestTranscription(JSONObject meta,TextView output) {
+        final String selectedRoom=code;
+        final String cacheKey="transcript_"+RoomAccess.topic(selectedRoom)+"_"+meta.optString("id");
+        String cached=options().getString(cacheKey,"");
+        if(!cached.isEmpty()){
+            output.setText("«"+cached+"»");
+            return;
+        }
+        if(pendingTranscriptions.contains(cacheKey)){
+            output.setText("Распознавание уже выполняется…");
+            return;
+        }
+        // Never transmit plaintext voice audio without the user's consent.
+        final String[] languages={"Автоматически","Русский","English"};
+        final String[] codes={"auto","ru","en"};
+        final int[] selected={0};
         new AlertDialog.Builder(this)
-                .setTitle("Расшифровать голосовое?")
-                .setMessage("Для распознавания аудио в открытом виде будет отправлено "+
-                        "в Cloudflare Workers AI (Whisper). В отличие от хранения "+
-                        "голосовых в чате, это не сквозное шифрование. "+
-                        "Длина записи — до 2 МБ. Отправить на распознавание?")
+                .setTitle("Распознавание речи")
+                .setMessage("Аудио будет отправлено в Cloudflare Workers AI без сквозного шифрования. "+
+                        "Оно не публикуется в чате. Выберите язык речи (до 2 МБ).")
+                .setSingleChoiceItems(languages,0,(dialog,which)->selected[0]=which)
                 .setNegativeButton("Отмена",null)
-                .setPositiveButton("Расшифровать",(dialog,which)->transcribeMedia(meta,output))
+                .setPositiveButton("Распознать",(dialog,which)->
+                        transcribeMedia(meta,output,selectedRoom,codes[selected[0]]))
                 .show();
     }
 
-    private void transcribeMedia(JSONObject meta,TextView output) {
-        final String selectedRoom=code;
-        status.setText("● Расшифровка голосового через Cloudflare AI…");
+    private void transcribeMedia(JSONObject meta,TextView output,String selectedRoom,String language) {
+        final String cacheKey="transcript_"+RoomAccess.topic(selectedRoom)+"_"+meta.optString("id");
+        if(!pendingTranscriptions.add(cacheKey))return;
+        output.setText("Распознаём голосовое…");
+        status.setText("● Распознаём речь через Cloudflare AI…");
         new Thread(()->{
             try {
                 File file=MediaTransfer.download(this,selectedRoom,meta,null);
@@ -1130,16 +1168,23 @@ public final class MainActivity extends Activity {
                 try(InputStream in=new FileInputStream(file)){
                     audio=MediaTransfer.readLimited(in);
                 }
-                String transcript=MediaTransfer.transcribe(audio,selectedRoom);
+                String transcript=MediaTransfer.transcribe(audio,selectedRoom,language);
                 runOnUiThread(()->{
+                    pendingTranscriptions.remove(cacheKey);
+                    // Persist per-room transcript even when the user switched rooms.
+                    options().edit().putString(cacheKey,transcript).apply();
                     if(!selectedRoom.equals(code))return;
-                    options().edit().putString("transcript_"+RoomAccess.topic(selectedRoom)+"_"+
-                            meta.optString("id"),transcript).apply();
-                    output.setText("Расшифровка: "+transcript);
+                    output.setText("«"+transcript+"»");
                     status.setText("● Расшифровка готова");
                 });
             }catch(Exception error){
-                runOnUiThread(()->status.setText("● Расшифровка: "+error.getMessage()));
+                final String reason=error.getMessage()==null?"Ошибка сети":error.getMessage();
+                runOnUiThread(()->{
+                    pendingTranscriptions.remove(cacheKey);
+                    if(!selectedRoom.equals(code))return;
+                    output.setText("Не удалось распознать: "+reason);
+                    status.setText("● Ошибка распознавания. Можно повторить.");
+                });
             }
         },"EHTID-Whisper").start();
     }
@@ -1153,6 +1198,7 @@ public final class MainActivity extends Activity {
         boolean changed=!room.equals(code);
         code=room;
         codeLabel.setText(code);
+        codePeek.setText("Код "+code.substring(0,6)+"… · открыть доступ");
         savedRooms.remember(room);
         getPreferences(MODE_PRIVATE).edit().putString("room",room).apply();
         if(changed){
@@ -1261,7 +1307,35 @@ public final class MainActivity extends Activity {
         TextView v = text(label,sp,WHITE,true);
         v.setGravity(Gravity.CENTER);
         v.setPadding(dp(12),dp(9),dp(12),dp(9));
-        v.setBackground(round(color,12));
+        v.setMinHeight(dp(40));
+        v.setBackground(ripple(color,12));
+        return v;
+    }
+    private RippleDrawable ripple(int color,int radius) {
+        return new RippleDrawable(ColorStateList.valueOf(Color.argb(55,255,255,255)),
+                round(color,radius),round(Color.WHITE,radius));
+    }
+    private void setIcon(TextView view,int resource,int tint) {
+        Drawable glyph=getDrawable(resource);
+        if(glyph!=null){
+            glyph=glyph.mutate();
+            glyph.setTint(tint);
+            glyph.setBounds(0,0,dp(23),dp(23));
+            view.setCompoundDrawables(glyph,null,null,null);
+        }
+    }
+    private TextView iconButton(int icon,int bg,String description) {
+        TextView v=button("",bg,17);
+        v.setPadding(dp(10),dp(10),dp(10),dp(10));
+        setIcon(v,icon,WHITE);
+        v.setContentDescription(description);
+        return v;
+    }
+    private TextView labeledButton(String label,int icon,int bg,int size) {
+        TextView v=button(label,bg,size);
+        setIcon(v,icon,WHITE);
+        v.setCompoundDrawablePadding(dp(7));
+        v.setContentDescription(label);
         return v;
     }
     private TextView text(String content,int sp,int color,boolean bold) {

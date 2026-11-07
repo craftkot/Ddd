@@ -191,6 +191,12 @@ public final class MediaTransfer {
     /** Explicit user opt-in is mandatory: this sends RAW audio to Cloudflare
      * Workers AI for transcription, unlike encrypted private file uploads. */
     public static String transcribe(byte[] audio,String room) throws Exception {
+        return transcribe(audio,room,"auto");
+    }
+
+    public static String transcribe(byte[] audio,String room,String language) throws Exception {
+        if(!("auto".equals(language)||"ru".equals(language)||"en".equals(language)))
+            throw new IllegalArgumentException("Неизвестный язык распознавания");
         if(audio==null||audio.length<100||audio.length>2*1024*1024)
             throw new IllegalArgumentException("Расшифровка доступна для записей до 2 МБ");
         HttpURLConnection c=(HttpURLConnection)new URL(
@@ -201,6 +207,7 @@ public final class MediaTransfer {
             c.setReadTimeout(90000);
             c.setRequestProperty("Authorization","Bearer "+RoomAccess.bearer(room));
             c.setRequestProperty("Content-Type","audio/mp4");
+            c.setRequestProperty("X-EHTID-Language",language);
             c.setDoOutput(true);
             c.setFixedLengthStreamingMode(audio.length);
             try(OutputStream out=c.getOutputStream()){out.write(audio);}
@@ -216,8 +223,13 @@ public final class MediaTransfer {
                 text=b.toString("UTF-8");
             }
             JSONObject res=new JSONObject(text);
-            if(status!=200||!res.optBoolean("ok"))
-                throw new java.io.IOException("Whisper: "+res.optString("error","HTTP "+status));
+            if(status!=200||!res.optBoolean("ok")) {
+                if(status==429)throw new java.io.IOException("Дневной лимит распознавания исчерпан");
+                if(status==413)throw new java.io.IOException("Аудио слишком большое (до 2 МБ)");
+                if(status==422)throw new java.io.IOException("В записи не удалось обнаружить речь");
+                if(status==503)throw new java.io.IOException("Сервис распознавания временно недоступен");
+                throw new java.io.IOException("Сервер распознавания: HTTP "+status);
+            }
             String transcript=res.optString("text","").trim();
             if(transcript.isEmpty())throw new java.io.IOException("Речь не распознана");
             return transcript.length()>3000?transcript.substring(0,3000):transcript;
