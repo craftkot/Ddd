@@ -42,7 +42,7 @@ public class MainActivity extends Activity {
                 if ("game.ehtid".equals(u.getHost()) && "https".equals(u.getScheme())) {
                     String filename = u.getPath().replaceFirst("^/", "");
                     if (filename.isEmpty()) filename = "index.html";
-                    if (!filename.matches("index\\.html|expansion-data\\.js|expansion-relics\\.js|expansion-combat\\.js|expansion-visual\\.js|pvp-balance\\.js|atelier\\.js|connection-ui\\.js|run-save\\.js|run-economy\\.js|encounter-director\\.js|route-tree\\.js|atelier\\.css|connection-ui\\.css|expansion\\.css|artbook\\.css|art/arena\\.webp|art/atlas\\.webp|art/kenney/(ui|icons|scene|heroes)/[a-z_-]+\\.png")) return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream(new byte[0]));
+                    if (!filename.matches("index\\.html|expansion-data\\.js|expansion-relics\\.js|expansion-combat\\.js|expansion-visual\\.js|pvp-balance\\.js|atelier\\.js|connection-ui\\.js|run-save\\.js|run-economy\\.js|encounter-director\\.js|route-tree\\.js|atelier\\.css|connection-ui\\.css|expansion\\.css|artbook\\.css|character-redesign\\.css|art/arena\\.webp|art/atlas\\.webp|art/characters/(guard|oracle|hunter|bandit|cultist|skeleton|slime|hound|boss)\\.webp|art/kenney/(ui|icons|scene|heroes)/[a-z_-]+\\.png")) return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream(new byte[0]));
                     String mime = filename.endsWith(".js") ? "application/javascript" : filename.endsWith(".css") ? "text/css" : filename.endsWith(".png") ? "image/png" : filename.endsWith(".webp") ? "image/webp" : "text/html";
                     try {
                         return new WebResourceResponse(mime, "UTF-8", getAssets().open(filename));
