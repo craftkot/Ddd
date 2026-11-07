@@ -182,3 +182,27 @@
 @media(prefers-reduced-motion:reduce){
  .fate-stage .etch-person img.figure.artbook-figure,.etch-card.fate-card{animation:none!important;transition:none!important}
 }
+
+/* Rear and front stone terraces make the two formation tiers physically grounded.
+   At 390px the upper pair's feet align to 50% of the 530px stage height. */
+.fate-stage .fate-battle-risers{position:absolute;inset:0;pointer-events:none;z-index:1;overflow:hidden}
+.fate-stage .fate-riser{position:absolute;height:16px;left:32%;right:0;
+ border-top:3px solid #ae8b72;border-bottom:5px solid #111522;
+ background:repeating-linear-gradient(90deg,#49424d 0 20px,#746457 22px 24px,#343240 25px 53px);
+ box-shadow:0 -4px 12px #d0a98f2c,0 11px 18px #05070cdd;
+ transform:perspective(460px) rotateX(18deg);transform-origin:center center}
+.fate-stage .fate-riser.rear{top:49.6%;left:32%;right:.5%}
+.fate-stage .fate-riser.rear:after{
+ content:"";position:absolute;top:14px;left:0;right:0;height:255px;
+ background:repeating-linear-gradient(90deg,#151722e8 0 8%,#33303bc9 12% 17%,#191b29e6 21% 30%);
+ border-left:3px solid #403b42;box-shadow:inset 0 14px 22px #080a16d9;
+ opacity:.76
+}
+.fate-stage .fate-riser.front{bottom:2.8%;left:29%;right:0;height:12px;z-index:2;
+ border-top:3px solid #c09a73;box-shadow:0 -5px 17px #d49b6338,0 8px 16px #01030bcc}
+.fate-stage .etch-fighters{z-index:3}
+.fate-stage .fate-player-platform{position:relative;z-index:3}
+@media(max-width:520px){
+ .fate-stage .fate-riser.rear{top:49.6%;left:30%;right:0}
+ .fate-stage .fate-riser.front{left:29%;bottom:3%}
+}
