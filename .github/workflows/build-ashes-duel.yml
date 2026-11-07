@@ -107,27 +107,7 @@ jobs:
           arch: x86_64
           profile: pixel_4
           disable-animations: true
-          script: |
-            set -e
-            adb install "$GITHUB_WORKSPACE/rogue-duel/app/build/outputs/apk/debug/app-debug.apk"
-            adb logcat -c
-            adb shell am start -W -n com.ehtid.ashesduel.trial/com.ehtid.ashesduel.MainActivity
-            for attempt in $(seq 1 30); do
-              if adb logcat -d -s AshesStartup:I '*:S' | grep -q ASHES_READY; then
-                echo "PASS: Android native activity and JavaScript game launched."
-                exit 0
-              fi
-              if adb logcat -d -s AshesStartup:E '*:S' | grep -q STARTUP_ERROR; then
-                echo "FAIL: native startup error"
-                adb logcat -d -s AshesStartup:V AndroidRuntime:E '*:S' | tail -120
-                exit 1
-              fi
-              sleep 2
-            done
-            echo "FAIL: timeout without ASHES_READY (WebView blank/crashed)"
-            adb logcat -d -s AshesStartup:V AndroidRuntime:E chromium:E '*:S' | tail -150
-            exit 1
-
+          script: bash "$GITHUB_WORKSPACE/.github/scripts/ashes-smoke.sh"
       - uses: actions/upload-artifact@v4
         with:
           name: Pepel-i-Karty-Android-APK
