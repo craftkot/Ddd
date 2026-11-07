@@ -140,7 +140,7 @@ function hud(hero,other=""){
 }
 function hand(f,action,disabled){
  const cards=f.hand||[],c=G.combat,s=action==="play"&&c?.av&&window.ASH_AV?.valid(c)?c.av:null;
- const energy=s?s.sp:f.energy,limit=s?5:3;
+ const energy=s?s.sp:f.energy,limit=s||action==="duelPlay"?5:3;
  return '<div class="etch-resourcebar"><div class="etch-energy">'+trim(energy)+'/'+limit+'</div><div class="etch-metrics">'+
   '<span>▣ Колода '+trim(f.deck?.length)+'</span><span>↺ Сброс '+trim(f.discard?.length)+'</span><span>В руке '+cards.length+'</span></div></div>'+
   '<div class="etch-hand-shell"><div class="etch-hand count-'+Math.min(10,cards.length)+'">'+
@@ -198,8 +198,9 @@ function duelView(){
   return out
  }
  out+='<div class="etch-hint">'+(mine?"ТВОЁ ДЕЙСТВИЕ":"ХОД ПРОТИВНИКА")+' · Число завершённых действий '+d.actions+' · До следующего события '+(5-d.actions%5)+'</div>'+
+ '<div class="fate-sp-tray" aria-label="Очки навыков"><strong>ОЧКИ НАВЫКОВ</strong><div class="fate-sp-points">'+Array.from({length:5},(_,i)=>'<span class="'+(i<(m.sp??m.energy)?"filled":"empty")+'"></span>').join("")+'</div><b>'+(m.sp??m.energy)+' / 5</b></div>'+
  hand(m,"duelPlay",!mine)+
- '<div class="etch-actions"><button data-a="duelEndTurn" class="etch-btn cta" '+(!mine?"disabled":"")+'>Завершить действие</button></div>'+
+ '<div class="etch-actions"><button data-a="duelBasic" class="etch-btn cool fate-basic" '+(!mine?"disabled":"")+'><strong>⚔ Базовая атака</strong><span>5 урона · +1 ОН</span></button><button data-a="duelEndTurn" class="etch-btn cta" '+(!mine?"disabled":"")+'>Передать ход</button></div>'+
  '<div class="logs">'+d.log.slice(-5).map(esc).join("\n")+'</div>';
  return out
 }
