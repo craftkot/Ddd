@@ -131,6 +131,7 @@ function unit(f,kind,i,isEnemy,clickable){
 function stage(hero,foes,target,clickable){
  const num=foes.length;
  return '<div class="etch-stage fate-stage count-'+num+'"><div class="etch-moon"></div><div class="etch-spires"></div>'+
+  (num>=3?'<div class="fate-battle-risers" aria-hidden="true"><div class="fate-riser rear"></div><div class="fate-riser front"></div></div>':'')+
   '<div class="etch-fighters"><div class="fate-player-platform">'+unit(hero,hero.hero||G.runner?.hero||"guard",-1,false,false)+'</div>'+
   '<div class="etch-team count-'+num+'">'+foes.map((f,i)=>unit(f,f.kind||f.hero||"boss",i,true,clickable)).join("")+'</div></div>'+
   '<div class="etch-groundline"></div></div>'
