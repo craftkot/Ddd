@@ -214,10 +214,10 @@ public final class InternetEngine {
                     : (m.online && fresh && (meshMode||relayOnline));
             long measuredAt=m.isMe?relayPingAt:peerPingTimes.getOrDefault(m.id,0L);
             long maxAge=meshMode?120_000L:(m.isMe?420_000L:660_000L);
-            boolean fresh=measuredAt>0&&now-measuredAt<=maxAge&&now>=measuredAt;
-            int freshPing=fresh?(m.isMe?relayPingMs:m.pingMs):-1;
+            boolean pingFresh=measuredAt>0&&now-measuredAt<=maxAge&&now>=measuredAt;
+            int freshPing=pingFresh?(m.isMe?relayPingMs:m.pingMs):-1;
             list.add(new Member(m.id,m.name,m.lastSeen,freshPing,m.isMe,online,
-                    m.isMe?sessionLoginAt:m.loginAt,fresh?measuredAt:0L));
+                    m.isMe?sessionLoginAt:m.loginAt,pingFresh?measuredAt:0L));
         }
         list.sort((a,b)->a.isMe?-1:b.isMe?1:
                 a.online!=b.online?Boolean.compare(b.online,a.online):
