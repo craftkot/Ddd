@@ -105,6 +105,7 @@ function playcard(c,act,i,disabled=false){
   '<div class="card-type"><span>'+longType(a.t)+'</span><span>'+(rarity==="rare"?"◆ РЕДКАЯ":rarity==="uncommon"?"◇ НЕОБЫЧНАЯ":"✧ ОБЫЧНАЯ")+'</span></div></button>'
 }
 
+window.ASH_UI_DEBUG={playcard,cardVisual,stage,hand,fightView};
 function eventHead(title,subtitle){return '<div class="etch-head"><p class="eyebrow">✦ ПЕПЕЛ И КАРТЫ ✦</p><h2>'+esc(title)+'</h2><p class="sub">'+esc(subtitle||"")+'</p></div>'}
 function health(f){return '<span class="fig-hp">❤ '+trim(f.hp)+'/'+trim(f.maxHp)+'</span><span class="fig-track"><span style="width:'+pct(f.hp,f.maxHp)+'%"></span></span>'}
 function stateIcons(f){
