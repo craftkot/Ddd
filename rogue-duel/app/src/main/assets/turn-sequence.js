@@ -263,6 +263,12 @@
       f.sp=bounded(f.energy,0,MAX_SP);
       f.energy=f.sp;
     }
+    // The underlying PvP engine broadcasts before returning. Our energy
+    // update happens afterwards, so explicitly synchronize the new charge
+    // and SP state to the remote device to prevent divergent UI gauges.
+    if(d.revision!==revBefore &&
+        (cmd.action==="play"||f.hp<hpBeforeF||e.hp<hpBeforeE) &&
+        G.role==="host")broadcastDuel();
     // End is a voluntary pass, not a free SP generator; use Basic Attack.
     return result;
   };
