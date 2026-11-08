@@ -6,18 +6,18 @@
 const oldMake=createMonster,oldCreate=createFight;
 const MOBS=[
  {kind:"bandit",name:"Болотный налётчик",role:"fighter",moves:["slash","lunge","guard"]},
- {kind:"cultist",name:"Пепельный культист",role:"caster",moves:["hex","slash","enrage"]},
+ {kind:"cultist",name:"Пепельный культист",role:"caster",moves:["hex","scorch","enrage"]},
  {kind:"skeleton",name:"Скелет-дозорный",role:"guard",moves:["guard","bash","slash"]},
  {kind:"slime",name:"Гнилая слизь",role:"poison",moves:["venom","guard","sever"]},
  {kind:"knight",name:"Рыцарь пепельной клятвы",role:"fighter",moves:["charge","lunge","guard"]},
- {kind:"mage",name:"Ткач пустоты",role:"caster",moves:["hex","drain","sever"]},
+ {kind:"mage",name:"Ткач пустоты",role:"caster",moves:["hex","scorch","sever"]},
  {kind:"hound",name:"Пещерный волк",role:"fighter",moves:["bite","bite","howl"]},
- {kind:"boss",name:"Судья без лица",role:"boss",moves:["charge","sever","hex","rampage"]}
+ {kind:"boss",name:"Судья без лица",role:"boss",moves:["charge","sever","scorch","rampage"]}
 ];
 const MOVE_NAME={
  slash:"Прямой удар",lunge:"Быстрый выпад",guard:"Стойка за щитом",
  hex:"Проклятие",enrage:"Взгляд безумия",bash:"Щитовой удар",
- venom:"Ядовитые брызги",sever:"Рассекающий удар",charge:"Подготовка натиска",
+ venom:"Ядовитые брызги",scorch:"Пепельное пламя",sever:"Рассекающий удар",charge:"Подготовка натиска",
  drain:"Похищение сил",bite:"Два укуса",howl:"Звериный вой",rampage:"Разрушительный шквал"
 };
 function modeFor(e){
@@ -36,6 +36,7 @@ function preview(e){
  bash:{damage:attack-1,block:4,description:"🛡 4 · ⚔ "+(attack-1)},
  venom:{damage:Math.max(1,attack-5),poison:3+Math.floor(G.stage/5),description:"☠ Яд +"+(3+Math.floor(G.stage/5))+" · ⚔ "+Math.max(1,attack-5)},
  sever:{damage:Math.max(1,attack-2),bleed:3,description:"🩸 Кровь +3 · ⚔ "+Math.max(1,attack-2)},
+  scorch:{damage:Math.max(1,attack-6),burn:3+Math.floor(G.stage/8),description:"🔥 Горение +"+(3+Math.floor(G.stage/8))+" · ⚔ "+Math.max(1,attack-6)},
  charge:{block:9+Math.floor(G.stage/2),strength:1,description:"🛡 "+(9+Math.floor(G.stage/2))+" · ⚔ Сила +1"},
  drain:{damage:Math.max(1,attack-4),weak:2,heal:5,description:"🕸 Слабость +2 · ⚔ "+Math.max(1,attack-4)+" · ❤ 5"},
  bite:{damage:Math.max(1,Math.floor(attack*.65)),hits:2,description:"⚔ "+Math.max(1,Math.floor(attack*.65))+" ×2"},
@@ -72,11 +73,13 @@ function execute(e,p,c){
  if(cmd.vuln)p.vuln+=cmd.vuln;
  if(cmd.poison)p.poison+=cmd.poison;
  if(cmd.bleed)p.bleed+=cmd.bleed;
+  if(cmd.burn)p.burn+=cmd.burn;
+  if(window.ASH_STATUSES)ASH_STATUSES.capStacks(p);
  if(cmd.heal)ashHeal(e,cmd.heal);
  let total=0;
  for(let i=0;i<(cmd.hits||1)&&p.hp>0;i++)if(cmd.damage)total+=hit(e,p,cmd.damage);
  logLine(e.name+": "+cmd.label+(total?" · "+total+" урона":"")+
-    (cmd.poison?" · яд +"+cmd.poison:"")+(cmd.bleed?" · кровотечение +"+cmd.bleed:""))
+    (cmd.poison?" · яд +"+cmd.poison:"")+(cmd.bleed?" · кровотечение +"+cmd.bleed:"")+(cmd.burn?" · горение +"+cmd.burn:""))
 }
 soloEnd=window.soloEnd=function(){
  const c=G.combat;if(!c||!c.enemies)return;
