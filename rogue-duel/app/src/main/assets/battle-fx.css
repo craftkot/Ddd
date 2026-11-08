@@ -159,17 +159,17 @@ html:has(.ashfx-settings-panel:not([hidden])) .combat-dock .dock-status-codex[op
  position:absolute;inset:0;z-index:17;pointer-events:none;
  background:radial-gradient(ellipse at 60% 44%,#f7defebd,#ba78d349 32%,transparent 70%)
 }
-.combat-arena .ashfx-cardflight{
- position:absolute;z-index:19;display:block;width:42px;height:62px;
+body .ashfx-cardflight{
+ position:fixed;z-index:2004;display:block;width:42px;height:62px;
  border:2px solid #f4d1a3;border-radius:5px;pointer-events:none;
  background:linear-gradient(145deg,#70445d,#2b2b47 60%,#161924);
  box-shadow:0 0 12px #f2c38bcb,0 0 25px #ad7eae66,inset 0 0 10px #edb86f44;
  will-change:transform,opacity
 }
-.combat-arena .ashfx-cardflight:after{
+body .ashfx-cardflight:after{
  content:"✦";position:absolute;inset:5px;display:grid;place-items:center;
  border:1px solid #dabb8f8c;color:#ffdfad;font:700 26px Georgia
 }
-.combat-arena .ashfx-cardflight.flame{border-color:#ffba83;box-shadow:0 0 20px #fa7d4d;}
-.combat-arena .ashfx-cardflight.venom{border-color:#9ddba8;box-shadow:0 0 20px #65c986;}
-.combat-arena .ashfx-cardflight.blood{border-color:#e8a2b0;box-shadow:0 0 20px #f17e93;}
+body .ashfx-cardflight.flame{border-color:#ffba83;box-shadow:0 0 20px #fa7d4d;}
+body .ashfx-cardflight.venom{border-color:#9ddba8;box-shadow:0 0 20px #65c986;}
+body .ashfx-cardflight.blood{border-color:#e8a2b0;box-shadow:0 0 20px #f17e93;}
