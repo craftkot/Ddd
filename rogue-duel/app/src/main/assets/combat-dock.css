@@ -233,3 +233,59 @@ html.combat-fullscreen,html.combat-fullscreen body{
 .combat-dock .dock-topline,.combat-dock .dock-actions,.combat-dock .dock-target-strip,
 .combat-dock .dock-scroll,.combat-dock .etch-hand-shell{min-width:0!important;max-width:100%!important;width:100%}
 .combat-dock .etch-hand{min-width:100%!important;width:max-content!important;max-width:none!important}
+
+/* Unified character art treatment — the figures now share the geometric
+   bevel, spectral halo, paper grain and muted palette used by the card art. */
+.combat-arena .fate-stage .unit-portrait-frame{
+ --aura:#c29b7f;
+ display:block;position:relative;width:96%;max-width:154px;
+ height:clamp(65px,17dvh,156px);margin:0 auto 1px;
+ flex:0 1 auto;overflow:hidden;border-radius:48% 48% 17% 17%;
+ background:radial-gradient(ellipse at 50% 48%,color-mix(in srgb,var(--aura) 34%,transparent),#10182770 72%,transparent 95%);
+ border:1px solid color-mix(in srgb,var(--aura) 55%,transparent);
+ box-shadow:inset 0 0 19px #06091796,inset 0 -5px 12px #070b19c2,0 0 8px #090b13b8;
+}
+.combat-arena .fate-stage .unit-portrait-frame.kind-guard{--aura:#e0bc83}
+.combat-arena .fate-stage .unit-portrait-frame.kind-oracle{--aura:#c3a0ee}
+.combat-arena .fate-stage .unit-portrait-frame.kind-hunter{--aura:#89c9b5}
+.combat-arena .fate-stage .unit-portrait-frame.kind-bandit{--aura:#e7a17d}
+.combat-arena .fate-stage .unit-portrait-frame.kind-cultist{--aura:#b690ca}
+.combat-arena .fate-stage .unit-portrait-frame.kind-skeleton{--aura:#b6c3ca}
+.combat-arena .fate-stage .unit-portrait-frame.kind-slime{--aura:#90b69b}
+.combat-arena .fate-stage .unit-portrait-frame.kind-hound{--aura:#bd8c81}
+.combat-arena .fate-stage .unit-portrait-frame.kind-boss{--aura:#d99d80}
+.combat-arena .fate-stage .unit-portrait-frame::before{
+ content:"";position:absolute;inset:5%;border:1px solid color-mix(in srgb,var(--aura) 37%,transparent);
+ border-radius:50% 50% 16% 16%;
+ background:linear-gradient(145deg,transparent 18%,#f5d2ae0b 19% 20%,transparent 21% 78%,#ffffff0d 79% 80%,transparent 81%);
+ z-index:1;pointer-events:none
+}
+.combat-arena .fate-stage .unit-portrait-frame::after{
+ content:"✦";position:absolute;top:2px;right:8px;font:10px Georgia;color:var(--aura);
+ text-shadow:0 0 10px var(--aura);z-index:3;opacity:.8;pointer-events:none
+}
+.combat-arena .fate-stage .unit-portrait-frame img.figure.artbook-figure{
+ height:100%!important;width:100%!important;max-width:100%!important;
+ margin:0!important;object-position:center bottom;
+ filter:saturate(.83) sepia(.12) contrast(1.22) brightness(1.14)
+ drop-shadow(0 0 5px color-mix(in srgb,var(--aura) 53%,transparent))
+ drop-shadow(0 5px 5px #01040dcf)!important;
+}
+.combat-arena .fate-stage .etch-person.enemy .unit-portrait-frame{
+ width:90%;height:clamp(50px,13dvh,122px);max-width:121px
+}
+.combat-arena .fate-stage.count-3 .etch-person.enemy .unit-portrait-frame,
+.combat-arena .fate-stage.count-4 .etch-person.enemy .unit-portrait-frame{
+ height:clamp(43px,10dvh,85px);max-width:91px
+}
+.hero-choice .hero-portrait-wrap img{
+ filter:saturate(.82) sepia(.10) contrast(1.16) brightness(1.08)
+ drop-shadow(0 0 12px #c39d8b99)!important
+}
+@media(max-height:730px){
+ .combat-arena .fate-stage .unit-portrait-frame{height:clamp(60px,13dvh,108px)}
+ .combat-arena .fate-stage.count-3 .etch-person.enemy .unit-portrait-frame,
+ .combat-arena .fate-stage.count-4 .etch-person.enemy .unit-portrait-frame{
+ height:clamp(41px,8.5dvh,66px)
+ }
+}
