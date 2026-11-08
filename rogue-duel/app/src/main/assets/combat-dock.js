@@ -28,7 +28,10 @@
       const f=foes[i],button=E("button","dock-target"+(G.combat.target===i?" active":"")+(f.hp<=0?" dead":""));
       button.type="button";button.dataset.combatTarget=String(i);button.disabled=f.hp<=0;
       const title=E("strong",null,(i+1)+". "+labelOf(f));
-      const hp=E("small",null,Math.max(0,f.hp)+"/"+f.maxHp+" HP");
+      const forecast=window.ASH_STATUSES?.breakdown(f);
+      const dot=forecast?.total?(" · ДоТ −"+forecast.hpDamage):"";
+      const hp=E("small",null,Math.max(0,f.hp)+"/"+f.maxHp+" HP"+dot);
+      button.title=window.ASH_STATUSES?.explain(f)||labelOf(f);
       button.append(title,hp);strip.appendChild(button);
     }
   }
@@ -78,6 +81,27 @@
     const sp=move(topOfDock,".fate-sp-tray",app);
     if(sp)sp.classList.add("dock-sp");
     topOfDock.appendChild(energyTray());
+    if(window.ASH_STATUSES){
+      const codex=E("details","dock-status-codex");
+      const summary=E("summary",null,"☷");
+      summary.title="Эффекты и комбинации ДоТ";
+      summary.setAttribute("aria-label","Эффекты и комбинации ДоТ");
+      const panel=E("section","status-codex-panel");
+      const lines=[
+        "☠ Яд — 1 урон за заряд, теряет 1 заряд за действие владельца.",
+        "🔥 Горение — 2 урона за заряд, теряет 1 заряд за действие.",
+        "🩸 Кровь — 1 урон за заряд, теряет 2 заряда за действие.",
+        "✦ Воспламенение: яд 4+ и горение 3+ усиливают ДоТ.",
+        "✦ Заражённая рана: яд 3+ и кровь 4+ усиливают ДоТ.",
+        "✦ Прижигание: горение 3+ и кровь 3+ усиливают ДоТ.",
+        "⚔ Разрыв раны: удар по цели с кровью 4+ наносит дополнительный урон.",
+        "⚒ Пробитие стойкости: заполняй шкалу ударами, чтобы прервать действие врага.",
+        "⬟ Щит ДоТ поглощает статусный урон. Очищение снимает заряды.",
+        "Только сильнейшая комбинация срабатывает за одно действие; у взрыва ДоТ есть предел урона."
+      ];
+      lines.forEach(line=>panel.appendChild(E("p",null,line)));
+      codex.append(summary,panel);topOfDock.appendChild(codex);
+    }
     dock.appendChild(topOfDock);
     if(G.screen==="fight"){
       const strip=E("div","dock-target-strip");strip.id="dock-target-strip";
