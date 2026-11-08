@@ -397,6 +397,13 @@
   sound("button");
  }
  // Deliberately no global untrusted data is inserted into innerHTML.
+ let flushFrame=null;
+ function scheduleVisualFlush(){
+  if(flushFrame!==null)return;
+  if(typeof window.requestAnimationFrame==="function"){
+   flushFrame=window.requestAnimationFrame(()=>{flushFrame=null;flush()});
+  }else flush();
+ }
  const originalRender=render;
  render=window.render=function(){
   const prev=priorScreen;
@@ -404,7 +411,9 @@
   if(!goodDOM())return;
   const next=G.screen;showScreenCue(prev,next);priorScreen=next;
   mountControls();
-  flush();
+  // Multiple synchronous AV actions may render before the browser paints.
+  // Show the final impact on the last mounted stage, not a discarded stage.
+  scheduleVisualFlush();
  };
  const originalDispatch=dispatch;
  dispatch=window.dispatch=async function(action,x){
