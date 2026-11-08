@@ -75,6 +75,7 @@ assert.equal(check("G.combat.player.bleed"),1);
 const cardHtml=check("ASH_STATUS_CARD_IDS.map(id=>ASH_UI_DEBUG.playcard(inst(id),'reward',0)).join('')");
 assert(cardHtml.includes("Пепельный фильтр")&&cardHtml.includes("Разрыв сухожилий"),"new cards not rendered");
 assert(cardHtml.includes("очищения ДоТ")&&cardHtml.includes("стойкости"),"new descriptions absent");
+check("G.combat.enemies[0].poison=3;G.combat.enemies[0].stagger=44;");
 const unitHtml=check("ATELIER_TEST.stage({...G.combat.player,hero:'oracle'},G.combat.enemies,0,true)");
 assert(unitHtml.includes("ash-status-forecast")&&unitHtml.includes("ash-break-next"),"enemy telegraph missing");
 run("G.combat=null;G.screen='lobby';G.demo=false;G.done=true;G.role='host';G.other=newRun('hunter');G.runner=newRun('guard');G.duel=null;pvStartDuel()");
