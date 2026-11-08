@@ -75,6 +75,7 @@ check("G.screen=\'lobby\'"); // reset test-only combat state before loading grap
 
 /* PvP 0.3 rules: predictable AV, counters, simultaneous gambits, OTK guard. */
 vm.runInContext(fs.readFileSync(base+"pvp-balance.js","utf8"),context,{timeout:5000});
+vm.runInContext(fs.readFileSync(base+"status-engine.js","utf8"),context,{timeout:5000});
 const stats=check("window.EXPANSION_STATS");
 assert.strictEqual(check("Object.keys(CARDS).length"),173);
 assert.strictEqual(check("RELICS.length"),136);
