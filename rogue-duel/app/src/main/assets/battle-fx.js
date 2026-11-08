@@ -84,7 +84,7 @@
   card:()=>{whoosh(480,2200,.085,.16);oscillator("triangle",450,660,.11,.065,.035)}
  };
  function sound(name){
-  if(!config.enabled||typeof presets[name]!=="function"||!initAudio())return false;
+  if(!config.enabled||config.effects<=0||typeof presets[name]!=="function"||!initAudio())return false;
   try{
    // Avoid a wall of overlapping hits when enemies attack simultaneously.
    if(name==="impact"&&Date.now()-lastCueAt<63)return true;
@@ -99,7 +99,7 @@
  }
  function updateAmbience(){
   if(!ctx||!master)return;
-  if(!config.enabled||!config.ambientOn||config.ambience<=0||document.visibilityState==="hidden"){
+  if(!config.enabled||!config.ambientOn||config.ambience<=0||config.effects<=0||document.visibilityState==="hidden"){
    clearAmbient();return;
   }
   if(ambient){ambient.gain.setTargetAtTime(config.ambience*config.effects*.13,ctx.currentTime,.15);return}
@@ -192,7 +192,7 @@
   animation.oncancel=()=>{try{element.remove()}catch(e){}};
  }
  function animateUnit(node,role){
-  if(!node||!node.animate||reduced())return;
+  if(!node||!node.animate||reduced()||!config.shake)return;
   const el=node.querySelector(".unit-portrait-frame")||node;
   const key=role==="impact"?
    [{transform:"translate3d(0,0,0)",filter:"brightness(1)"},{transform:"translate3d(-6px,-3px,0) rotate(-3deg)",filter:"brightness(1.9)",offset:.28},{transform:"translate3d(3px,0,0)",filter:"brightness(1.23)",offset:.62},{transform:"translate3d(0,0,0)",filter:"brightness(1)"}]:
@@ -272,11 +272,12 @@
   const snap=snapshot(),layer=fxLayer();
   if(snap.screen!=="fight"&&snap.screen!=="duel"){pending.length=0;previous=snap;return;}
   if(!layer){pending.length=0;previous=snap;return;}
-  if(previous&&previous.screen===snap.screen&&!pending.length){
+  if(previous&&previous.screen===snap.screen){
    for(const item of snap.items){
     const prev=previous.items.find(x=>x.id===item.id);
     if(!prev)continue;
-    if(item.hp<prev.hp)pending.push({id:item.id,source:null,type:"impact",amount:prev.hp-item.hp});
+    if(item.hp<prev.hp&&!pending.some(e=>e.id===item.id&&e.amount>0))
+      pending.push({id:item.id,source:null,type:"impact",amount:prev.hp-item.hp});
     if((item.stagger||0)<(prev.stagger||0)&&prev.stagger>=75)
       pending.push({id:item.id,source:null,type:"break",amount:0});
    }
