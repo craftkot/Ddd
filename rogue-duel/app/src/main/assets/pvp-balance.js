@@ -271,7 +271,7 @@ function pvResolveCard(d){
 }
 function pvOfferReaction(d,by,c){
  const def=d.fighters[by==="host"?"guest":"host"];
- const effect=art(c.id).effects||[],harmful=art(c.id).t==="attack"||effect.some(x=>["poison","burn","bleed","detonate","weak","vuln","mark","tax","delay","slow","aoe","aoepoison","aoeburn","aoebleed"].includes(x.key));
+ const effect=art(c.id).effects||[],harmful=art(c.id).t==="attack"||effect.some(x=>["poison","burn","bleed","detonate","weak","vuln","mark","tax","delay","slow","stagger","aoe","aoepoison","aoeburn","aoebleed"].includes(x.key));
  d.pending={by,card:c,counter:null};
  if(harmful&&def.focus>0){d.phase="reaction";return}
  pvResolveCard(d)
