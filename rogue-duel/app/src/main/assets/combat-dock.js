@@ -92,11 +92,13 @@
     if(resource)resource.classList.add("dock-hidden-metrics");
     holder.appendChild(hand);
     dock.appendChild(holder);
-    const potion=move(dock,".potion-hud",app);
+    const potion=move(topOfDock,".potion-hud",app);
     if(potion){
       const details=E("details","dock-potions");
-      const summary=E("summary",null,"Зелья и расходники");
-      details.append(summary,potion);dock.appendChild(details);
+      const summary=E("summary",null,"⚗");
+      summary.title="Зелья и расходники";
+      summary.setAttribute("aria-label","Зелья и расходники");
+      details.append(summary,potion);topOfDock.appendChild(details);
     }
     // Nonessential combat log remains accessible, but never hides the arena.
     const log=move(dock,".logs",app);
