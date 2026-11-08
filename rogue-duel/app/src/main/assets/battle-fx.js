@@ -220,7 +220,8 @@
  function burst(layer,x,y,kind,amount){
   if(!layer||reduced()||!config.particles)return;
   const color=colors[kind]||colors.impact;
-  const n=kind==="ultimate"?21:kind==="break"?17:kind==="blocked"?6:12;
+  const low=typeof window.innerWidth==="number"&&window.innerWidth<400;
+  const n=kind==="ultimate"?(low?16:23):kind==="break"?(low?11:17):kind==="blocked"?5:(low?8:12);
   for(let i=0;i<n;i++){
    const angle=i/n*Math.PI*2+(i%3)*.16,dist=18+(i%4)*11;
    const el=document.createElement("i");el.className="ashfx-spark";
@@ -247,6 +248,51 @@
    {opacity:0,transform:"translate(-50%,-58px) scale(.88)"}
   ],{duration:820,easing:"cubic-bezier(.2,.65,.25,1)"});
   cleanupWhenDone(node,anim);
+ }
+ function ultimateWave(layer){
+  if(!layer||reduced())return;
+  const w=layer.clientWidth,h=layer.clientHeight;
+  const center={x:w*.62,y:h*.46};
+  const halo=document.createElement("span");
+  halo.className="ashfx-ult-halo";
+  halo.style.left=center.x+"px";halo.style.top=center.y+"px";
+  layer.appendChild(halo);
+  cleanupWhenDone(halo,halo.animate([
+   {transform:"translate(-50%,-50%) scale(.08)",opacity:0,filter:"brightness(2)"},
+   {transform:"translate(-50%,-50%) scale(.4)",opacity:.9,filter:"brightness(1.6)",offset:.22},
+   {transform:"translate(-50%,-50%) scale(2.8)",opacity:0,filter:"brightness(.6)"}
+  ],{duration:990,easing:"cubic-bezier(.14,.65,.2,1)"}));
+  const flash=document.createElement("span");
+  flash.className="ashfx-ult-flash";layer.appendChild(flash);
+  cleanupWhenDone(flash,flash.animate([
+   {opacity:0},{opacity:.47,offset:.23},{opacity:.06,offset:.55},{opacity:0}
+  ],{duration:660,easing:"ease-out"}));
+  const hero=findUnit("hero");
+  if(hero?.animate)hero.animate([
+   {filter:"brightness(1)",transform:"translateZ(0)"},
+   {filter:"brightness(1.8) drop-shadow(0 0 15px #e9aeff)",transform:"translate3d(0,-11px,0)",offset:.35},
+   {filter:"brightness(1)",transform:"translateZ(0)"}
+  ],{duration:730,easing:"ease-in-out"});
+ }
+ function cardFlight(fromRect,school,layer){
+  if(!layer||!fromRect||reduced())return;
+  const r=layer.getBoundingClientRect();
+  const pt={x:fromRect.left+fromRect.width/2-r.left,
+     y:fromRect.top+fromRect.height/2-r.top};
+  const node=document.createElement("span");
+  node.className="ashfx-cardflight";
+  if(school==="Огонь")node.classList.add("flame");
+  else if(school==="Яд")node.classList.add("venom");
+  else if(school==="Кровь")node.classList.add("blood");
+  node.style.left=pt.x+"px";node.style.top=pt.y+"px";
+  layer.appendChild(node);
+  const dx=r.width*.53-pt.x,dy=r.height*.45-pt.y;
+  cleanupWhenDone(node,node.animate([
+   {opacity:0,transform:"translate(-50%,-50%) scale(.46) rotate(-22deg)"},
+   {opacity:1,transform:"translate(-50%,-50%) scale(1.15) rotate(-7deg)",offset:.2},
+   {opacity:.8,transform:`translate(calc(-50% + ${dx*.45}px),calc(-50% + ${dy*.45}px)) scale(.9) rotate(9deg)`,offset:.5},
+   {opacity:0,transform:`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(.12) rotate(35deg)`}
+  ],{duration:470,easing:"cubic-bezier(.24,.65,.26,1)"}));
  }
  function playEvent(event,layer){
   const unit=findUnit(event.id);if(!unit||!layer)return;
@@ -366,10 +412,16 @@
   if(action==="duelPlay")card=G.duel?.fighters?.[G.role]?.hand?.[Number(x)];
   const oldSP=G.combat?.av?.sp;
   const oldCharge=G.combat?.av?.ultCharge;
+  let fromRect=null;
+  if(card&&goodDOM()){
+   const node=document.querySelector('.combat-dock .etch-card[data-cast-index="'+Number(x)+'"][data-cast-action="'+action+'"]');
+   if(node){const r=node.getBoundingClientRect();fromRect={left:r.left,top:r.top,width:r.width,height:r.height};}
+  }
   const result=await originalDispatch(action,x);
   if(!goodDOM())return result;
   if(card){
    const t=art(card.id),school=t?.school||"";
+   cardFlight(fromRect,school,fxLayer());
    if(school==="Яд"||school==="Лечение")sound(school==="Лечение"?"heal":"poison");
    else if(school==="Огонь")sound("fire");
    else if(school==="Кровь")sound("bleed");
@@ -377,7 +429,7 @@
   }else if(action==="ultimate"&&oldCharge>=100&&beforeScreen==="fight"||
            action==="duelUltimate"&&beforeScreen==="duel"){
    sound("ultimate");
-   const layer=fxLayer();if(layer){const rect=layer.getBoundingClientRect();burst(layer,rect.width*.62,rect.height*.42,"ultimate",0)}
+   const layer=fxLayer();if(layer){const rect=layer.getBoundingClientRect();ultimateWave(layer);burst(layer,rect.width*.62,rect.height*.42,"ultimate",0)}
   }else if(action==="basicAttack"||action==="duelBasic"){
    sound("attack");
   }else if(action==="usePotion"||action==="restHeal"){
