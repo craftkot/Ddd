@@ -142,7 +142,7 @@ function unit(f,kind,i,isEnemy,clickable){
  const intent=isEnemy&&alive?'<div class="etch-intent" title="'+esc(intentOf(f))+'">'+esc(intentOf(f))+'</div>':"";
  return '<button type="button" '+(clickable?'data-foe-index="'+i+'" ':"")+
   'class="etch-person '+(isEnemy?"enemy":"hero")+' '+(alive?"":"dead")+' '+(chosen?"is-target":"")+'"'+(isEnemy&&!alive?' disabled':"")+'>'+
-  '<span class="fate-ground-shadow"></span>'+paintedPortrait(kind)+
+  '<span class="fate-ground-shadow"></span><span class="unit-portrait-frame kind-'+esc(String(kind||"unknown").replace(/[^a-z0-9_-]/gi,""))+'">'+paintedPortrait(kind)+'</span>'+
   '<div class="fig-name">'+esc(f.name)+'</div>'+health(f)+stateIcons(f)+intent+'</button>'
 }
 
@@ -367,6 +367,7 @@ function clickCard(node){
   if(UI.select&&UI.select.action===action&&UI.select.i===i){UI.select=null;selectCard(null)}
   else{UI.select={action,i};selectCard(node)}
  }else doCast(action,i)
+ window.ASH_COMBAT_DOCK?.syncTargets?.();
 }
 function clearLine(){
  let x=document.getElementById("etch-aim-line");if(x?.remove)x.remove();
