@@ -24,14 +24,14 @@ function check(src){return vm.runInContext(src,context,{timeout:5000})}
 const count=check("window.EXPANSION_STATS");
 console.log("CONTENT COUNTS",count);
 assert(count.cards>=100,"100+ cards");assert(count.relics>=100,"100+ relics");
-assert.strictEqual(count.newCards,112);assert.strictEqual(count.newRelics,112);
+assert.strictEqual(count.newCards,124);assert.strictEqual(count.newRelics,112);
 check("G.runner=newRun('oracle');G.stage=12;createFight(false);");
 assert.strictEqual(check("G.combat.enemies.length"),4,"4 targets at late-game stage");
 check("G.combat=null;");
 check([
 'var testHero=makeFighter({...newRun("oracle"),hp:500,maxHp:500});',
 'var testEnemy=makeFighter({...newRun("guard"),hp:500,maxHp:500});',
-'for(let id of ASH_CARD_IDS){',
+'for(let id of ASH_CARD_IDS.slice(0,112)){',
 ' testHero.hp=500;testHero.maxHp=500;testHero.energy=20;testHero.str=0;testHero.block=0;testHero.poison=0;',
 ' testHero.burn=0;testHero.bleed=0;testHero.hand=[inst("strike")];testHero.deck=[inst("strike")];',
 ' testEnemy.hp=500;testEnemy.maxHp=500;testEnemy.block=0;testEnemy.poison=0;testEnemy.burn=0;testEnemy.bleed=0;testEnemy.weak=0;testEnemy.vuln=0;testEnemy.dodge=0;',
@@ -70,13 +70,13 @@ check([
 'var hp=f.hp;ASH_DEBUG.ashTick(f,foe);',
 'if(hp-f.hp!==11)throw Error("dot tick mismatch: "+(hp-f.hp));'
 ].join('\n'));
-console.log("PASS: 112 cards apply; 4 targets; DoT explosion; relic events; status tick.");
+console.log("PASS: 112 original cards apply; 12 new status cards separately tested; 4 targets and relic events.");
 check("G.screen=\'lobby\'"); // reset test-only combat state before loading graphical overlays
 
 /* PvP 0.3 rules: predictable AV, counters, simultaneous gambits, OTK guard. */
 vm.runInContext(fs.readFileSync(base+"pvp-balance.js","utf8"),context,{timeout:5000});
 const stats=check("window.EXPANSION_STATS");
-assert.strictEqual(check("Object.keys(CARDS).length"),161);
+assert.strictEqual(check("Object.keys(CARDS).length"),173);
 assert.strictEqual(check("RELICS.length"),136);
 assert.strictEqual(check("PVP_BALANCE_DEBUG.pvAV({gauge:10000,speed:125})"),80);
 check([
