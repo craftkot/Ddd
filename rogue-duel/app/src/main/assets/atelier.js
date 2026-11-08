@@ -363,6 +363,9 @@ function clickCard(node){
  const action=node.getAttribute("data-cast-action"),i=Number(node.getAttribute("data-cast-index"));
  const c=indexCard(action,i);if(!c||node.disabled)return;
  if(!isPlayedAction(action)){doCast(action,i);return}
+ // In the final duel there is only one possible enemy; casting should
+ // never require a second tap on a tiny portrait.
+ if(action==="duelPlay"){doCast(action,i);return}
  if(isHostile(art(c.id))){
   if(UI.select&&UI.select.action===action&&UI.select.i===i){UI.select=null;selectCard(null)}
   else{UI.select={action,i};selectCard(node)}
