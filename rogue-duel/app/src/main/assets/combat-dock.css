@@ -308,3 +308,17 @@ html.combat-fullscreen,html.combat-fullscreen body{
  border-radius:11px;padding:11px;box-shadow:0 8px 24px #000d
 }
 .combat-dock .dock-potions .potion-btn{font-size:10px;min-width:90px;flex:1 1 90px}
+
+/* Exhaustive 161-card viewport test: six multi-clause effects initially
+   extended past the card footer at 390px. Give descriptions real space
+   instead of clipping their final line. */
+.combat-dock .etch-card.fate-card .card-art{
+ height:clamp(37px,6dvh,54px)!important;
+}
+.combat-dock .etch-card.fate-card .card-desc{
+ font-size:9.6px!important;line-height:1.24!important;
+}
+@media(max-height:730px){
+ .combat-dock .etch-card.fate-card .card-art{height:33px!important}
+ .combat-dock .etch-card.fate-card .card-desc{font-size:9px!important;line-height:1.17!important}
+}
