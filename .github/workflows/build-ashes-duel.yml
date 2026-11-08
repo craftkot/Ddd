@@ -10,6 +10,7 @@ on:
       - fix/ashes-android-startup-v012
       - feature/ashes-combat-dock-energy-v013
       - feature/ashes-status-break-v014
+      - feature/ashes-animated-audio-v015
     paths:
       - 'rogue-duel/**'
       - '.github/workflows/build-ashes-duel.yml'
@@ -68,6 +69,10 @@ jobs:
           test -s app/src/main/assets/combat-dock.css
           test -s app/src/main/assets/status-engine.js
           test -s app/src/main/assets/status-engine.css
+          test -s app/src/main/assets/battle-fx.js
+          test -s app/src/main/assets/battle-fx.css
+          grep -q 'battle-fx.js' app/src/main/assets/index.html
+          grep -q 'battle-fx.css' app/src/main/assets/index.html
           grep -q 'status-engine.js' app/src/main/assets/index.html
           grep -q 'status-engine.css' app/src/main/assets/index.html
           grep -q 'combat-dock.js' app/src/main/assets/index.html
@@ -83,14 +88,14 @@ jobs:
           grep -q 'appassets.androidplatform.net' app/src/main/java/com/ehtid/ashesduel/MainActivity.java
           grep -q 'ASHES_READY' app/src/main/java/com/ehtid/ashesduel/MainActivity.java
           grep -q 'AndroidNet.ready()' app/src/main/assets/run-save.js
-          grep -q "applicationIdSuffix '.v14'" app/build.gradle
+          grep -q "applicationIdSuffix '.v15'" app/build.gradle
           test -s app/src/main/assets/art/atlas.webp
           test -s app/src/main/assets/art/kenney/icons/sword.png
           test -s app/src/main/assets/art/kenney/heroes/red_character.png
           grep -q 'EHTID-RELAY-ACCESS-V1:' app/src/main/assets/index.html
           grep -q 'ehtid-chat-relay.craftkot404.workers.dev' app/src/main/java/com/ehtid/ashesduel/MainActivity.java
           if grep -q 'ntfy.sh' app/src/main/java/com/ehtid/ashesduel/MainActivity.java; then echo "Old transport remains"; exit 1; fi
-          for file in app/src/main/assets/expansion-{data,relics,combat,visual}.js app/src/main/assets/pvp-balance.js app/src/main/assets/status-engine.js app/src/main/assets/combat-dock.js app/src/main/assets/turn-sequence.js app/src/main/assets/atelier.js app/src/main/assets/route-tree.js app/src/main/assets/connection-ui.js app/src/main/assets/encounter-director.js app/src/main/assets/run-economy.js app/src/main/assets/run-save.js; do node --check "$file"; done
+          for file in app/src/main/assets/expansion-{data,relics,combat,visual}.js app/src/main/assets/pvp-balance.js app/src/main/assets/status-engine.js app/src/main/assets/combat-dock.js app/src/main/assets/battle-fx.js app/src/main/assets/turn-sequence.js app/src/main/assets/atelier.js app/src/main/assets/route-tree.js app/src/main/assets/connection-ui.js app/src/main/assets/encounter-director.js app/src/main/assets/run-economy.js app/src/main/assets/run-save.js; do node --check "$file"; done
       - name: Test deck engine and relic interactions
         run: |
           node tests/gameplay.test.cjs
@@ -100,6 +105,7 @@ jobs:
           node tests/av-layout.test.cjs
           node tests/combat-dock-energy.test.cjs
           node tests/status-mechanics.test.cjs
+          node tests/battle-fx.test.cjs
       - name: Build installable debug APK
         run: gradle --no-daemon :app:assembleDebug --stacktrace
       - name: Verify APK signing
@@ -107,7 +113,7 @@ jobs:
           test -s app/build/outputs/apk/debug/app-debug.apk
           unzip -tq app/build/outputs/apk/debug/app-debug.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify app/build/outputs/apk/debug/app-debug.apk
-          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/AshesDuel-v0.14-status.apk
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/AshesDuel-v0.15-cinematic.apk
       - name: Enable Android emulator acceleration
         run: |
           if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
@@ -119,13 +125,29 @@ jobs:
           arch: x86_64
           profile: pixel_4
           disable-animations: true
-          script: ASHES_PACKAGE=com.ehtid.ashesduel.v14 bash "$GITHUB_WORKSPACE/.github/scripts/ashes-smoke.sh"
+          script: ASHES_PACKAGE=com.ehtid.ashesduel.v15 bash "$GITHUB_WORKSPACE/.github/scripts/ashes-smoke.sh"
       - uses: actions/upload-artifact@v4
         with:
           name: Pepel-i-Karty-Android-APK
-          path: rogue-duel/app/build/outputs/apk/debug/AshesDuel-v0.14-status.apk
+          path: rogue-duel/app/build/outputs/apk/debug/AshesDuel-v0.15-cinematic.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish validated v0.15 sound and animation beta
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/feature/ashes-animated-audio-v015') || (github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feature/ashes-animated-audio-v015' && github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TARGET_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+          cd app/build/outputs/apk/debug
+          sha256sum AshesDuel-v0.15-cinematic.apk > SHA256SUMS.txt
+          cd -
+          if gh release view ashes-duel-v0.15.0-beta >/dev/null 2>&1; then
+            gh release upload ashes-duel-v0.15.0-beta app/build/outputs/apk/debug/AshesDuel-v0.15-cinematic.apk#AshesDuel-v0.15-cinematic.apk app/build/outputs/apk/debug/SHA256SUMS.txt#SHA256SUMS.txt --clobber
+            gh release edit ashes-duel-v0.15.0-beta --target "$TARGET_SHA" || true
+          else
+            gh release create ashes-duel-v0.15.0-beta app/build/outputs/apk/debug/AshesDuel-v0.15-cinematic.apk#AshesDuel-v0.15-cinematic.apk app/build/outputs/apk/debug/SHA256SUMS.txt#SHA256SUMS.txt --target "$TARGET_SHA" --prerelease --title "Пепел и карты v0.15 — анимации и звук" --notes "Добавлены анимации ожидания героев и врагов, рывки атак, вспышки попаданий, цифры урона, частицы яда/пламени/крови/пробития, реакция на броню, эффект поражения и импульс ультимейта. Новый полностью офлайн звуковой движок WebAudio с отдельными эффектами карт, сражений, лечения, выбора, победы и проигрыша, фоновым гулом и сохранением настроек громкости/музыки/эффектов. Учитывает системные настройки уменьшения движения, снижает интенсивность анимаций. Проходит игровые тесты, подпись и запуск APK в Android Emulator API 34. Debug APK устанавливается рядом с v0.14 как com.ehtid.ashesduel.v15. PvP и аудио на физических устройствах остаются бета."
+          fi
 
       - name: Publish validated v0.14 status systems beta
         if: (github.event_name == 'push' && github.ref == 'refs/heads/feature/ashes-status-break-v014') || (github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feature/ashes-status-break-v014' && github.event.pull_request.head.repo.full_name == github.repository)
