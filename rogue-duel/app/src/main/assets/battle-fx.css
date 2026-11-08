@@ -1,0 +1,148 @@
+/* EHTID Ashes v0.15. Cinematic motion and particles without canvas loops.
+   Intentionally GPU-composited (transforms/opacity), not layout-heavy. */
+.combat-arena{isolation:isolate}
+.combat-arena .ashfx-layer{
+ position:absolute;inset:0;z-index:19;
+ overflow:hidden;pointer-events:none;contain:layout paint;
+}
+.combat-arena .ashfx-spark{
+ position:absolute;display:block;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;
+ border-radius:50%;pointer-events:none;will-change:transform,opacity
+}
+.combat-arena .ashfx-number{
+ position:absolute;display:block;font:900 clamp(16px,4vw,26px)/1 system-ui,sans-serif;
+ color:#f9c9a0;-webkit-text-stroke:.5px #211724;
+ text-shadow:0 2px 3px #16060a,0 0 9px #efae7cb0;
+ pointer-events:none;white-space:nowrap;z-index:20;
+ will-change:transform,opacity
+}
+.combat-arena .ashfx-number.fire{color:#ff9f6c}
+.combat-arena .ashfx-number.poison{color:#8bea8e}
+.combat-arena .ashfx-number.bleed{color:#fa8b9e}
+.combat-arena .ashfx-number.blocked{color:#add8f3}
+.combat-arena .ashfx-number.heal{color:#9ff5c0}
+.combat-arena .ashfx-number.break{color:#ffe7a3}
+.combat-arena .ashfx-projectile{
+ position:absolute;display:block;width:20px;height:7px;
+ margin:-3px 0 0 -10px;border-radius:50% 22% 50% 22%;
+ background:linear-gradient(90deg,transparent,#ffe5ad,#fff1d6);
+ box-shadow:0 0 9px 3px #e5ae68aa,0 0 22px #c88f7188;
+ filter:blur(.15px);z-index:19;pointer-events:none;will-change:transform,opacity
+}
+.combat-arena .ashfx-projectile.kind-magic,
+.combat-arena .ashfx-projectile.kind-ultimate{
+ background:linear-gradient(90deg,transparent,#e9b4ff,#c9c5ff);
+ box-shadow:0 0 16px #c99df1,0 0 33px #9763d79c
+}
+.combat-arena .ashfx-projectile.kind-fire{
+ background:linear-gradient(90deg,transparent,#ff9062,#ffe4a0);
+ box-shadow:0 0 12px #f87b36,0 0 22px #e74a218f
+}
+.combat-arena .unit-portrait-frame{
+ transform-origin:50% 86%;
+ backface-visibility:hidden;
+ will-change:transform;
+ animation:ashfx-hero-idle 4.1s ease-in-out infinite alternate
+}
+.combat-arena .etch-person.enemy .unit-portrait-frame{
+ animation:ashfx-foe-idle 3.65s ease-in-out infinite alternate
+}
+.combat-arena .etch-person.enemy:nth-child(2n) .unit-portrait-frame{animation-delay:-1.5s}
+.combat-arena .etch-person.enemy:nth-child(3n) .unit-portrait-frame{animation-delay:-2.6s}
+.combat-arena .etch-person.enemy:nth-child(4n) .unit-portrait-frame{animation-delay:-.55s}
+@keyframes ashfx-hero-idle{
+ from{transform:translate3d(0,0,0) rotate(-.7deg)}
+ to{transform:translate3d(0,-4px,0) rotate(.75deg)}
+}
+@keyframes ashfx-foe-idle{
+ from{transform:translate3d(0,0,0) scale(1)}
+ to{transform:translate3d(0,-3px,0) scale(1.025)}
+}
+.combat-arena .etch-person.is-target .unit-portrait-frame{
+ box-shadow:0 0 0 1px #ffe9b595,0 0 20px #dc9d68ad,inset 0 0 25px #120b18cc;
+}
+.combat-arena .etch-person.dead .unit-portrait-frame{
+ animation:ashfx-fall .55s ease-out both!important;
+ filter:grayscale(.85) brightness(.5)!important;
+}
+@keyframes ashfx-fall{
+ 0%{opacity:1;transform:translate3d(0,0,0) scale(1)}
+ 45%{opacity:.8;transform:translate3d(7px,0,0) rotate(8deg) scale(.97)}
+ 100%{opacity:.5;transform:translate3d(5px,9px,0) rotate(12deg) scale(.88)}
+}
+.combat-dock .etch-card.fate-card.selected{
+ box-shadow:0 0 0 2px #f0c98ca8,0 0 25px #d2a36c9c,inset 0 0 19px #ddbb8a40!important;
+ border-color:#f7d7a1!important;
+ transform:translate3d(0,-5px,0)!important;
+}
+.combat-dock .etch-card.fate-card{
+ transition:filter .13s ease,box-shadow .16s ease,border-color .15s ease;
+ transform-origin:50% 96%;-webkit-tap-highlight-color:transparent
+}
+.combat-dock .etch-card.fate-card:active{
+ filter:brightness(1.21) saturate(1.1)!important;
+}
+.combat-dock .dock-target.active{
+ animation:ashfx-target-pulse 1.4s ease-in-out infinite alternate
+}
+@keyframes ashfx-target-pulse{
+ from{box-shadow:inset 0 0 9px #a88a6066,0 0 1px #f7d8a9}
+ to{box-shadow:inset 0 0 14px #e7ad8480,0 0 11px #eec68e75}
+}
+.ashfx-settings-trigger{
+ position:fixed;right:max(8px,env(safe-area-inset-right));top:calc(8px + env(safe-area-inset-top));
+ z-index:2100;width:33px;height:33px;display:grid;place-items:center;
+ border:1px solid #c9ae82;border-radius:9px;
+ background:linear-gradient(145deg,#55415b,#282c41);color:#ffdeb5;
+ box-shadow:0 0 0 1px #151622,0 2px 12px #04060cbd;
+ font:700 20px Georgia,serif;line-height:1
+}
+.ashfx-settings-trigger[aria-pressed="false"]{
+ color:#9c9a9f;background:linear-gradient(#262936,#171a24)
+}
+.combat-topbar{padding-right:44px!important}
+.ashfx-settings-panel{
+ position:fixed;z-index:2200;
+ top:calc(48px + env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));
+ max-height:min(82dvh,570px);overflow-y:auto;
+ width:min(88vw,340px);padding:14px 15px;
+ border:1px solid #dbb98c;border-radius:12px;
+ background:linear-gradient(155deg,#342a3ded,#121927fa 69%);
+ box-shadow:0 15px 50px #03040ce8;
+ color:#f2dfc7;font:12px/1.5 system-ui;
+ backdrop-filter:blur(18px);
+}
+.ashfx-settings-panel[hidden]{display:none!important}
+.ashfx-settings-panel .ashfx-settings-head{
+ display:flex;align-items:center;justify-content:space-between;gap:15px;
+ margin-bottom:13px;color:#ffe0a5;font:700 12px/1.3 system-ui;letter-spacing:.8px
+}
+.ashfx-settings-panel .ashfx-settings-head button{
+ display:grid;place-items:center;width:28px;height:28px;
+ border:1px solid #ab8c71;border-radius:6px;
+ background:#483744;color:#f2dab3;font-size:14px
+}
+.ashfx-settings-panel label{
+ display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;
+ padding:9px 0;border-bottom:1px solid #c5a07a26
+}
+.ashfx-settings-panel label:has(input[type="checkbox"]){justify-content:flex-start}
+.ashfx-settings-panel input[type="checkbox"]{width:17px;height:17px;accent-color:#c9a373}
+.ashfx-settings-panel input[type="range"]{width:75%;accent-color:#ccab81}
+.ashfx-settings-panel output{min-width:32px;color:#f6d6a4;text-align:right;font:700 11px system-ui}
+.ashfx-settings-panel .ashfx-settings-note{
+ padding-top:12px;font:10px/1.35 system-ui;color:#b9b8c4
+}
+@media(max-width:359px){
+ .ashfx-settings-trigger{height:28px;width:28px;font-size:17px}
+ .combat-topbar{padding-right:36px!important}
+}
+@media(max-height:650px){.ashfx-settings-panel{max-height:79dvh}}
+@media(prefers-reduced-motion:reduce){
+ .combat-arena .unit-portrait-frame,.combat-arena .etch-person.dead .unit-portrait-frame,
+ .combat-dock .dock-target.active{animation:none!important}
+ .combat-dock .etch-card.fate-card{transition:none!important}
+}
+html:has(.ashfx-settings-panel:not([hidden])) .combat-dock .dock-status-codex[open] .status-codex-panel{
+ display:none!important
+}
