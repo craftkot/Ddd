@@ -8,6 +8,7 @@ on:
       - feature/ashes-av-fate-combat-v10
       - feature/ashes-icon-install-v011
       - fix/ashes-android-startup-v012
+      - feature/ashes-combat-dock-energy-v013
     paths:
       - 'rogue-duel/**'
       - '.github/workflows/build-ashes-duel.yml'
@@ -62,6 +63,10 @@ jobs:
           test -s app/src/main/assets/character-redesign.css
           test -s app/src/main/assets/fate-combat.css
           test -s app/src/main/assets/turn-sequence.js
+          test -s app/src/main/assets/combat-dock.js
+          test -s app/src/main/assets/combat-dock.css
+          grep -q 'combat-dock.js' app/src/main/assets/index.html
+          grep -q 'combat-dock.css' app/src/main/assets/index.html
           grep -q 'turn-sequence.js' app/src/main/assets/index.html
           test -s app/src/main/assets/art/arena.webp
           test -s app/src/main/assets/art/ashes-cover.webp
@@ -80,7 +85,7 @@ jobs:
           grep -q 'EHTID-RELAY-ACCESS-V1:' app/src/main/assets/index.html
           grep -q 'ehtid-chat-relay.craftkot404.workers.dev' app/src/main/java/com/ehtid/ashesduel/MainActivity.java
           if grep -q 'ntfy.sh' app/src/main/java/com/ehtid/ashesduel/MainActivity.java; then echo "Old transport remains"; exit 1; fi
-          for file in app/src/main/assets/expansion-{data,relics,combat,visual}.js app/src/main/assets/pvp-balance.js app/src/main/assets/turn-sequence.js app/src/main/assets/atelier.js app/src/main/assets/route-tree.js app/src/main/assets/connection-ui.js app/src/main/assets/encounter-director.js app/src/main/assets/run-economy.js app/src/main/assets/run-save.js; do node --check "$file"; done
+          for file in app/src/main/assets/expansion-{data,relics,combat,visual}.js app/src/main/assets/pvp-balance.js app/src/main/assets/combat-dock.js app/src/main/assets/turn-sequence.js app/src/main/assets/atelier.js app/src/main/assets/route-tree.js app/src/main/assets/connection-ui.js app/src/main/assets/encounter-director.js app/src/main/assets/run-economy.js app/src/main/assets/run-save.js; do node --check "$file"; done
       - name: Test deck engine and relic interactions
         run: |
           node tests/gameplay.test.cjs
@@ -88,6 +93,7 @@ jobs:
           node tests/design.test.cjs
           node tests/character-art.test.cjs
           node tests/av-layout.test.cjs
+          node tests/combat-dock-energy.test.cjs
       - name: Build installable debug APK
         run: gradle --no-daemon :app:assembleDebug --stacktrace
       - name: Verify APK signing
@@ -95,7 +101,7 @@ jobs:
           test -s app/build/outputs/apk/debug/app-debug.apk
           unzip -tq app/build/outputs/apk/debug/app-debug.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify app/build/outputs/apk/debug/app-debug.apk
-          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/AshesDuel-v0.12-trial.apk
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/AshesDuel-v0.13-battle.apk
       - name: Enable Android emulator acceleration
         run: |
           if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
@@ -107,13 +113,29 @@ jobs:
           arch: x86_64
           profile: pixel_4
           disable-animations: true
-          script: bash "$GITHUB_WORKSPACE/.github/scripts/ashes-smoke.sh"
+          script: ASHES_PACKAGE=com.ehtid.ashesduel.v13 bash "$GITHUB_WORKSPACE/.github/scripts/ashes-smoke.sh"
       - uses: actions/upload-artifact@v4
         with:
           name: Pepel-i-Karty-Android-APK
-          path: rogue-duel/app/build/outputs/apk/debug/AshesDuel-v0.12-trial.apk
+          path: rogue-duel/app/build/outputs/apk/debug/AshesDuel-v0.13-battle.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish validated v0.13 fixed battle UI
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/feature/ashes-combat-dock-energy-v013') || (github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feature/ashes-combat-dock-energy-v013' && github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TARGET_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+          cd app/build/outputs/apk/debug
+          sha256sum AshesDuel-v0.13-battle.apk > SHA256SUMS.txt
+          cd -
+          if gh release view ashes-duel-v0.13.0-beta >/dev/null 2>&1; then
+            gh release upload ashes-duel-v0.13.0-beta app/build/outputs/apk/debug/AshesDuel-v0.13-battle.apk#AshesDuel-v0.13-battle.apk app/build/outputs/apk/debug/SHA256SUMS.txt#SHA256SUMS.txt --clobber
+            gh release edit ashes-duel-v0.13.0-beta --target "$TARGET_SHA" || true
+          else
+            gh release create ashes-duel-v0.13.0-beta app/build/outputs/apk/debug/AshesDuel-v0.13-battle.apk#AshesDuel-v0.13-battle.apk app/build/outputs/apk/debug/SHA256SUMS.txt#SHA256SUMS.txt --target "$TARGET_SHA" --prerelease --title "Пепел и карты v0.13 — бой без прокрутки" --notes "Полностью переработан экран боя: арена, цели и карты без вертикальной прокрутки; горизонтальный свайп рукой; OC 0–5 и энергия ультимейта 0–100 отдельно; базовая атака +20 энергии, карты +12–16, заряд от урона и добиваний, новая ульта Пепельный разлом, артовая окантовка и обработка цвета моделей в едином стиле карт. Устанавливается отдельно от v0.12 как com.ehtid.ashesduel.v13. CI включает игровые тесты и реальный запуск APK на Android Emulator API 34. Это beta, PvP на физических устройствах требует проверки."
+          fi
 
       - name: Publish validated v0.12 Android startup fix
         if: (github.event_name == 'push' && github.ref == 'refs/heads/fix/ashes-android-startup-v012') || (github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'fix/ashes-android-startup-v012' && github.event.pull_request.head.repo.full_name == github.repository)
