@@ -277,16 +277,18 @@
  function cardFlight(fromRect,school,layer){
   if(!layer||!fromRect||reduced())return;
   const r=layer.getBoundingClientRect();
-  const pt={x:fromRect.left+fromRect.width/2-r.left,
-     y:fromRect.top+fromRect.height/2-r.top};
+  const pt={x:fromRect.left+fromRect.width/2,
+     y:fromRect.top+fromRect.height/2};
   const node=document.createElement("span");
   node.className="ashfx-cardflight";
   if(school==="Огонь")node.classList.add("flame");
   else if(school==="Яд")node.classList.add("venom");
   else if(school==="Кровь")node.classList.add("blood");
   node.style.left=pt.x+"px";node.style.top=pt.y+"px";
-  layer.appendChild(node);
-  const dx=r.width*.53-pt.x,dy=r.height*.45-pt.y;
+  document.body.appendChild(node);
+  // Fly above the fixed dock into the arena. The arena is overflow-clipped,
+  // so this intentionally uses a short-lived fixed viewport overlay.
+  const dx=r.left+r.width*.53-pt.x,dy=r.top+r.height*.45-pt.y;
   cleanupWhenDone(node,node.animate([
    {opacity:0,transform:"translate(-50%,-50%) scale(.46) rotate(-22deg)"},
    {opacity:1,transform:"translate(-50%,-50%) scale(1.15) rotate(-7deg)",offset:.2},
