@@ -128,11 +128,20 @@
     if(typeof requestAnimationFrame==="function")requestAnimationFrame(syncTargets);
   });
   const renderBefore=render;
+  let priorHandX=0;
   render=window.render=function(){
-    // Clear the layout flag on screen changes before normal app rendering.
-    if(!combatMode())document.documentElement?.classList?.remove?.("combat-fullscreen");
+    // Retain the hand's horizontal position between actions rather than
+    // forcing the player to swipe from the first card every turn.
+    const before=document.querySelector?.(".combat-dock .etch-hand-shell");
+    if(before)priorHandX=before.scrollLeft||0;
+    if(!combatMode()){
+      document.documentElement?.classList?.remove?.("combat-fullscreen");
+      priorHandX=0;
+    }
     renderBefore();
     organize();
+    const after=document.querySelector?.(".combat-dock .etch-hand-shell");
+    if(after&&priorHandX>0)after.scrollLeft=priorHandX;
   };
   window.ASH_COMBAT_DOCK={organize,syncTargets,energyTray,targets};
   render();
