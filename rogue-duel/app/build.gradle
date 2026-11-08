@@ -6,14 +6,14 @@ android {
         applicationId 'com.ehtid.ashesduel'
         minSdk 26
         targetSdk 35
-        versionCode 14
-        versionName '0.14.0'
+        versionCode 15
+        versionName '0.15.0'
     }
     // Trial APK installs alongside older CI builds signed by different ephemeral
     // debug certificates. Existing game/save data is NOT overwritten.
     buildTypes {
         debug {
-            applicationIdSuffix '.v14'
+            applicationIdSuffix '.v15'
             versionNameSuffix '-trial'
         }
     }
