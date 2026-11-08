@@ -44,6 +44,34 @@ for(const [school,emoji,defs] of ASH_FAMILIES)for(const [name,cost,type,fx] of d
  CARDS[id]={n:name,e:emoji,t:type,c:cost,d,v:effects[0].value,k:"combo",effects,school};
  ASH_CARD_IDS.push(id);COMMON.push(id);
 }
+/* v0.14 — tactical status cards. Append AFTER original 112 cards so all
+   existing IDs and saved decks remain stable. */
+Object.assign(ASH_EFFECT_NAMES,{
+  stagger:"стойкости",ward:"щита против ДоТ",purify:"% очищения ДоТ",
+  delay:"задержки AV"
+});
+const ASH_STATUS_CARDS=[
+ ["Нестабильный токсин",1,"skill","poison4|burn3","Яд"],
+ ["Слепая вспышка",2,"attack","hit6|detonate1","Яд"],
+ ["Багряные угли",1,"attack","hit5|burn3|bleed3","Огонь"],
+ ["Гниющая рана",1,"skill","poison3|bleed5","Кровь"],
+ ["Разрыв сухожилий",2,"attack","hit10|stagger32","Кровь"],
+ ["Пепельный фильтр",1,"skill","purify55|ward7","Оборона"],
+ ["Призрачная броня",2,"skill","block14|ward12","Оборона"],
+ ["Сломанная ось",2,"skill","stagger45|delay6","Проклятия"],
+ ["Сильный антидот",1,"skill","purify80|heal6","Лечение"],
+ ["Дробящий натиск",2,"attack","multihit4|stagger30","Сила"],
+ ["Клеймо пламени",2,"skill","mark3|burn4","Огонь"],
+ ["Кровоостанавливающий настой",1,"skill","purify50|regen2","Лечение"]
+];
+const ASH_STATUS_CARD_IDS=[];
+for(const [name,cost,type,fx,school] of ASH_STATUS_CARDS){
+  const id="forge"+String(++ashId).padStart(3,"0"),effects=ashParseFX(fx);
+  const emoji=ASH_FAMILIES.find(x=>x[0]===school)?.[1]||"✦";
+  const d=effects.map(z=>z.value+" "+(ASH_EFFECT_NAMES[z.key]||z.key)).join(" · ")+".";
+  CARDS[id]={n:name,e:emoji,t:type,c:cost,d,v:effects[0].value,k:"combo",effects,school};
+  ASH_STATUS_CARD_IDS.push(id);ASH_CARD_IDS.push(id);COMMON.push(id);
+}
 CLASSES.guard.deck.splice(-2,0,"forge022","forge023");
 CLASSES.oracle.deck.splice(-2,0,"forge003","forge004");
 CLASSES.hunter.deck.splice(-2,0,"forge095","forge096");
