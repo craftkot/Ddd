@@ -4,7 +4,13 @@
    Inspired by public turn-order conventions; not a copy of HSR art or code.
    Existing PvP AV, counter phases, and saved run mechanics remain compatible. */
 (function(){
-  const BASE_GAUGE=10000,MAX_SP=5,START_SP=3;
+  const BASE_GAUGE=10000,MAX_SP=5,START_SP=3,MAX_ULT=100;
+  const chargeOf=c=>bounded(Number(c?.av?.ultCharge)||0,0,MAX_ULT);
+  const gainCharge=(c,delta)=>{
+    if(!c?.av)return 0;
+    c.av.ultCharge=bounded(chargeOf(c)+Math.max(0,Number(delta)||0),0,MAX_ULT);
+    return c.av.ultCharge;
+  };
   const oldCreate=createFight,oldPlay=playSolo,oldEnd=soloEnd,oldDispatch=dispatch;
   const bounded=(v,min,max)=>Math.max(min,Math.min(max,v));
   function living(c){return c.enemies?.some(e=>e.hp>0)&&c.player?.hp>0}
@@ -18,6 +24,7 @@
     const speed={guard:156,oracle:172,hunter:184};
     c.av={
       clock:0,sp:bounded(hero.energy||START_SP,0,MAX_SP),maxSp:MAX_SP,
+      ultCharge:0,ultMax:MAX_ULT,
       current:null,heroActions:0,actions:0,
       actors:[{id:"hero",speed:speed[G.runner?.hero]||165,gauge:BASE_GAUGE},
         ...c.enemies.map((e,i)=>({
@@ -46,7 +53,9 @@
   function tickEnemy(c,a){
     const i=Number(a.id.slice(3)),e=c.enemies[i],p=c.player;
     if(!e||e.hp<=0)return;
+    const hpBefore=p.hp;
     ASH_ENCOUNTERS.execute(e,p,c);
+    if(p.hp<hpBefore)gainCharge(c,Math.min(18,5+Math.ceil((hpBefore-p.hp)/2)));
     const damage=ASH_DEBUG.ashTick(e,p);
     if(damage)logLine(e.name+": периодический урон "+damage);
     if(e.hp<=0&&!ash.killSet.has(e)){ash.killSet.add(e);ashHook("kill",p,e,{})}
@@ -107,6 +116,7 @@
     const target=c.enemies[c.target]?.hp>0?c.enemies[c.target]:c.enemies.find(e=>e.hp>0);
     if(!target)return false;
     const dmg=hit(c.player,target,Math.max(4,6+Math.floor(G.stage/4)));
+    gainCharge(c,20);
     c.av.sp=bounded(c.av.sp+1,0,MAX_SP);
     c.player.energy=c.av.sp;
     logLine("Базовая атака: "+dmg+" урона · ОН "+c.av.sp+"/"+MAX_SP);
@@ -119,6 +129,7 @@
     if(!card||!art(card.id)||art(card.id).t==="reaction")return false;
     const cost=art(card.id).c;
     if(!Number.isFinite(cost)||cost<0||cost>c.av.sp)return false;
+    const aliveBefore=c.enemies.filter(x=>x.hp>0).length;
     const e=c.enemies[c.target]?.hp>0?c.enemies[c.target]:c.enemies.find(x=>x.hp>0);
     if(!e)return false;
     p.hand.splice(index,1);
@@ -126,9 +137,29 @@
     if(art(card.id).t==="power")(p.exhaust||(p.exhaust=[])).push(card);
     else p.discard.push(card);
     logLine("Ты: "+apply(card,p,e));
+    gainCharge(c,12+(art(card.id).c>=2?4:0));
+    const killed=Math.max(0,aliveBefore-c.enemies.filter(x=>x.hp>0).length);
+    if(killed)gainCharge(c,killed*15);
     // Some original card/relic effects generate energy: map it into shared SP.
     c.av.sp=bounded(p.energy,0,MAX_SP);p.energy=c.av.sp;
     if(c.enemies[c.target]?.hp<=0)c.target=Math.max(0,c.enemies.findIndex(x=>x.hp>0));
+    finishHeroAction(c);
+    return true;
+  }
+  function ultimate(){
+    const c=G.combat;
+    if(!valid(c)||c.av.current!=="hero"||!living(c)||chargeOf(c)<MAX_ULT)return false;
+    c.av.ultCharge=0;
+    let total=0,kills=0;
+    for(const foe of c.enemies){
+      if(foe.hp<=0)continue;
+      const wasAlive=foe.hp>0;
+      total+=hit(c.player,foe,18+Math.floor(G.stage/3));
+      if(wasAlive&&foe.hp<=0)kills++;
+    }
+    // Ultimate is an action, not a free extra turn. SP remains unchanged.
+    c.player.block=(c.player.block||0)+8;
+    logLine("Пепельный разлом: "+total+" урона по врагам, +8 брони, "+kills+" добито");
     finishHeroAction(c);
     return true;
   }
@@ -166,6 +197,8 @@
   };
   dispatch=window.dispatch=async function(action,x){
     if(action==="duelBasic"&&G.screen==="duel"){commandDuel({action:"basic"});return}
+    if(action==="ultimate"&&G.screen==="fight"){ultimate();return}
+    if(action==="duelUltimate"&&G.screen==="duel"){commandDuel({action:"ult",revision:G.duel?.revision});return}
     if(action==="basicAttack"&&G.screen==="fight"){basicAttack();return}
     if(action==="endTurn"&&G.screen==="fight"&&valid(G.combat)){basicAttack();return}
     await oldDispatch(action,x);
@@ -178,7 +211,7 @@
   // Make the same five-point resource persist across its normal turns.
   const oldPvMake=pvMakeFighter,oldPvNext=pvNext,oldPvAction=pvAction;
   pvMakeFighter=function(build){
-    const f=oldPvMake(build);f.sp=START_SP;f.maxSp=MAX_SP;return f
+    const f=oldPvMake(build);f.sp=START_SP;f.maxSp=MAX_SP;f.ultCharge=0;return f
   };
   pvNext=function(d){
     const taxes={host:d.fighters.host.nextTax||0,guest:d.fighters.guest.nextTax||0};
@@ -194,9 +227,21 @@
     const d=G.duel;if(!d?.fighters||!cmd)return oldPvAction(cmd,by);
     const f=d.fighters[by],e=d.fighters[by==="host"?"guest":"host"];
     if(!f)return oldPvAction(cmd,by);
+    const pvpCharge=(x,n)=>{if(x)x.ultCharge=bounded((x.ultCharge||0)+n,0,MAX_ULT)};
+    if(cmd.action==="ult"){
+      if(d.turn!==by||d.phase!=="play"||d.winner||f.ultCharge<MAX_ULT||
+          (Number.isInteger(cmd.revision)&&cmd.revision!==d.revision))return;
+      f.ultCharge=0;
+      const damage=hit(f,e,22);
+      f.block=(f.block||0)+7;
+      d.log.push(f.name+": Пепельный разлом — "+damage+" урона, +7 брони");
+      return oldPvAction({...cmd,action:"end"},by);
+    }
     if(cmd.action==="basic"){
       if(d.turn!==by||d.phase!=="play"||d.winner||Number.isInteger(cmd.revision)&&cmd.revision!==d.revision)return;
       hit(f,e,5);
+      pvpCharge(f,20);
+      pvpCharge(e,Math.min(18,5+Math.ceil(5/2)));
       f.sp=bounded((f.sp??START_SP)+1,0,MAX_SP);
       f.energy=f.sp;
       d.log.push(f.name+": базовая атака · +1 ОН");
@@ -206,9 +251,14 @@
       f.sp=bounded(f.sp??START_SP,0,MAX_SP);
       f.energy=f.sp;
     }
-    const energyBefore=f.energy;
+    const hpBeforeF=f.hp,hpBeforeE=e.hp;
     const revBefore=d.revision;
     const result=oldPvAction(cmd,by);
+    if(d.revision!==revBefore){
+      if(cmd.action==="play")pvpCharge(f,12);
+      if(f.hp<hpBeforeF)pvpCharge(f,Math.min(18,5+Math.ceil((hpBeforeF-f.hp)/2)));
+      if(e.hp<hpBeforeE)pvpCharge(e,Math.min(18,5+Math.ceil((hpBeforeE-e.hp)/2)));
+    }
     if(cmd.action==="play"&&d.revision!==revBefore){
       f.sp=bounded(f.energy,0,MAX_SP);
       f.energy=f.sp;
@@ -216,5 +266,5 @@
     // End is a voluntary pass, not a free SP generator; use Basic Attack.
     return result;
   };
-  window.ASH_AV={BASE_GAUGE,MAX_SP,START_SP,valid,preview,advance,basicAttack,useCard,initialize};
+  window.ASH_AV={BASE_GAUGE,MAX_SP,START_SP,MAX_ULT,valid,preview,advance,basicAttack,useCard,ultimate,gainCharge,chargeOf,initialize};
 })();
