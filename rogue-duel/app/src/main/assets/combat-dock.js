@@ -40,7 +40,7 @@
     const wrapper=E("div","dock-ult-wrap");
     const progress=E("div","dock-ult-meter");
     const fill=E("span","dock-ult-fill");
-    fill.style.width=Math.min(100,charge)+"%";
+    fill.style.height=Math.min(100,charge)+"%";
     progress.appendChild(fill);
     const button=E("button","dock-ultimate"+(charge>=max?" charged":""));
     button.type="button";
