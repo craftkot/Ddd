@@ -3,7 +3,7 @@
 # executes script entries separately via /bin/sh -c, not as a multiline shell.
 set -euo pipefail
 APK="$GITHUB_WORKSPACE/rogue-duel/app/build/outputs/apk/debug/app-debug.apk"
-PKG="com.ehtid.ashesduel.trial"
+PKG="${ASHES_PACKAGE:-com.ehtid.ashesduel.trial}"
 ACT="com.ehtid.ashesduel.MainActivity"
 
 adb install "$APK"
