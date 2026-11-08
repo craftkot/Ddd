@@ -393,6 +393,12 @@ function pointerDown(e){
 function pointerMove(e){
  const d=UI.drag;if(!d)return;
  const dx=e.clientX-d.startX,dy=e.clientY-d.startY;
+ // Horizontal swipes navigate the fixed hand, not the card-drag targeting
+ // gesture. Without this guard pointermove.preventDefault blocked scrolling.
+ if(!d.moved&&d.node.closest?.(".combat-dock")&&
+    Math.abs(dx)>14&&Math.abs(dx)>Math.abs(dy)*1.2){
+   UI.drag=null;return;
+ }
  if(!d.moved&&Math.hypot(dx,dy)<12)return;
  if(!d.moved){
   d.moved=true;d.ghost=d.node.cloneNode(true);d.ghost.classList.add("held");d.ghost.disabled=true;
