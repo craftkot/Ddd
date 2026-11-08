@@ -78,7 +78,7 @@ jobs:
           grep -q 'appassets.androidplatform.net' app/src/main/java/com/ehtid/ashesduel/MainActivity.java
           grep -q 'ASHES_READY' app/src/main/java/com/ehtid/ashesduel/MainActivity.java
           grep -q 'AndroidNet.ready()' app/src/main/assets/run-save.js
-          grep -q "applicationIdSuffix '.trial'" app/build.gradle
+          grep -q "applicationIdSuffix '.v13'" app/build.gradle
           test -s app/src/main/assets/art/atlas.webp
           test -s app/src/main/assets/art/kenney/icons/sword.png
           test -s app/src/main/assets/art/kenney/heroes/red_character.png
