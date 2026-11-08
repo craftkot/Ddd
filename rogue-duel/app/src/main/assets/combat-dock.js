@@ -130,7 +130,7 @@
   const renderBefore=render;
   render=window.render=function(){
     // Clear the layout flag on screen changes before normal app rendering.
-    if(!combatMode())document.documentElement.classList.remove("combat-fullscreen");
+    if(!combatMode())document.documentElement?.classList?.remove?.("combat-fullscreen");
     renderBefore();
     organize();
   };
