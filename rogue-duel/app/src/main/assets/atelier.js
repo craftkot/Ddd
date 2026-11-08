@@ -127,9 +127,30 @@ window.ASH_UI_DEBUG={playcard,cardVisual,stage,hand,fightView};
 function eventHead(title,subtitle){return '<div class="etch-head"><p class="eyebrow">✦ ПЕПЕЛ И КАРТЫ ✦</p><h2>'+esc(title)+'</h2><p class="sub">'+esc(subtitle||"")+'</p></div>'}
 function health(f){return '<span class="fig-hp">❤ '+trim(f.hp)+'/'+trim(f.maxHp)+'</span><span class="fig-track"><span style="width:'+pct(f.hp,f.maxHp)+'%"></span></span>'}
 function stateIcons(f){
- let out=[];const statuses=[["🛡",f.block],["☠",f.poison],["🩸",f.bleed],["🔥",f.burn],["⚔",f.str],["⬟",f.ward],["⏳",f.weak],["✧",f.regen],["✦",f.thorns]];
- for(let [sym,val] of statuses)if(val>0)out.push('<small>'+sym+' '+trim(val)+'</small>');
+ const labels={block:"Броня",poison:"Яд: чистый урон в свой ход",burn:"Горение: двойной урон в свой ход",
+  bleed:"Кровотечение: усиливает прямые удары и ДоТ",mark:"Метка: усиливает атаки",
+  str:"Сила",ward:"Щит от прямого урона ДоТ",weak:"Слабость: меньше урона",vuln:"Уязвимость: больше получаемого урона",
+  regen:"Регенерация",thorns:"Шипы"};
+ const statuses=[["🛡",f.block,"block"],["☠",f.poison,"poison"],["🔥",f.burn,"burn"],
+   ["🩸",f.bleed,"bleed"],["🎯",f.mark,"mark"],["⚔",f.str,"str"],
+   ["⬟",f.ward,"ward"],["⏳",f.weak,"weak"],["⚡",f.vuln,"vuln"],
+   ["✧",f.regen,"regen"],["✦",f.thorns,"thorns"]];
+ const out=[];
+ for(const [sym,val,key] of statuses)if(val>0)
+   out.push('<small class="status-'+key+'" title="'+esc(labels[key]+": "+trim(val))+'">'+sym+' '+trim(val)+'</small>');
  return '<div class="fig-status">'+out.join("")+'</div>'
+}
+function statusForecast(f,isEnemy){
+ if(!window.ASH_STATUSES||!f||f.hp<=0)return"";
+ const info=ASH_STATUSES.breakdown(f),stagger=Math.max(0,f.stagger||0);
+ const significant=info.total>0||stagger>0;
+ if(!significant)return"";
+ const combo=info.combo?' · '+info.combo.label:"";
+ const label=esc(ASH_STATUSES.explain(f));
+ return '<div class="ash-status-forecast" title="'+label+'" aria-label="'+label+'">'+
+  (info.total>0?'<span class="ash-dot-next">ДоТ −'+info.hpDamage+(info.ward>0?" (щит)":"")+'</span>':"")+
+  (stagger>0?'<span class="ash-break-next">⚒ '+stagger+'/'+ASH_STATUSES.threshold(f)+'</span>':"")+
+  (info.combo?'<span class="ash-combo-next" title="'+esc(info.combo.label)+'">✦</span>':"")+'</div>'
 }
 function intentOf(f){
  if(f.hp<=0)return"ПОВЕРЖЕН";
@@ -143,7 +164,7 @@ function unit(f,kind,i,isEnemy,clickable){
  return '<button type="button" '+(clickable?'data-foe-index="'+i+'" ':"")+
   'class="etch-person '+(isEnemy?"enemy":"hero")+' '+(alive?"":"dead")+' '+(chosen?"is-target":"")+'"'+(isEnemy&&!alive?' disabled':"")+'>'+
   '<span class="fate-ground-shadow"></span><span class="unit-portrait-frame kind-'+esc(String(kind||"unknown").replace(/[^a-z0-9_-]/gi,""))+'">'+paintedPortrait(kind)+'</span>'+
-  '<div class="fig-name">'+esc(f.name)+'</div>'+health(f)+stateIcons(f)+intent+'</button>'
+  '<div class="fig-name">'+esc(f.name)+'</div>'+health(f)+statusForecast(f,isEnemy)+stateIcons(f)+intent+'</button>'
 }
 
 function stage(hero,foes,target,clickable){
