@@ -1,0 +1,57 @@
+/* Ashes 0.14 — readable combat statuses and tactical forecast. */
+.combat-arena .ash-status-forecast{
+ width:100%;max-width:100%;display:flex;justify-content:center;align-items:center;
+ flex-wrap:nowrap;gap:2px;min-height:13px;max-height:17px;overflow:hidden;
+ padding:0 1px;font:700 8px/1.2 system-ui,sans-serif;pointer-events:none
+}
+.combat-arena .ash-status-forecast span{
+ border:1px solid #c8a07888;border-radius:4px;padding:1px 3px;
+ background:linear-gradient(#302435,#161b27);
+ color:#ffcbaf;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:100%;
+ text-shadow:0 0 5px #000
+}
+.combat-arena .ash-status-forecast .ash-break-next{color:#b8d3f4;border-color:#6694bf9c}
+.combat-arena .ash-status-forecast .ash-combo-next{color:#ffe4aa;border-color:#e3bb809d;padding:1px 2px}
+.combat-arena .fate-stage .etch-person .fig-status{
+ display:flex;flex-wrap:nowrap;align-items:center;justify-content:center;gap:2px;
+ max-width:100%;min-height:0;overflow:hidden
+}
+.combat-arena .fate-stage .etch-person .fig-status small{
+ color:#eed8ba;border-color:#bda07a50;max-width:44px;overflow:hidden;
+ white-space:nowrap;text-overflow:clip
+}
+.combat-arena .fate-stage .etch-person .fig-status .status-poison{color:#a3df9a}
+.combat-arena .fate-stage .etch-person .fig-status .status-burn{color:#f6b67e}
+.combat-arena .fate-stage .etch-person .fig-status .status-bleed{color:#f398a1}
+.combat-arena .fate-stage .etch-person .fig-status .status-ward{color:#c7c7f4}
+.combat-dock .dock-target small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.combat-dock .dock-target:has(small){max-width:146px}
+.combat-dock .dock-status-codex{display:block;position:relative;flex:0 0 auto}
+.combat-dock .dock-status-codex summary{
+ display:grid;place-items:center;cursor:pointer;list-style:none;
+ width:31px;height:34px;border:1px solid #bda27c;border-radius:8px;
+ background:linear-gradient(#494056,#272939);color:#f7dbaa;font:700 18px Georgia,serif
+}
+.combat-dock .dock-status-codex summary::-webkit-details-marker{display:none}
+.combat-dock .dock-status-codex[open] summary{background:#634763}
+.combat-dock .status-codex-panel{
+ position:fixed;right:7px;bottom:clamp(252px,43dvh,366px);
+ z-index:110;width:min(94vw,380px);max-height:min(54dvh,430px);
+ overflow-y:auto;padding:12px;
+ border:1px solid #c6a57d;border-radius:10px;
+ background:linear-gradient(160deg,#2b2434f7,#111a2bf7);
+ box-shadow:0 10px 35px #000e
+}
+.combat-dock .status-codex-panel p{
+ font:11px/1.38 system-ui;white-space:normal;color:#f0e1cb;margin:0 0 6px
+}
+.combat-dock .status-codex-panel p:last-child{margin-bottom:0}
+@media(max-width:360px){
+ .combat-dock .dock-status-codex summary{width:25px;height:30px;font-size:15px}
+ .combat-dock .dock-topline{gap:4px}
+ .combat-arena .ash-status-forecast{font-size:7px}
+}
+@media(max-height:730px){
+ .combat-arena .ash-status-forecast{font-size:7px;max-height:13px}
+ .combat-dock .status-codex-panel{bottom:46dvh}
+}
