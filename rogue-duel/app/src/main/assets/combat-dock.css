@@ -1,0 +1,217 @@
+/* Ashes Duel v0.13: Android battle viewport.
+   Combat does not scroll vertically. Only the hand scrolls horizontally. */
+html.combat-fullscreen,html.combat-fullscreen body{
+  width:100%;height:100%;overflow:hidden!important;overscroll-behavior:none
+}
+.combat-fullscreen #shell{max-width:none!important;padding:0!important;min-height:0!important}
+.combat-fullscreen #shell>header{display:none!important}
+.combat-fullscreen #app{min-height:0!important;overflow:hidden!important}
+.combat-viewport{
+ position:fixed;inset:0;z-index:50;display:grid;grid-template-rows:auto minmax(0,1fr) auto;
+ background:radial-gradient(ellipse at 50% 0,#34283b,#080d18 65%);overflow:hidden;
+ color:#f4e8d5;font-family:system-ui,sans-serif;
+ padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)
+}
+.combat-topbar{position:relative;z-index:3;background:linear-gradient(#1b1e2f,#141b28);
+ border-bottom:1px solid #b18d6859;padding:4px 9px 5px;min-height:54px}
+.combat-topbar .etch-battle-hud{display:flex!important;align-items:center;justify-content:space-between;
+ padding:2px 4px!important;margin:0!important;min-height:23px;gap:7px;font:11px/1.2 system-ui}
+.combat-topbar .etch-battle-hud .hp{font-size:12px}
+.combat-topbar .etch-battle-hud>.coin{font-size:10px}
+.combat-topbar .dock-turn-order{display:block;width:100%;overflow:hidden}
+.combat-topbar .fate-av-bar{display:flex!important;align-items:center;gap:8px;
+ margin:2px 0 0!important;padding:3px 1px!important;background:none!important;border:0!important;box-shadow:none!important}
+.combat-topbar .fate-av-label{font:700 9px system-ui;flex:0 0 auto;max-width:66px;margin:0;line-height:1.1}
+.combat-topbar .fate-av-scroll{display:flex!important;flex:1;gap:3px;min-width:0;overflow:hidden}
+.combat-topbar .fate-av-token{min-width:0;min-height:31px;flex:1 1 0;padding:2px;
+ border-radius:5px;font:9px/1.1 system-ui}
+.combat-topbar .fate-av-token:nth-child(n+7){display:none}
+.combat-topbar .fate-av-token strong{font-size:9px}
+.combat-topbar .fate-av-token small{font-size:8px;padding-top:1px}
+.combat-topbar .etch-timeline{padding:2px 0;margin:0;min-height:0;overflow:hidden;white-space:nowrap}
+.combat-arena{position:relative;min-height:0;overflow:hidden}
+.combat-arena .etch-stage.fate-stage{
+ width:100%;height:100%!important;min-height:0!important;max-height:none!important;
+ margin:0!important;padding:5px 4px 8px!important;border:0!important;border-radius:0!important;
+ background:radial-gradient(ellipse at 73% 19%,#a9655360,transparent 45%),
+ linear-gradient(180deg,#1c1c2a70,#080d18bb 74%),
+ url("art/arena.webp") center 55%/cover no-repeat!important
+}
+.combat-arena .fate-stage .etch-fighters{
+ display:grid!important;position:absolute!important;inset:3px 4px 5px!important;
+ width:calc(100% - 8px)!important;height:calc(100% - 8px)!important;min-height:0!important;
+ padding:0!important;grid-template-columns:31% minmax(0,69%)!important;gap:1px!important;align-items:end
+}
+.combat-arena .fate-stage .fate-player-platform{height:100%;display:flex;justify-content:center;align-items:flex-end}
+.combat-arena .fate-stage .etch-team{
+ display:grid!important;height:100%;align-items:end!important;min-height:0!important;
+ grid-template-columns:repeat(2,minmax(0,1fr))!important;
+ grid-template-rows:repeat(2,minmax(0,1fr))!important;gap:3px!important;overflow:visible
+}
+.combat-arena .fate-stage.count-1 .etch-team{
+ grid-template-columns:1fr!important;grid-template-rows:1fr!important;
+}
+.combat-arena .fate-stage.count-2 .etch-team{
+ grid-template-columns:repeat(2,minmax(0,1fr))!important;grid-template-rows:1fr!important;
+}
+.combat-arena .fate-stage .etch-person{
+ min-height:0!important;max-height:100%!important;height:auto!important;width:100%!important;
+ padding:3px 2px 4px!important;margin:0!important;
+ border:1px solid #b98c5a3d;border-radius:9px;
+ background:linear-gradient(180deg,#14192718,#2226384d 75%,#14131cd9)!important;
+ overflow:hidden!important;position:relative;gap:1px!important;display:flex!important;
+ flex-direction:column;justify-content:flex-end;align-items:center;
+ box-shadow:inset 0 0 0 1px #ffd7ac0b,0 3px 9px #0008
+}
+.combat-arena .fate-stage .etch-person.enemy.is-target,
+.combat-arena .fate-stage .etch-person.enemy.aimed{
+ outline:2px solid #ecc489!important;outline-offset:-1px;
+ background:linear-gradient(#74423d54,#241722d9)!important;
+ box-shadow:inset 0 0 20px #dda06b36,0 0 14px #e8a57879!important
+}
+.combat-arena .fate-stage .etch-person img.figure.artbook-figure{
+ width:100%!important;height:clamp(65px,17dvh,156px)!important;max-width:148px!important;
+ object-fit:contain!important;object-position:center bottom;flex-shrink:1!important;
+ margin:0 auto!important;
+ filter:saturate(.66) sepia(.08) contrast(1.22) brightness(1.1)
+ drop-shadow(0 0 7px #d1a17a91) drop-shadow(0 5px 5px #02040acb)!important
+}
+.combat-arena .fate-stage .etch-person.enemy img.figure.artbook-figure{
+ height:clamp(50px,13dvh,122px)!important;max-width:105px!important
+}
+.combat-arena .fate-stage.count-3 .etch-person.enemy img.figure.artbook-figure,
+.combat-arena .fate-stage.count-4 .etch-person.enemy img.figure.artbook-figure{
+ height:clamp(41px,10dvh,83px)!important;max-width:83px!important
+}
+.combat-arena .fate-stage .etch-person .fig-name{
+ font:700 clamp(8px,2.3vw,11px)/1.12 Georgia,serif!important;color:#f2dcba!important;
+ text-shadow:0 2px 5px #000!important;max-width:100%!important;text-align:center;
+ display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+ overflow:hidden;overflow-wrap:anywhere!important;max-height:2.4em;padding:0!important
+}
+.combat-arena .fate-stage .etch-person .fig-hp{font:700 9px/1.2 system-ui!important}
+.combat-arena .fate-stage .etch-person .fig-track{height:5px!important;min-height:5px;width:93%!important}
+.combat-arena .fate-stage .etch-person .fig-status{
+ display:flex;max-height:18px!important;flex-wrap:nowrap;justify-content:center;
+ max-width:100%;gap:1px;overflow:hidden!important
+}
+.combat-arena .fate-stage .etch-person .fig-status small{
+ font-size:8px!important;padding:1px!important;white-space:nowrap
+}
+.combat-arena .fate-stage .etch-person .etch-intent{
+ position:relative!important;top:auto!important;inset:auto!important;max-width:100%!important;
+ min-height:0!important;width:100%!important;margin:1px 0!important;padding:2px!important;
+ border:1px solid #c59e6a85;font:700 8px/1.18 system-ui!important;
+ border-radius:4px;white-space:normal!important;overflow-wrap:anywhere
+}
+.combat-arena .fate-stage .fate-ground-shadow{height:10px;bottom:28px}
+.combat-arena .fate-stage .fate-riser.rear{top:46%!important;left:31%!important;height:8px!important;opacity:.58}
+.combat-arena .fate-stage .fate-riser.rear:after{height:200px!important;opacity:.28!important}
+.combat-arena .fate-stage .fate-riser.front{bottom:4%!important;left:29%!important;height:8px!important;opacity:.58}
+.combat-arena .fate-stage .etch-groundline{height:16px;opacity:.6}
+.combat-dock{
+ min-height:0;max-height:min(50dvh,368px);display:flex;flex-direction:column;
+ padding:8px 8px max(8px,env(safe-area-inset-bottom));
+ background:linear-gradient(180deg,#232232 0%,#121b29 12%,#101521 100%);
+ border-top:2px solid #cda578;
+ box-shadow:0 -10px 30px #000d,inset 0 1px #ffedc748;
+ overflow:hidden;gap:5px
+}
+.combat-dock .dock-topline{display:flex;align-items:center;gap:7px;min-height:41px}
+.combat-dock .fate-sp-tray{
+ margin:0!important;flex:1 1 auto;min-height:36px;padding:3px 6px!important;gap:7px!important;
+ justify-content:flex-start;font-size:10px;border-color:#ae906881
+}
+.combat-dock .fate-sp-tray strong{font-size:9px!important;letter-spacing:0!important}
+.combat-dock .fate-sp-tray b{font-size:12px}
+.combat-dock .fate-sp-points{gap:5px}
+.combat-dock .fate-sp-points span{width:12px!important;height:12px!important;transform:rotate(45deg)}
+.combat-dock .dock-ult-wrap{display:flex;align-items:center;gap:3px;flex:0 0 auto}
+.combat-dock .dock-ult-meter{width:4px;height:34px;background:#44344c;border-radius:5px;
+ display:flex;align-items:flex-end;overflow:hidden}
+.combat-dock .dock-ult-fill{display:block;background:linear-gradient(#f0c794,#9e6de0);height:100%;
+ transform:rotate(180deg);border-radius:5px}
+.combat-dock .dock-ultimate{
+ border:1px solid #b58b8d;border-radius:9px;padding:4px 7px;
+ display:flex;flex-direction:column;align-items:center;justify-content:center;
+ min-width:80px;min-height:36px;background:linear-gradient(#483455,#22233b);
+ color:#e5c9de;font:700 10px system-ui
+}
+.combat-dock .dock-ultimate.charged{color:#fff0c2;border-color:#f3d38d;
+ background:linear-gradient(#9d677a,#60395e);
+ box-shadow:0 0 10px #9c70bf8a;animation:dock-pulse 1.7s ease-in-out infinite alternate}
+.combat-dock .dock-ultimate:disabled{opacity:.63}
+.combat-dock .dock-ultimate b{font-size:10px}
+.combat-dock .dock-target-strip{
+ display:flex;gap:5px;align-items:center;overflow-x:auto;scrollbar-width:none;
+ min-height:38px;padding:2px 0;touch-action:pan-x;flex-shrink:0
+}
+.combat-dock .dock-target-title{font:700 9px system-ui;letter-spacing:.7px;flex-shrink:0;color:#d6ba8b}
+.combat-dock .dock-target{background:#263041;border:1px solid #836e61;border-radius:7px;
+ color:#e4d9c8;display:flex;flex-direction:column;gap:2px;
+ padding:3px 8px;min-width:90px;max-width:132px;min-height:34px;flex:1 0 auto;
+ text-align:left}
+.combat-dock .dock-target strong{font:700 9px/1.1 system-ui;white-space:nowrap;
+ overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.combat-dock .dock-target small{font:8px system-ui;color:#dcac9b}
+.combat-dock .dock-target.active{border-color:#f3d08d;background:#4c3d3e;box-shadow:inset 0 0 7px #e8b47b4f}
+.combat-dock .dock-target.dead{opacity:.32}
+.combat-dock .dock-actions{display:flex!important;align-items:center;gap:7px;margin:0!important;
+ min-height:40px!important;flex-shrink:0}
+.combat-dock .dock-actions .fate-basic{flex:1 1 auto;min-height:41px!important;
+ padding:4px 9px!important;align-items:center!important;text-align:center!important;
+ border-radius:8px}
+.combat-dock .dock-actions .fate-basic strong{font-size:12px}
+.combat-dock .dock-actions .fate-basic span{font-size:9px}
+.combat-dock .dock-actions .etch-hint{display:none!important}
+.combat-dock .dock-actions .etch-btn{min-height:40px!important;padding:5px!important;flex:1 1 auto}
+.combat-dock .dock-cards-title{margin:1px 0 0!important;font-size:10px!important;line-height:1}
+.combat-dock .dock-cards-title small{display:none}
+.combat-dock .dock-scroll{overflow:hidden;min-height:0;flex:1 1 auto}
+.combat-dock .dock-hidden-metrics{display:none}
+.combat-dock .etch-hand-shell{height:100%;min-height:0!important;max-height:none!important;width:100%;
+ overflow-x:auto!important;overflow-y:hidden!important;scrollbar-width:thin;scrollbar-color:#84695b transparent;
+ padding:2px 0 8px!important;overscroll-behavior-x:contain;touch-action:pan-x}
+.combat-dock .etch-hand{
+ display:flex!important;grid-template-columns:none!important;flex-wrap:nowrap!important;
+ align-items:stretch!important;gap:8px!important;width:max-content!important;min-width:100%;
+ height:100%!important;padding:0 3px 2px!important
+}
+.combat-dock .etch-card.fate-card{
+ height:100%!important;min-height:0!important;max-height:100%!important;
+ flex:0 0 clamp(112px,34vw,155px)!important;width:clamp(112px,34vw,155px)!important;
+ padding:6px!important;margin:0!important;gap:1px;overflow:hidden!important
+}
+.combat-dock .etch-card.fate-card .fate-card-top{min-height:29px!important;margin:0 0 3px!important;gap:5px}
+.combat-dock .etch-card.fate-card .cost{width:24px!important;height:24px!important;flex-basis:24px!important;font-size:13px}
+.combat-dock .etch-card.fate-card .card-title{font-size:11px!important;line-height:1.1}
+.combat-dock .etch-card.fate-card .card-art{height:clamp(37px,8.5dvh,76px)!important;flex:none!important;
+ margin:0 0 3px!important}
+.combat-dock .etch-card.fate-card .card-desc{
+ font-size:10px!important;line-height:1.26!important;
+ padding:1px!important;margin:0!important;flex:1;overflow:visible!important;
+ overflow-wrap:anywhere;max-height:none!important
+}
+.combat-dock .etch-card.fate-card .card-type{font-size:7px!important;padding:3px 0 0!important;
+ min-height:14px!important;line-height:1.1}
+.combat-dock .etch-card.fate-card .card-type span:last-child{display:none}
+.combat-dock .dock-potions,.combat-dock .dock-log{display:none!important}
+@keyframes dock-pulse{from{box-shadow:0 0 8px #9c70bf80}to{box-shadow:0 0 16px #f5c888b8}}
+@media(max-height:730px){
+ .combat-dock{max-height:44dvh;padding-top:5px;gap:3px}
+ .combat-topbar{min-height:43px;padding:3px 8px}
+ .combat-topbar .fate-av-token:nth-child(n+5){display:none}
+ .combat-dock .dock-target-strip{min-height:32px}
+ .combat-dock .dock-cards-title{display:none}
+ .combat-dock .etch-card.fate-card .card-art{height:37px!important}
+ .combat-dock .fate-sp-tray{min-height:32px}
+ .combat-arena .fate-stage .etch-person.enemy img.figure.artbook-figure{height:9dvh!important}
+}
+@media(max-width:360px){
+ .combat-dock .dock-target{min-width:78px}
+ .combat-dock .fate-sp-tray strong{display:none}
+ .combat-topbar .fate-av-label{display:none}
+ .combat-dock .etch-card.fate-card{flex-basis:119px!important;width:119px!important}
+ .combat-dock .dock-ultimate{min-width:70px}
+}
+@media(prefers-reduced-motion:reduce){.combat-dock .dock-ultimate.charged{animation:none}}
