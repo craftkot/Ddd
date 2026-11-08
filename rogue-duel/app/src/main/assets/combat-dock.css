@@ -215,3 +215,13 @@ html.combat-fullscreen,html.combat-fullscreen body{
  .combat-dock .dock-ultimate{min-width:70px}
 }
 @media(prefers-reduced-motion:reduce){.combat-dock .dock-ultimate.charged{animation:none}}
+
+/* Reserve a predictable physical touch area; a flex:auto dock could collapse
+   the hand when the Android keyboard/viewport recalculates. */
+.combat-dock{height:clamp(246px,43dvh,360px);flex:0 0 auto}
+.combat-dock .dock-ult-fill{width:100%;transform:none}
+@media(max-height:730px){
+ .combat-dock{height:clamp(225px,45dvh,316px);max-height:none!important}
+ .combat-dock .etch-card.fate-card .card-desc{font-size:9px!important;line-height:1.18!important}
+ .combat-dock .etch-card.fate-card .card-type{display:none}
+}
