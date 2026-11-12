@@ -681,8 +681,10 @@ public final class MainActivity extends Activity {
 
         profileContent.addView(text("Параметры",16,WHITE,true));
         String[] labels={"Уведомления о сообщениях","Работа чата в фоне",
-                "Показывать текст уведомлений","Звук уведомлений"};
-        String[] keys={"notifications","background","preview","sound"};
+                "Показывать текст уведомлений","Звук уведомлений",
+                "Уведомления о звонках","Вибрация сообщений"};
+        String[] keys={"notifications","background","preview","sound",
+                "calls_notifications","vibration"};
         for(int i=0;i<keys.length;i++) {
             final int which=i;
             CheckBox box=new CheckBox(this);
@@ -1591,7 +1593,8 @@ public final class MainActivity extends Activity {
     private void settingsDialog() {
         String[] labels={"Уведомления о сообщениях","Работа чата в фоне",
                 "Показывать текст сообщений","Звук уведомлений"};
-        String[] keys={"notifications","background","preview","sound"};
+        String[] keys={"notifications","background","preview","sound",
+                "calls_notifications","vibration"};
         boolean[] checked=new boolean[keys.length];
         for(int i=0;i<keys.length;i++)
             checked[i]=options().getBoolean(keys[i],true);
