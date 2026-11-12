@@ -136,7 +136,7 @@ public final class MainActivity extends Activity {
             bound = true;
             if(!code.equals(service.currentRoom()))service.switchRoom(code,false);
             myId = service.myId();
-            service.setVisible(true);
+            service.setVisible(active && page==0);
             service.setUiListener(callbacks);
             if(ChatService.ACTION_CALL_ACCEPT.equals(getIntent().getAction())) {
                 getIntent().setAction(null);
@@ -454,6 +454,7 @@ public final class MainActivity extends Activity {
         profileScroll.setVisibility(page==2?View.VISIBLE:View.GONE);
         roomsScroll.setVisibility(page==3?View.VISIBLE:View.GONE);
         composer.setVisibility(page==0?View.VISIBLE:View.GONE);
+        if(service!=null)service.setVisible(active && page==0);
         if(page==1)refreshPeoplePage();
         if(page==2)refreshProfilePage();
         if(page==3)refreshRoomsPage();
@@ -1685,7 +1686,7 @@ public final class MainActivity extends Activity {
         super.onStart();
         active=true;
         if (profile().getString("nick","").trim().length()>0 && !bindRequested) launchChat(code,false);
-        if(service!=null) service.setVisible(true);
+        if(service!=null) service.setVisible(page==0);
         if(readyUpdate!=null&&readyUpdate.ready()&&
                 !readyUpdate.version.equals(lastPromptedUpdate))
             showUpdatePrompt(readyUpdate);
