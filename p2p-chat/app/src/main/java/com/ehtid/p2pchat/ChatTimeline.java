@@ -23,9 +23,13 @@ public final class ChatTimeline {
         today.add(Calendar.DAY_OF_YEAR,-1);
         if(sameDay(day,today))return "Вчера";
         SimpleDateFormat format=new SimpleDateFormat(
-                day.get(Calendar.YEAR)==Calendar.getInstance().get(Calendar.YEAR)
+                day.get(Calendar.YEAR)==yearOf(now)
                     ? "d MMMM" : "d MMMM yyyy",new Locale("ru"));
         return format.format(new Date(epoch));
+    }
+    private static int yearOf(long timestamp){
+        Calendar c=Calendar.getInstance();c.setTimeInMillis(timestamp);
+        return c.get(Calendar.YEAR);
     }
     private static boolean sameDay(Calendar a,Calendar b) {
         return a.get(Calendar.ERA)==b.get(Calendar.ERA)
