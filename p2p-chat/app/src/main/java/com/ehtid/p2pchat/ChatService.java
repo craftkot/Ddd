@@ -15,6 +15,7 @@ import java.util.Map;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.pm.ServiceInfo;
 import android.os.Binder;
 import android.os.Build;
 import android.os.IBinder;
@@ -48,6 +49,7 @@ public final class ChatService extends Service implements InternetEngine.Listene
     private List<InternetEngine.Member> members = new ArrayList<>();
     private boolean visible = false;
     private boolean foreground = false;
+    private boolean microphoneForeground = false;
     private String lastManualCode="";
     private String lastManualKind="";
     private final Map<String,List<String>> notificationLines=new LinkedHashMap<>();
@@ -65,6 +67,7 @@ public final class ChatService extends Service implements InternetEngine.Listene
                 if(current!=null)current.sendCallSignal(packet);
             }
             @Override public void changed(String phase,String person){
+                if("idle".equals(phase))demoteCallForeground();
                 updateCallNotification(phase,person);
                 if(ui!=null)ui.onCallState(phase,person);
             }
@@ -155,14 +158,64 @@ public final class ChatService extends Service implements InternetEngine.Listene
         if(voiceCalls!=null&&engine!=null&&!memberId.equals(engine.myId()))
             voiceCalls.start(memberId,nickname);
     }
-    public void answerCall(){if(voiceCalls!=null)voiceCalls.accept();}
+    public void answerCall(){
+        if(voiceCalls!=null && voiceCalls.isRinging()){
+            if(promoteCallForeground())voiceCalls.accept();
+            else voiceCalls.decline();
+        }
+    }
     public void declineCall(){if(voiceCalls!=null)voiceCalls.decline();}
     public void endCall(){if(voiceCalls!=null)voiceCalls.end();}
     public boolean hasIncomingCall(){return voiceCalls!=null&&voiceCalls.isRinging();}
     public String callPhase(){return voiceCalls==null?"idle":voiceCalls.phase();}
     public String callPeerName(){return voiceCalls==null?"":voiceCalls.peerName();}
     @Override public void onCallSignal(JSONObject packet){
-        if(voiceCalls!=null)voiceCalls.receive(packet);
+        if(voiceCalls!=null){
+            if("accept".equals(packet.optString("action")) &&
+                    !promoteCallForeground()){
+                voiceCalls.end();return;
+            }
+            voiceCalls.receive(packet);
+        }
+    }
+    private boolean promoteCallForeground(){
+        if(Build.VERSION.SDK_INT>=23 &&
+                checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED)
+            return false;
+        try {
+            if(Build.VERSION.SDK_INT>=34){
+                startForeground(1100,buildOngoing(),
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING |
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
+            }else if(Build.VERSION.SDK_INT>=29){
+                startForeground(1100,buildOngoing(),
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING |
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
+            }else startForeground(1100,buildOngoing());
+            foreground=true;microphoneForeground=true;
+            return true;
+        }catch(RuntimeException ex){
+            status="Микрофон заблокирован Android: открой EHTID Chat";
+            if(ui!=null)ui.onStatus(status);
+            return false;
+        }
+    }
+    private void demoteCallForeground(){
+        if(!microphoneForeground)return;
+        microphoneForeground=false;
+        boolean wanted=getSharedPreferences("ui_settings",MODE_PRIVATE)
+                .getBoolean("background",true);
+        if(!wanted){
+            if(Build.VERSION.SDK_INT>=24)stopForeground(STOP_FOREGROUND_REMOVE);
+            else stopForeground(true);
+            foreground=false;
+        }else{
+            try {
+                if(Build.VERSION.SDK_INT>=29)
+                    startForeground(1100,buildOngoing(),ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING);
+                else startForeground(1100,buildOngoing());
+            }catch(RuntimeException ignored){}
+        }
     }
 
     public void send(String text) {
@@ -205,6 +258,7 @@ public final class ChatService extends Service implements InternetEngine.Listene
     public void refreshSettings() {
         SharedPreferences p = getSharedPreferences("ui_settings", MODE_PRIVATE);
         boolean background = p.getBoolean("background", true);
+        if (microphoneForeground)return;
         if (background && !foreground) {
             try {
                 startForeground(1100, buildOngoing());
@@ -324,6 +378,7 @@ public final class ChatService extends Service implements InternetEngine.Listene
         NotificationManager nm=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
         if(nm==null)return;
         if("idle".equals(phase)){nm.cancel(CALL_NOTIFICATION_ID);return;}
+        if(!getSharedPreferences("ui_settings",MODE_PRIVATE).getBoolean("calls_notifications",true))return;
         if(Build.VERSION.SDK_INT>=33 &&
                 checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)return;
         boolean incoming="incoming".equals(phase);
