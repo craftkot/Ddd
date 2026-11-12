@@ -88,6 +88,8 @@ public final class MainActivity extends Activity {
     private MediaPlayer voicePlayer;
     private AlertDialog incomingCallDialog;
     private String lastCallPhase="idle";
+    private InternetEngine.Member pendingCallMember;
+    private boolean pendingAnswerCall;
     private int page=0;
     private SavedRooms savedRooms;
     private ReleaseUpdater.Result readyUpdate;
@@ -138,7 +140,7 @@ public final class MainActivity extends Activity {
             service.setUiListener(callbacks);
             if(ChatService.ACTION_CALL_ACCEPT.equals(getIntent().getAction())) {
                 getIntent().setAction(null);
-                service.answerCall();
+                requestCallPermission(null,true);
             }
             status.setText("● Служба чата подключена");
         }
@@ -503,7 +505,7 @@ public final class MainActivity extends Activity {
                 clp.topMargin=dp(7);
                 card.addView(call,clp);
                 call.setOnClickListener(v->{
-                    if(service!=null)service.callMember(m.id,m.name);
+                    requestCallPermission(m,false);
                 });
             }
         }
@@ -744,7 +746,7 @@ public final class MainActivity extends Activity {
         setIntent(intent);
         if(intent!=null&&ChatService.ACTION_CALL_ACCEPT.equals(intent.getAction())){
             intent.setAction(null);
-            if(service!=null)service.answerCall();
+            requestCallPermission(null,true);
         }
         if(intent!=null&&intent.getBooleanExtra("ehtid_show_update",false)) {
             intent.removeExtra("ehtid_show_update");
@@ -973,6 +975,12 @@ public final class MainActivity extends Activity {
         if(request==RECORD_PERMISSION&&grants.length>0&&grants[0]==PackageManager.PERMISSION_GRANTED)
             startRecording();
         else if(request==RECORD_PERMISSION)status.setText("● Нет разрешения на микрофон");
+        if(request==205){
+            if(grants.length>0&&grants[0]==PackageManager.PERMISSION_GRANTED)
+                requestCallPermission(pendingCallMember,pendingAnswerCall);
+            else status.setText("● Для звонков требуется разрешение микрофона");
+            pendingCallMember=null;pendingAnswerCall=false;
+        }
     }
 
     @Override public void onBackPressed(){
@@ -1525,6 +1533,19 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void requestCallPermission(InternetEngine.Member peer,boolean answer) {
+        if(service==null){status.setText("● Нет подключения к чату");return;}
+        if(Build.VERSION.SDK_INT>=23 &&
+                checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
+            pendingCallMember=peer;
+            pendingAnswerCall=answer;
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},205);
+            return;
+        }
+        if(answer)service.answerCall();
+        else if(peer!=null)service.callMember(peer.id,peer.name);
+    }
+
     private void showCallStatus(String phase,String nickname){
         if(!phase.equals(lastCallPhase)) {
             lastCallPhase=phase;
@@ -1537,7 +1558,7 @@ public final class MainActivity extends Activity {
                             if(service!=null)service.declineCall();
                         })
                         .setPositiveButton("Ответить",(d,w)->{
-                            if(service!=null)service.answerCall();
+                            requestCallPermission(null,true);
                         }).create();
                 incomingCallDialog.show();
             }
@@ -1554,7 +1575,7 @@ public final class MainActivity extends Activity {
         if("incoming".equals(phase)) {
             new AlertDialog.Builder(this).setTitle("Входящий звонок")
                     .setMessage(service.callPeerName())
-                    .setPositiveButton("Ответить",(d,w)->service.answerCall())
+                    .setPositiveButton("Ответить",(d,w)->requestCallPermission(null,true))
                     .setNegativeButton("Отклонить",(d,w)->service.declineCall()).show();
         }else if(!"idle".equals(phase)) {
             new AlertDialog.Builder(this).setTitle("Голосовой звонок")
