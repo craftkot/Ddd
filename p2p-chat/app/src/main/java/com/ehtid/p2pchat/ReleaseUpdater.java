@@ -91,7 +91,8 @@ public final class ReleaseUpdater {
             Context app=context.getApplicationContext();
             SharedPreferences prefs=app.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
             Result ready=prepared(app);
-            if(ready!=null)return ready;
+            // Manual checks must still discover a newer release than a staged APK.
+            if(ready!=null && !force)return ready;
             if(!prefs.getBoolean("automatic",true)&&!force)
                 return result("disabled","",null,"Автообновление отключено");
             long now=System.currentTimeMillis();
@@ -99,9 +100,11 @@ public final class ReleaseUpdater {
                 return result("skipped","",null,"Следующая проверка позднее");
 
             Candidate candidate=lookupNewest(app);
-            // Mark the attempt only after a successful GitHub API response.
-            prefs.edit().putLong("checked",now).apply();
-            if(candidate==null)return result("current","",null,"Установлена актуальная версия");
+            if(candidate==null){
+                // GitHub has no newer eligible release; cache a successful lookup.
+                prefs.edit().putLong("checked",now).apply();
+                return result("current","",null,"Установлена актуальная версия");
+            }
 
             File dir=new File(app.getFilesDir(),"updates");
             if(!dir.exists()&&!dir.mkdirs())
@@ -110,6 +113,7 @@ public final class ReleaseUpdater {
             if(target.isFile()) {
                 if(verifyArchive(app,target,candidate.sha256)){
                     saveReady(prefs,candidate.version,target,candidate.sha256);
+                    prefs.edit().putLong("checked",now).apply();
                     return result("ready",candidate.version,target,"Обновление скачано и проверено");
                 }
                 if(!target.delete())throw new java.io.IOException("Повреждённый APK не удалён");
@@ -125,6 +129,8 @@ public final class ReleaseUpdater {
             } finally {if(temp.exists())temp.delete();}
 
             saveReady(prefs,candidate.version,target,candidate.sha256);
+            // Failed or interrupted downloads must not block the next attempt.
+            prefs.edit().putLong("checked",now).apply();
             return result("ready",candidate.version,target,
                     "Обновление готово. Для установки требуется подтверждение Android.");
         }
