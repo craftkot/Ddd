@@ -73,6 +73,8 @@ public final class MainActivity extends Activity {
     private EditText input, joinInput;
     private TextView status, codeLabel, codePeek, pingHeader, profileLabel, membersLabel, homeServerLabel;
     private final ImagePreviews imagePreviews=new ImagePreviews();
+    private final SquarePreviews squarePreviews=new SquarePreviews();
+    private final List<SquareSlot> squareSlots=new ArrayList<>();
     private final List<PreviewSlot> previewSlots=new ArrayList<>();
     private boolean previewRefreshQueued;
     private final Set<String> pendingTranscriptions=new HashSet<>();
@@ -1044,6 +1046,7 @@ public final class MainActivity extends Activity {
         final int oldFeedHeight=feed.getHeight(),oldY=scroll.getScrollY();
         expandingHistory=false;
         previewSlots.clear();
+        squareSlots.clear();
         feed.removeAllViews();
         if(allMessages>messages.size() && historyViewLimit<5000){
             TextView older=button("↑ Загрузить ранние сообщения ("+
@@ -1156,6 +1159,8 @@ public final class MainActivity extends Activity {
                         bubble.addView(tile,sqLp);
                         tile.setContentDescription("Квадратное видеосообщение · воспроизвести");
                         tile.setOnClickListener(v->openMedia(media));
+                        if(size<=3*1024*1024)
+                            squareSlots.add(new SquareSlot(code,media,poster));
                     } else {
                         TextView open=labeledButton("voice".equals(kind)?"Воспроизвести":"Открыть файл",
                                 "voice".equals(kind)?R.drawable.ic_ehtid_play:R.drawable.ic_ehtid_attach,ACCENT,12);
@@ -1205,6 +1210,15 @@ public final class MainActivity extends Activity {
         });
     }
 
+    private static final class SquareSlot {
+        final String room;
+        final JSONObject media;
+        final ImageView poster;
+        boolean started;
+        SquareSlot(String room,JSONObject media,ImageView poster){
+            this.room=room;this.media=media;this.poster=poster;
+        }
+    }
     private static final class PreviewSlot {
         final String room;
         final JSONObject media;
@@ -1222,6 +1236,16 @@ public final class MainActivity extends Activity {
             previewRefreshQueued=false;
             if(page!=0)return;
             Rect visible=new Rect();
+            for(SquareSlot slot:squareSlots){
+                if(slot.started||!slot.room.equals(code)||
+                        !slot.poster.getGlobalVisibleRect(visible)||
+                        visible.width()<32||visible.height()<32)continue;
+                slot.started=true;
+                squarePreviews.load(getApplicationContext(),slot.room,slot.media,bmp->{
+                    if(bmp!=null&&slot.room.equals(code)&&slot.poster.isAttachedToWindow())
+                        slot.poster.setImageBitmap(bmp);
+                });
+            }
             for(PreviewSlot slot:previewSlots) {
                 if(slot.started || !slot.room.equals(code) ||
                         !slot.image.getGlobalVisibleRect(visible) ||
@@ -1674,6 +1698,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onDestroy() {
         imagePreviews.close();
+        squarePreviews.close();
         if(recorder!=null)stopRecording(false);
         if(voicePlayer!=null) {
             try {voicePlayer.release();} catch(Exception ignored){}
