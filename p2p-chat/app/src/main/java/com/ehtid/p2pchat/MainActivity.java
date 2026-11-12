@@ -749,7 +749,7 @@ public final class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        if(intent!=null&&ChatService.ACTION_CALL_ACCEPT.equals(intent.getAction())){
+        if(intent!=null&&ChatService.ACTION_CALL_ACCEPT.equals(intent.getAction()) && service!=null){
             intent.setAction(null);
             requestCallPermission(null,true);
         }
