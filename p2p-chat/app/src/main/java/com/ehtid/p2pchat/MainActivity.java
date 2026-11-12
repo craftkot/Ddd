@@ -96,6 +96,9 @@ public final class MainActivity extends Activity {
     private SavedRooms savedRooms;
     private ReleaseUpdater.Result readyUpdate;
     private String lastPromptedUpdate="";
+    private boolean updateCheckRunning;
+    private TextView updateProgressLabel;
+    private String updateProgress="";
     private int historyViewLimit=300;
     private boolean expandingHistory=false;
     private List<JSONObject> visibleSnapshot=new ArrayList<>();
@@ -650,6 +653,11 @@ public final class MainActivity extends Activity {
         profileContent.addView(text("Версия: "+BuildConfig.VERSION_NAME+
                 " · сохранённые комнаты и история останутся после обновления",
                 12,MUTED,false));
+        updateProgressLabel=text(updateProgress.isEmpty()?
+                "Проверка GitHub: обновления ищутся при запуске и в фоне":
+                updateProgress,12,MUTED,false);
+        updateProgressLabel.setPadding(0,dp(8),0,dp(8));
+        profileContent.addView(updateProgressLabel);
         CheckBox updateMode=new CheckBox(this);
         updateMode.setText("Автоматически загружать APK (≈50 МБ, включая мобильную сеть)");
         updateMode.setTextColor(WHITE);
@@ -658,16 +666,17 @@ public final class MainActivity extends Activity {
         updateMode.setOnCheckedChangeListener((v,checked)->{
             getSharedPreferences("ehtid_updater",MODE_PRIVATE).edit()
                     .putBoolean("automatic",checked).apply();
-            if(checked) {
-                UpdateCheckWorker.schedule(this);
-                checkForUpdates(false);
-            }
+            UpdateCheckWorker.schedule(this);
+            if(checked)checkForUpdates(false);
         });
         profileContent.addView(updateMode);
         TextView updateButton=button("Проверить новые версии",PANEL,14);
         LinearLayout.LayoutParams updateLp=new LinearLayout.LayoutParams(-1,dp(44));
         updateLp.topMargin=dp(8);
         profileContent.addView(updateButton,updateLp);
+        updateButton.setText(updateCheckRunning?"Проверка / загрузка…":"Проверить новые версии");
+        updateButton.setEnabled(!updateCheckRunning);
+        updateButton.setAlpha(updateCheckRunning?0.6f:1f);
         updateButton.setOnClickListener(v->checkForUpdates(true));
         if(readyUpdate!=null&&readyUpdate.ready()) {
             TextView install=button("Установить EHTID v"+readyUpdate.version,ACCENT,14);
@@ -709,25 +718,63 @@ public final class MainActivity extends Activity {
                 12,MUTED,false));
     }
 
+    private void setUpdateProgress(String message) {
+        updateProgress=message;
+        if(updateProgressLabel!=null)updateProgressLabel.setText(message);
+    }
+
+    private boolean dismissedUpdate(String version) {
+        return version.equals(getSharedPreferences("ehtid_updater",MODE_PRIVATE)
+                .getString("dismissed_version",""));
+    }
+
     private void checkForUpdates(boolean manual) {
+        if(updateCheckRunning) {
+            if(manual)Toast.makeText(this,"Проверка уже выполняется",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+        updateCheckRunning=true;
+        setUpdateProgress("Соединяемся с GitHub…");
         if(manual&&status!=null)status.setText("● Проверяю обновления GitHub…");
+        if(page==2)refreshProfilePage();
+        final int[] lastPercent={-1};
         ReleaseUpdater.checkAsync(this,manual,result->{
+            updateCheckRunning=false;
             if(isFinishing()||isDestroyed())return;
-            if(result.ready()){
+            String message;
+            if(result.ready()) {
                 readyUpdate=result;
-                if(status!=null)status.setText("● EHTID v"+result.version+
-                        " загружен. Требуется подтверждение установки.");
-                if(page==2)refreshProfilePage();
-                if(active&&!result.version.equals(lastPromptedUpdate))
-                    showUpdatePrompt(result);
-            } else if(manual) {
-                String message="current".equals(result.status)?"Уже установлена актуальная версия":
-                        result.detail==null?result.status:result.detail;
+                message="EHTID v"+result.version+" скачан и проверен";
                 if(status!=null)status.setText("● "+message);
-                new AlertDialog.Builder(this).setTitle("Обновления EHTID")
-                        .setMessage(message)
-                        .setPositiveButton("ОК",null).show();
+                if(page==2)refreshProfilePage();
+                if(active && (manual || (!dismissedUpdate(result.version) &&
+                        !result.version.equals(lastPromptedUpdate))))
+                    showUpdatePrompt(result);
+            } else {
+                readyUpdate=null;
+                message="current".equals(result.status)?"Установлена актуальная версия":
+                        "disabled".equals(result.status)?"Автообновление отключено":
+                        "skipped".equals(result.status)?"Следующая фоновая проверка по расписанию":
+                        result.detail==null?result.status:result.detail;
+                if(manual) {
+                    if(status!=null)status.setText("● "+message);
+                    new AlertDialog.Builder(this).setTitle("Обновления EHTID")
+                            .setMessage(message).setPositiveButton("ОК",null).show();
+                }
             }
+            setUpdateProgress(message);
+            if(page==2)refreshProfilePage();
+        },(received,total)->{
+            int percent=total>0?(int)Math.min(100,received*100/total):0;
+            if(lastPercent[0]==percent)return;
+            lastPercent[0]=percent;
+            runOnUiThread(()->{
+                if(isFinishing()||isDestroyed())return;
+                String progress="Скачивание APK: "+percent+"%";
+                setUpdateProgress(progress);
+                if(manual&&status!=null)status.setText("● "+progress);
+            });
         });
     }
 
@@ -740,7 +787,9 @@ public final class MainActivity extends Activity {
                         "пакету и постоянной подписи EHTID. Установка поверх "+
                         "текущей версии сохраняет чаты, список комнат и настройки. "+
                         "Android попросит подтвердить установку.")
-                .setNegativeButton("Позже",null)
+                .setNegativeButton("Позже",(d,w)->getSharedPreferences(
+                        "ehtid_updater",MODE_PRIVATE).edit()
+                        .putString("dismissed_version",ready.version).apply())
                 .setPositiveButton("Установить",(dialog,which)->
                         ReleaseUpdater.requestInstallation(this,ready))
                 .show();
@@ -1713,7 +1762,8 @@ public final class MainActivity extends Activity {
         if (profile().getString("nick","").trim().length()>0 && !bindRequested) launchChat(code,false);
         if(service!=null) service.setVisible(page==0);
         if(readyUpdate!=null&&readyUpdate.ready()&&
-                !readyUpdate.version.equals(lastPromptedUpdate))
+                !readyUpdate.version.equals(lastPromptedUpdate)&&
+                !dismissedUpdate(readyUpdate.version))
             showUpdatePrompt(readyUpdate);
     }
     @Override protected void onStop() {
