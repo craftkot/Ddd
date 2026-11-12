@@ -25,6 +25,11 @@ import org.json.JSONObject;
 public final class ChatService extends Service implements InternetEngine.Listener {
     public static final String ACTION_STOP = "com.ehtid.p2pchat.STOP";
     public static final String ACTION_REPLY = "com.ehtid.p2pchat.REPLY";
+    public static final String ACTION_CALL_DECLINE = "com.ehtid.p2pchat.CALL_DECLINE";
+    public static final String ACTION_CALL_ACCEPT = "com.ehtid.p2pchat.CALL_ACCEPT";
+    public static final String ACTION_CALL_END = "com.ehtid.p2pchat.CALL_END";
+    private static final int CALL_NOTIFICATION_ID=3777;
+    private static final String CHANNEL_CALL = "ehtid_calls_v1";
     public static final String ACTION_READ = "com.ehtid.p2pchat.READ";
     private static final String EXTRA_REPLY_TEXT = "ehtid_reply_text";
     private static final String GROUP_ROOMS = "ehtid_rooms";
@@ -35,6 +40,7 @@ public final class ChatService extends Service implements InternetEngine.Listene
     private static final String CHANNEL_SILENT = "chat_messages_silent";
     private final IBinder binder = new LocalBinder();
     private InternetEngine engine;
+    private VoiceCalls voiceCalls;
     private InternetEngine.Listener ui;
     private String room = "";
     private String status = "Подключение…";
@@ -53,6 +59,16 @@ public final class ChatService extends Service implements InternetEngine.Listene
     @Override public void onCreate() {
         super.onCreate();
         createChannels();
+        voiceCalls=new VoiceCalls(this,new VoiceCalls.Events(){
+            @Override public void send(JSONObject packet){
+                InternetEngine current=engine;
+                if(current!=null)current.sendCallSignal(packet);
+            }
+            @Override public void changed(String phase,String person){
+                updateCallNotification(phase,person);
+                if(ui!=null)ui.onCallState(phase,person);
+            }
+        });
     }
 
     public static Intent intent(android.content.Context context, String code, boolean join) {
@@ -63,6 +79,14 @@ public final class ChatService extends Service implements InternetEngine.Listene
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && ACTION_CALL_DECLINE.equals(intent.getAction())) {
+            if(voiceCalls!=null)voiceCalls.decline();
+            return START_STICKY;
+        }
+        if (intent != null && ACTION_CALL_END.equals(intent.getAction())) {
+            if(voiceCalls!=null)voiceCalls.end();
+            return START_STICKY;
+        }
         if (intent != null && ACTION_REPLY.equals(intent.getAction())) {
             String target=intent.getStringExtra(EXTRA_ROOM);
             Bundle result=RemoteInput.getResultsFromIntent(intent);
@@ -94,6 +118,7 @@ public final class ChatService extends Service implements InternetEngine.Listene
     public void switchRoom(String requested,boolean join) {
         if (requested == null || !requested.matches("[A-Z2-9]{16,32}") ||
                 (engine != null && room.equals(requested)))return;
+        if(voiceCalls!=null && voiceCalls.isActive())voiceCalls.end();
         InternetEngine old=engine;
         engine=null;
         if(old!=null)old.stop();
@@ -125,6 +150,20 @@ public final class ChatService extends Service implements InternetEngine.Listene
     }
     public String currentRoom() { return room; }
     public String myId() { return engine == null ? "" : engine.myId(); }
+
+    public void callMember(String memberId,String nickname) {
+        if(voiceCalls!=null&&engine!=null&&!memberId.equals(engine.myId()))
+            voiceCalls.start(memberId,nickname);
+    }
+    public void answerCall(){if(voiceCalls!=null)voiceCalls.accept();}
+    public void declineCall(){if(voiceCalls!=null)voiceCalls.decline();}
+    public void endCall(){if(voiceCalls!=null)voiceCalls.end();}
+    public boolean hasIncomingCall(){return voiceCalls!=null&&voiceCalls.isRinging();}
+    public String callPhase(){return voiceCalls==null?"idle":voiceCalls.phase();}
+    public String callPeerName(){return voiceCalls==null?"":voiceCalls.peerName();}
+    @Override public void onCallSignal(JSONObject packet){
+        if(voiceCalls!=null)voiceCalls.receive(packet);
+    }
 
     public void send(String text) {
         if (engine != null) engine.sendMessage(text);
@@ -190,6 +229,7 @@ public final class ChatService extends Service implements InternetEngine.Listene
         l.onMessages(new ArrayList<>(messages));
         l.onParticipants(new ArrayList<>(members));
         if (!lastManualCode.isEmpty()) l.onManualSignal(lastManualCode,lastManualKind);
+        if(voiceCalls!=null)l.onCallState(voiceCalls.phase(),voiceCalls.peerName());
     }
 
     @Override public void onStatus(String s) {
@@ -280,6 +320,44 @@ public final class ChatService extends Service implements InternetEngine.Listene
                 .cancel(notificationId(roomCode));
     }
 
+    private void updateCallNotification(String phase,String person) {
+        NotificationManager nm=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
+        if(nm==null)return;
+        if("idle".equals(phase)){nm.cancel(CALL_NOTIFICATION_ID);return;}
+        if(Build.VERSION.SDK_INT>=33 &&
+                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)return;
+        boolean incoming="incoming".equals(phase);
+        String title=incoming?"Входящий вызов EHTID":("connected".equals(phase)?
+                "Звонок EHTID":"Соединение EHTID");
+        Notification.Builder b=builder(CHANNEL_CALL)
+                .setSmallIcon(R.drawable.ic_chat_notification)
+                .setContentTitle(title)
+                .setContentText(person)
+                .setCategory(incoming?Notification.CATEGORY_CALL:Notification.CATEGORY_SERVICE)
+                .setOngoing(!incoming).setContentIntent(callOpenIntent(false));
+        if(incoming){
+            b.addAction(new Notification.Action.Builder(
+                    android.R.drawable.sym_action_call,"Ответить",
+                    callOpenIntent(true)).build());
+            b.addAction(new Notification.Action.Builder(
+                    android.R.drawable.ic_menu_close_clear_cancel,"Отклонить",
+                    serviceAction(ACTION_CALL_DECLINE,room,false)).build());
+        }else{
+            b.addAction(new Notification.Action.Builder(
+                    android.R.drawable.ic_menu_close_clear_cancel,"Завершить",
+                    serviceAction(ACTION_CALL_END,room,false)).build());
+        }
+        nm.notify(CALL_NOTIFICATION_ID,b.build());
+    }
+    private PendingIntent callOpenIntent(boolean accept) {
+        Intent i=new Intent(this,MainActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        if(accept)i.setAction(ACTION_CALL_ACCEPT);
+        int flags=PendingIntent.FLAG_UPDATE_CURRENT;
+        if(Build.VERSION.SDK_INT>=23)flags|=PendingIntent.FLAG_IMMUTABLE;
+        return PendingIntent.getActivity(this,accept?91:90,i,flags);
+    }
+
     private Notification buildOngoing() {
         return builder(CHANNEL_STATUS)
                 .setSmallIcon(R.drawable.ic_chat_notification)
@@ -321,9 +399,15 @@ public final class ChatService extends Service implements InternetEngine.Listene
         silent.setSound(null, null);
         silent.enableVibration(false);
         nm.createNotificationChannel(silent);
+        NotificationChannel calls=new NotificationChannel(CHANNEL_CALL,
+                "Звонки EHTID",NotificationManager.IMPORTANCE_HIGH);
+        calls.setDescription("Входящие и активные голосовые вызовы");
+        calls.enableVibration(true);
+        nm.createNotificationChannel(calls);
     }
 
     @Override public void onDestroy() {
+        if(voiceCalls!=null)voiceCalls.close();
         if (engine != null) engine.stop();
         engine = null;
         ui = null;
