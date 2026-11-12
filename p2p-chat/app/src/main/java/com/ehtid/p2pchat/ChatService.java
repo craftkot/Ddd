@@ -6,6 +6,12 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.app.RemoteInput;
+import android.content.Context;
+import android.os.Bundle;
+import android.text.TextUtils;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -18,6 +24,10 @@ import org.json.JSONObject;
 
 public final class ChatService extends Service implements InternetEngine.Listener {
     public static final String ACTION_STOP = "com.ehtid.p2pchat.STOP";
+    public static final String ACTION_REPLY = "com.ehtid.p2pchat.REPLY";
+    public static final String ACTION_READ = "com.ehtid.p2pchat.READ";
+    private static final String EXTRA_REPLY_TEXT = "ehtid_reply_text";
+    private static final String GROUP_ROOMS = "ehtid_rooms";
     public static final String EXTRA_ROOM = "room";
     public static final String EXTRA_JOIN = "join";
     private static final String CHANNEL_STATUS = "chat_connection";
@@ -34,6 +44,7 @@ public final class ChatService extends Service implements InternetEngine.Listene
     private boolean foreground = false;
     private String lastManualCode="";
     private String lastManualKind="";
+    private final Map<String,List<String>> notificationLines=new LinkedHashMap<>();
 
     public class LocalBinder extends Binder {
         public ChatService service() { return ChatService.this; }
@@ -52,6 +63,22 @@ public final class ChatService extends Service implements InternetEngine.Listene
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && ACTION_REPLY.equals(intent.getAction())) {
+            String target=intent.getStringExtra(EXTRA_ROOM);
+            Bundle result=RemoteInput.getResultsFromIntent(intent);
+            CharSequence answer=result==null?null:result.getCharSequence(EXTRA_REPLY_TEXT);
+            if (target!=null && target.equals(room) && answer!=null &&
+                    !answer.toString().trim().isEmpty() && answer.length()<=1000) {
+                send(answer.toString());
+                clearRoomNotifications(target);
+            }
+            return START_STICKY;
+        }
+        if (intent != null && ACTION_READ.equals(intent.getAction())) {
+            String target=intent.getStringExtra(EXTRA_ROOM);
+            if(target!=null && target.equals(room))clearRoomNotifications(target);
+            return START_STICKY;
+        }
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
             stopSelf();
             return START_NOT_STICKY;
@@ -93,6 +120,7 @@ public final class ChatService extends Service implements InternetEngine.Listene
     /** Foreground presence controls the roster only, not the socket/service. */
     public void setVisible(boolean on) {
         visible = on;
+        if(on && !room.isEmpty())clearRoomNotifications(room);
         if (engine != null) engine.setChatVisible(on);
     }
     public String currentRoom() { return room; }
@@ -187,24 +215,69 @@ public final class ChatService extends Service implements InternetEngine.Listene
     @Override public void onIncoming(String nickname, String message) {
         if (ui != null) ui.onIncoming(nickname, message);
         SharedPreferences options = getSharedPreferences("ui_settings", MODE_PRIVATE);
-        if (visible || !options.getBoolean("notifications", true)) return;
+        if (visible || !options.getBoolean("notifications", true) || room.isEmpty()) return;
         if (Build.VERSION.SDK_INT >= 33 &&
                 checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
             return;
-
-        boolean preview = options.getBoolean("preview", true);
-        Notification.Builder b = builder(options.getBoolean("sound", true) ? CHANNEL_MESSAGE : CHANNEL_SILENT)
+        String current=room;
+        boolean preview=options.getBoolean("preview",true);
+        boolean sound=options.getBoolean("sound",true);
+        boolean vibration=options.getBoolean("vibration",true);
+        List<String> recent=notificationLines.get(current);
+        if(recent==null) {
+            recent=new ArrayList<>();
+            notificationLines.put(current,recent);
+        }
+        String line=preview ? nickname+": "+message : "Новое сообщение";
+        recent.add(line.length()>200?line.substring(0,200):line);
+        while(recent.size()>5)recent.remove(0);
+        Notification.InboxStyle style=new Notification.InboxStyle()
+                .setBigContentTitle("EHTID • комната "+current.substring(0,Math.min(6,current.length()))+"…");
+        for(String item:recent)style.addLine(item);
+        int count=recent.size();
+        Notification.Builder b=builder(sound?CHANNEL_MESSAGE:CHANNEL_SILENT)
                 .setSmallIcon(R.drawable.ic_chat_notification)
-                .setContentTitle(preview ? nickname : "Новое сообщение в EHTID")
-                .setContentText(preview ? message : "Откройте приложение, чтобы прочитать")
-                .setContentIntent(openIntent())
-                .setAutoCancel(true);
-        if (Build.VERSION.SDK_INT < 26) {
-            if (options.getBoolean("sound", true)) b.setDefaults(Notification.DEFAULT_SOUND);
+                .setContentTitle(preview ? nickname : "EHTID • новое сообщение")
+                .setContentText(preview ? message : "Откройте чат, чтобы прочитать")
+                .setStyle(style).setGroup(GROUP_ROOMS)
+                .setNumber(count).setOnlyAlertOnce(false)
+                .setContentIntent(openIntent()).setAutoCancel(true);
+        if (Build.VERSION.SDK_INT >= 24) {
+            RemoteInput input=new RemoteInput.Builder(EXTRA_REPLY_TEXT)
+                    .setLabel("Ответить в EHTID").build();
+            b.addAction(new Notification.Action.Builder(
+                    android.R.drawable.ic_menu_send,"Ответить",
+                    serviceAction(ACTION_REPLY,current,true)).addRemoteInput(input).build());
+        }
+        b.addAction(new Notification.Action.Builder(
+                android.R.drawable.ic_menu_close_clear_cancel,"Прочитано",
+                serviceAction(ACTION_READ,current,false)).build());
+        if(Build.VERSION.SDK_INT<26) {
+            if(sound)b.setDefaults(Notification.DEFAULT_SOUND);
+            if(vibration)b.setVibrate(new long[]{0,130,70,100});
             b.setPriority(Notification.PRIORITY_HIGH);
         }
-        ((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).notify(
-                2000 + Math.abs((int)(System.nanoTime() % 50)), b.build());
+        ((NotificationManager)getSystemService(NOTIFICATION_SERVICE))
+                .notify(notificationId(current),b.build());
+    }
+
+    private int notificationId(String roomCode) {
+        return 2000+(roomCode.hashCode() & 0x7fffffff)%100000;
+    }
+    private PendingIntent serviceAction(String action,String roomCode,boolean mutable) {
+        Intent i=new Intent(this,ChatService.class).setAction(action)
+                .putExtra(EXTRA_ROOM,roomCode);
+        int flags=PendingIntent.FLAG_UPDATE_CURRENT;
+        if(Build.VERSION.SDK_INT>=31) flags |= mutable ?
+                PendingIntent.FLAG_MUTABLE:PendingIntent.FLAG_IMMUTABLE;
+        else if(Build.VERSION.SDK_INT>=23 && !mutable)flags|=PendingIntent.FLAG_IMMUTABLE;
+        int request=notificationId(roomCode)+(ACTION_REPLY.equals(action)?100000:200000);
+        return PendingIntent.getService(this,request,i,flags);
+    }
+    private void clearRoomNotifications(String roomCode) {
+        notificationLines.remove(roomCode);
+        ((NotificationManager)getSystemService(NOTIFICATION_SERVICE))
+                .cancel(notificationId(roomCode));
     }
 
     private Notification buildOngoing() {
