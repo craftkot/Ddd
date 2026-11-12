@@ -39,6 +39,8 @@ public final class ChatService extends Service implements InternetEngine.Listene
     private static final String CHANNEL_STATUS = "chat_connection";
     private static final String CHANNEL_MESSAGE = "chat_messages";
     private static final String CHANNEL_SILENT = "chat_messages_silent";
+    private static final String CHANNEL_SOUND_ONLY = "chat_messages_sound_only_v15";
+    private static final String CHANNEL_VIB_ONLY = "chat_messages_vibrate_only_v15";
     private final IBinder binder = new LocalBinder();
     private InternetEngine engine;
     private VoiceCalls voiceCalls;
@@ -317,6 +319,8 @@ public final class ChatService extends Service implements InternetEngine.Listene
         boolean preview=options.getBoolean("preview",true);
         boolean sound=options.getBoolean("sound",true);
         boolean vibration=options.getBoolean("vibration",true);
+        String channel=sound?(vibration?CHANNEL_MESSAGE:CHANNEL_SOUND_ONLY):
+                (vibration?CHANNEL_VIB_ONLY:CHANNEL_SILENT);
         List<String> recent=notificationLines.get(current);
         if(recent==null) {
             recent=new ArrayList<>();
@@ -329,7 +333,7 @@ public final class ChatService extends Service implements InternetEngine.Listene
                 .setBigContentTitle("EHTID • комната "+current.substring(0,Math.min(6,current.length()))+"…");
         for(String item:recent)style.addLine(item);
         int count=recent.size();
-        Notification.Builder b=builder(sound?CHANNEL_MESSAGE:CHANNEL_SILENT)
+        Notification.Builder b=builder(channel)
                 .setSmallIcon(R.drawable.ic_chat_notification)
                 .setContentTitle(preview ? nickname : "EHTID • новое сообщение")
                 .setContentText(preview ? message : "Откройте чат, чтобы прочитать")
@@ -378,7 +382,9 @@ public final class ChatService extends Service implements InternetEngine.Listene
         NotificationManager nm=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
         if(nm==null)return;
         if("idle".equals(phase)){nm.cancel(CALL_NOTIFICATION_ID);return;}
-        if(!getSharedPreferences("ui_settings",MODE_PRIVATE).getBoolean("calls_notifications",true))return;
+        SharedPreferences settings=getSharedPreferences("ui_settings",MODE_PRIVATE);
+        if(!settings.getBoolean("calls_notifications",true))return;
+        String displayed=settings.getBoolean("preview",true)?person:"Входящий вызов";
         if(Build.VERSION.SDK_INT>=33 &&
                 checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)return;
         boolean incoming="incoming".equals(phase);
@@ -387,7 +393,7 @@ public final class ChatService extends Service implements InternetEngine.Listene
         Notification.Builder b=builder(CHANNEL_CALL)
                 .setSmallIcon(R.drawable.ic_chat_notification)
                 .setContentTitle(title)
-                .setContentText(person)
+                .setContentText(displayed)
                 .setCategory(incoming?Notification.CATEGORY_CALL:Notification.CATEGORY_SERVICE)
                 .setOngoing(!incoming).setContentIntent(callOpenIntent(false));
         if(incoming){
@@ -454,6 +460,15 @@ public final class ChatService extends Service implements InternetEngine.Listene
         silent.setSound(null, null);
         silent.enableVibration(false);
         nm.createNotificationChannel(silent);
+        NotificationChannel soundOnly=new NotificationChannel(CHANNEL_SOUND_ONLY,
+                "Сообщения • звук без вибрации",NotificationManager.IMPORTANCE_HIGH);
+        soundOnly.enableVibration(false);
+        nm.createNotificationChannel(soundOnly);
+        NotificationChannel vibrationOnly=new NotificationChannel(CHANNEL_VIB_ONLY,
+                "Сообщения • только вибрация",NotificationManager.IMPORTANCE_HIGH);
+        vibrationOnly.setSound(null,null);
+        vibrationOnly.enableVibration(true);
+        nm.createNotificationChannel(vibrationOnly);
         NotificationChannel calls=new NotificationChannel(CHANNEL_CALL,
                 "Звонки EHTID",NotificationManager.IMPORTANCE_HIGH);
         calls.setDescription("Входящие и активные голосовые вызовы");
