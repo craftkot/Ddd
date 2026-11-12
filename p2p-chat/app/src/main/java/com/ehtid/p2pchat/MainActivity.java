@@ -25,6 +25,9 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.media.MediaRecorder;
 import android.media.MediaPlayer;
+import android.media.MediaMetadataRetriever;
+import android.provider.MediaStore;
+import android.widget.VideoView;
 import android.net.Uri;
 import android.provider.OpenableColumns;
 import android.database.Cursor;
@@ -83,6 +86,8 @@ public final class MainActivity extends Activity {
     private File recordingFile;
     private long recordStarted;
     private MediaPlayer voicePlayer;
+    private AlertDialog incomingCallDialog;
+    private String lastCallPhase="idle";
     private int page=0;
     private SavedRooms savedRooms;
     private ReleaseUpdater.Result readyUpdate;
@@ -90,7 +95,8 @@ public final class MainActivity extends Activity {
     private int historyViewLimit=300;
     private boolean expandingHistory=false;
     private List<JSONObject> visibleSnapshot=new ArrayList<>();
-    private static final int PICK_ATTACHMENT=201, PICK_WALLPAPER=202, RECORD_PERMISSION=203;
+    private static final int PICK_ATTACHMENT=201, PICK_WALLPAPER=202, RECORD_PERMISSION=203,
+            PICK_SQUARE=204;
     private ChatService service;
     private boolean bound;
     private boolean bindRequested;
@@ -118,6 +124,9 @@ public final class MainActivity extends Activity {
         }
         @Override public void onIncoming(String nick, String text) {}
         @Override public void onManualSignal(String token, String kind) {}
+        @Override public void onCallState(String phase,String nickname) {
+            showCallStatus(phase,nickname);
+        }
     };
     private final ServiceConnection conn = new ServiceConnection() {
         @Override public void onServiceConnected(ComponentName name, IBinder binder) {
@@ -127,6 +136,10 @@ public final class MainActivity extends Activity {
             myId = service.myId();
             service.setVisible(true);
             service.setUiListener(callbacks);
+            if(ChatService.ACTION_CALL_ACCEPT.equals(getIntent().getAction())) {
+                getIntent().setAction(null);
+                service.answerCall();
+            }
             status.setText("● Служба чата подключена");
         }
         @Override public void onServiceDisconnected(ComponentName name) {
@@ -189,6 +202,11 @@ public final class MainActivity extends Activity {
         brand.addView(codePeek);
         pingHeader=text("Cloudflare · измеряем задержку…",11,MUTED,false);
         brand.addView(pingHeader);
+        TextView callButton=iconButton(R.drawable.ic_ehtid_call,PANEL,"Голосовой звонок");
+        LinearLayout.LayoutParams callLp=new LinearLayout.LayoutParams(dp(46),dp(46));
+        callLp.rightMargin=dp(5);
+        heading.addView(callButton,callLp);
+        callButton.setOnClickListener(v->openCallControls());
         TextView roomsButton=iconButton(R.drawable.ic_ehtid_rooms,PANEL,"Список комнат");
         LinearLayout.LayoutParams roomButtonLp=new LinearLayout.LayoutParams(dp(46),dp(46));
         roomButtonLp.rightMargin=dp(5);
@@ -359,11 +377,16 @@ public final class MainActivity extends Activity {
         input.setMaxLines(4);
         TextView attach=iconButton(R.drawable.ic_ehtid_attach,PANEL,"Добавить вложение");
         composer.addView(attach,new LinearLayout.LayoutParams(dp(43),dp(46)));
-        attach.setOnClickListener(v->chooseAttachment());
+        attach.setOnClickListener(v->new AlertDialog.Builder(this)
+                .setTitle("Добавить в EHTID")
+                .setItems(new String[]{"Файл или фото","Квадратное видеосообщение"},(d,which)->{
+                    if(which==0)chooseAttachment();else chooseSquare();
+                }).show());
         composer.addView(input,new LinearLayout.LayoutParams(0,-2,1f));
         micButton = iconButton(R.drawable.ic_ehtid_mic,PANEL,"Записать голосовое сообщение");
         composer.addView(micButton,new LinearLayout.LayoutParams(dp(43),dp(46)));
         micButton.setOnClickListener(v->toggleRecording());
+        micButton.setOnLongClickListener(v->{chooseSquare();return true;});
         TextView send = iconButton(R.drawable.ic_ehtid_send,ACCENT,"Отправить сообщение");
         LinearLayout.LayoutParams sendLp=new LinearLayout.LayoutParams(dp(47),dp(46));
         sendLp.leftMargin=dp(4);
@@ -474,6 +497,15 @@ public final class MainActivity extends Activity {
             card.addView(latency);
             String device=m.id.length()>12?m.id.substring(0,12)+"…":m.id;
             card.addView(text("Устройство: "+device,12,MUTED,false));
+            if(!m.isMe && m.online){
+                TextView call=labeledButton("Позвонить",R.drawable.ic_ehtid_call,ACCENT,13);
+                LinearLayout.LayoutParams clp=new LinearLayout.LayoutParams(-1,dp(42));
+                clp.topMargin=dp(7);
+                card.addView(call,clp);
+                call.setOnClickListener(v->{
+                    if(service!=null)service.callMember(m.id,m.name);
+                });
+            }
         }
         if(currentMembers.isEmpty())
             peopleContent.addView(text("Участники ещё не обнаружены",13,MUTED,false));
@@ -710,6 +742,10 @@ public final class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        if(intent!=null&&ChatService.ACTION_CALL_ACCEPT.equals(intent.getAction())){
+            intent.setAction(null);
+            if(service!=null)service.answerCall();
+        }
         if(intent!=null&&intent.getBooleanExtra("ehtid_show_update",false)) {
             intent.removeExtra("ehtid_show_update");
             lastPromptedUpdate="";
@@ -757,6 +793,37 @@ public final class MainActivity extends Activity {
             wallpaper.setBackgroundColor(BG);
             if(status!=null)status.setText("● Ошибка открытия фона: "+error.getClass().getSimpleName());
         }
+    }
+
+    private void chooseSquare() {
+        Intent capture=new Intent(MediaStore.ACTION_VIDEO_CAPTURE);
+        capture.putExtra(MediaStore.EXTRA_DURATION_LIMIT,60);
+        capture.putExtra(MediaStore.EXTRA_SIZE_LIMIT,(long)MediaTransfer.MAX_FILE_BYTES);
+        capture.putExtra(MediaStore.EXTRA_VIDEO_QUALITY,1);
+        try{startActivityForResult(capture,PICK_SQUARE);}
+        catch(Exception e){status.setText("● Камера недоступна");}
+    }
+
+    private void uploadSquare(Uri uri) {
+        final String selectedRoom=code;
+        status.setText("● Проверяем квадратное видео…");
+        new Thread(()->{
+            try {
+                long duration=0;
+                MediaMetadataRetriever metadata=new MediaMetadataRetriever();
+                try{
+                    metadata.setDataSource(this,uri);
+                    String value=metadata.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+                    if(value!=null)duration=Long.parseLong(value);
+                }finally{metadata.release();}
+                if(duration<1 || duration>60000L)
+                    throw new IllegalArgumentException("Длительность должна быть 1–60 секунд");
+                byte[] bytes=MediaTransfer.readLimited(getContentResolver().openInputStream(uri));
+                sendFile(bytes,selectedRoom,"Квадрат.mp4","video/mp4","square",duration);
+            }catch(Exception e){
+                runOnUiThread(()->status.setText("● Квадрат: "+e.getMessage()));
+            }
+        },"EHTID-Square-Prepare").start();
     }
 
     private void chooseAttachment() {
@@ -898,6 +965,7 @@ public final class MainActivity extends Activity {
             applyWallpaper();
             refreshProfilePage();
         } else if(request==PICK_ATTACHMENT)uploadChosen(uri);
+        else if(request==PICK_SQUARE)uploadSquare(uri);
     }
 
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] grants){
@@ -1059,6 +1127,24 @@ public final class MainActivity extends Activity {
                         preview.setOnClickListener(v->openMedia(media));
                         if(size<=3*1024*1024)
                             previewSlots.add(new PreviewSlot(code,media,preview,hint));
+                    } else if("square".equals(kind)){
+                        FrameLayout tile=new FrameLayout(this);
+                        tile.setBackground(round(PANEL,20));
+                        ImageView poster=new ImageView(this);
+                        poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                        tile.addView(poster,new FrameLayout.LayoutParams(-1,-1));
+                        TextView play=text("▶",35,WHITE,true);
+                        play.setGravity(Gravity.CENTER);
+                        tile.addView(play,new FrameLayout.LayoutParams(-1,-1));
+                        TextView length=text((media.optLong("duration")/1000)+" сек",12,WHITE,true);
+                        FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(-2,-2,Gravity.BOTTOM|Gravity.RIGHT);
+                        lp.setMargins(dp(8),dp(8),dp(10),dp(10));
+                        tile.addView(length,lp);
+                        LinearLayout.LayoutParams sqLp=new LinearLayout.LayoutParams(dp(195),dp(195));
+                        sqLp.topMargin=dp(6);
+                        bubble.addView(tile,sqLp);
+                        tile.setContentDescription("Квадратное видеосообщение · воспроизвести");
+                        tile.setOnClickListener(v->openMedia(media));
                     } else {
                         TextView open=labeledButton("voice".equals(kind)?"Воспроизвести":"Открыть файл",
                                 "voice".equals(kind)?R.drawable.ic_ehtid_play:R.drawable.ic_ehtid_attach,ACCENT,12);
@@ -1188,12 +1274,28 @@ public final class MainActivity extends Activity {
                     status.setText("● Вложение готово");
                     if("voice".equals(kind))playVoice(local);
                     else if("image".equals(kind))showImage(expanded);
+                    else if("square".equals(kind))playSquare(local);
                     else openOtherFile(local,media.optString("mime","application/octet-stream"));
                 });
             } catch(Exception error){
                 runOnUiThread(()->status.setText("● Не удалось открыть файл: "+error.getMessage()));
             }
         },"EHTID-Download").start();
+    }
+
+    private void playSquare(File local) {
+        VideoView video=new VideoView(this);
+        video.setVideoPath(local.getAbsolutePath());
+        video.setOnPreparedListener(mp->{mp.setLooping(true);video.start();});
+        FrameLayout frame=new FrameLayout(this);
+        frame.setBackgroundColor(Color.BLACK);
+        frame.addView(video,new FrameLayout.LayoutParams(-1,dp(320)));
+        AlertDialog dialog=new AlertDialog.Builder(this)
+                .setTitle("Квадрат EHTID")
+                .setView(frame)
+                .setPositiveButton("Закрыть",null).create();
+        dialog.setOnDismissListener(d->video.stopPlayback());
+        dialog.show();
     }
 
     private void playVoice(File local) {
@@ -1420,6 +1522,48 @@ public final class MainActivity extends Activity {
             options().edit().putBoolean("asked_permission",true).apply();
             getWindow().getDecorView().postDelayed(() -> requestPermissions(
                     new String[]{Manifest.permission.POST_NOTIFICATIONS},101),500);
+        }
+    }
+
+    private void showCallStatus(String phase,String nickname){
+        if(!phase.equals(lastCallPhase)) {
+            lastCallPhase=phase;
+            if("incoming".equals(phase) && active && !isFinishing()) {
+                if(incomingCallDialog!=null)incomingCallDialog.dismiss();
+                incomingCallDialog=new AlertDialog.Builder(this)
+                        .setTitle("Входящий звонок EHTID")
+                        .setMessage("Звонит "+nickname)
+                        .setNegativeButton("Отклонить",(d,w)->{
+                            if(service!=null)service.declineCall();
+                        })
+                        .setPositiveButton("Ответить",(d,w)->{
+                            if(service!=null)service.answerCall();
+                        }).create();
+                incomingCallDialog.show();
+            }
+            if("idle".equals(phase) && incomingCallDialog!=null){
+                incomingCallDialog.dismiss();incomingCallDialog=null;
+            }
+        }
+        if(!"idle".equals(phase) && status!=null)
+            status.setText("● Звонок: "+nickname+" · "+phase);
+    }
+    private void openCallControls(){
+        if(service==null){status.setText("● Сначала подключитесь к комнате");return;}
+        String phase=service.callPhase();
+        if("incoming".equals(phase)) {
+            new AlertDialog.Builder(this).setTitle("Входящий звонок")
+                    .setMessage(service.callPeerName())
+                    .setPositiveButton("Ответить",(d,w)->service.answerCall())
+                    .setNegativeButton("Отклонить",(d,w)->service.declineCall()).show();
+        }else if(!"idle".equals(phase)) {
+            new AlertDialog.Builder(this).setTitle("Голосовой звонок")
+                    .setMessage(service.callPeerName()+" · "+phase)
+                    .setPositiveButton("Завершить",(d,w)->service.endCall())
+                    .setNegativeButton("Закрыть",null).show();
+        }else {
+            showPage(1);
+            Toast.makeText(this,"Выбери участника и нажми «Позвонить»",Toast.LENGTH_LONG).show();
         }
     }
 
