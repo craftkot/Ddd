@@ -10,6 +10,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
     <application
         android:label="EHTID Chat"
         android:icon="@drawable/ic_chat_logo"
@@ -33,7 +34,7 @@
             android:exported="false"
             android:theme="@style/EhtidTheme"/>
         <service android:name=".ChatService"
-            android:foregroundServiceType="remoteMessaging"
+            android:foregroundServiceType="remoteMessaging|microphone"
             android:exported="false"/>
         <activity android:name=".MainActivity"
             android:exported="true"
