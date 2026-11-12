@@ -51,6 +51,7 @@ public final class ReleaseUpdater {
         public boolean ready(){return "ready".equals(status);}
     }
     public interface Callback {void finished(Result result);}
+    public interface Progress {void changed(long received,long total);}
     private static Result result(String status,String version,File file,String detail){
         return new Result(status,version,file,detail);
     }
@@ -64,18 +65,28 @@ public final class ReleaseUpdater {
     private ReleaseUpdater(){}
 
     public static void checkAsync(Context context,boolean force,Callback callback) {
+        checkAsync(context,force,callback,null);
+    }
+    public static void checkAsync(Context context,boolean force,Callback callback,Progress progress) {
         Context app=context.getApplicationContext();
         BACKGROUND.execute(()->{
             Result res;
-            try { res=checkAndDownload(app,force); }
-            catch(Exception error){res=result("error","",null,error.getMessage());}
+            try { res=checkAndDownload(app,force,progress); }
+            catch(Exception error){
+                String reason=error.getMessage();
+                res=result("error","",null,
+                        reason==null || reason.isEmpty()?"Ошибка проверки GitHub":reason);
+            }
             final Result finished=res;
-            if(callback!=null) new android.os.Handler(android.os.Looper.getMainLooper())
+            if(callback!=null)new android.os.Handler(android.os.Looper.getMainLooper())
                     .post(()->callback.finished(finished));
         });
     }
 
     public static Result checkAndDownload(Context context,boolean force) throws Exception {
+        return checkAndDownload(context,force,null);
+    }
+    public static Result checkAndDownload(Context context,boolean force,Progress progress) throws Exception {
         synchronized(LOCK) {
             Context app=context.getApplicationContext();
             SharedPreferences prefs=app.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
@@ -106,7 +117,7 @@ public final class ReleaseUpdater {
             File temp=new File(dir,"ehtid-update.tmp.apk");
             if(temp.exists())temp.delete();
             try {
-                download(candidate,temp);
+                download(candidate,temp,progress);
                 if(!verifyArchive(app,temp,candidate.sha256))
                     throw new java.io.IOException("APK не прошёл проверку подписи, версии или SHA-256");
                 if(!temp.renameTo(target))
@@ -228,7 +239,7 @@ public final class ReleaseUpdater {
         throw new java.io.IOException("Слишком много перенаправлений GitHub");
     }
 
-    private static void download(Candidate candidate,File temp) throws Exception {
+    private static void download(Candidate candidate,File temp,Progress progress) throws Exception {
         HttpURLConnection c=redirected(candidate.url);
         try {
             if(c.getResponseCode()!=200)
@@ -243,6 +254,9 @@ public final class ReleaseUpdater {
                     if(total>candidate.size||total>MAX_APK)
                         throw new java.io.IOException("Размер файла больше указанного GitHub");
                     output.write(chunk,0,n);
+                    if(progress!=null && (total==candidate.size ||
+                            total/262144!=(total-n)/262144))
+                        progress.changed(total,candidate.size);
                 }
                 output.getFD().sync();
             }
@@ -307,23 +321,8 @@ public final class ReleaseUpdater {
 
     public static void requestInstallation(android.app.Activity activity,Result ready) {
         if(ready==null||!ready.ready())return;
-        Result fresh=prepared(activity);
-        if(fresh==null||!fresh.file.equals(ready.file))return;
-        if(Build.VERSION.SDK_INT>=26 && !activity.getPackageManager().canRequestPackageInstalls()){
-            Intent allow=new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                    Uri.parse("package:"+activity.getPackageName()));
-            activity.startActivity(allow);
-            return;
-        }
-        try {
-            Uri uri=FileProvider.getUriForFile(activity,APP_ID+".files",fresh.file);
-            Intent install=new Intent(Intent.ACTION_VIEW);
-            install.setDataAndType(uri,"application/vnd.android.package-archive");
-            install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            activity.startActivity(install);
-        }catch(Exception error){
-            android.widget.Toast.makeText(activity,"Установщик: "+error.getMessage(),
-                    android.widget.Toast.LENGTH_LONG).show();
-        }
+        // The gateway rechecks the staged APK on a worker thread and continues
+        // automatically after Android's unknown-app-source settings screen.
+        activity.startActivity(new Intent(activity,ReleaseInstallActivity.class));
     }
 }
