@@ -53,6 +53,7 @@ public final class InternetEngine {
         void onIncoming(String nickname, String message);
         void onManualSignal(String code, String kind);
         default void onCallSignal(JSONObject signal) {}
+        default void onCallState(String phase,String peerName) {}
     }
     private static final int MAX_VISIBLE_MESSAGES = 300;
     private static final long HISTORY_COOLDOWN_MS = RoomPolicy.HISTORY_COOLDOWN_MS;
@@ -599,7 +600,8 @@ public final class InternetEngine {
                 ||parts<1||parts>MediaTransfer.MAX_PARTS)return;
         String kind=media.optString("kind","file");
         String label="voice".equals(kind)?"🎤 Голосовое сообщение":
-                "image".equals(kind)?"🖼 Изображение":"📎 "+media.optString("name","Файл");
+                "image".equals(kind)?"🖼 Изображение":
+                "square".equals(kind)?"▣ Квадратное видео":"📎 "+media.optString("name","Файл");
         if(label.length()>1000)label=label.substring(0,1000);
         JSONObject msg=obj("id",UUID.randomUUID().toString());
         put(msg,"from",id);
