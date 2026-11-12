@@ -52,6 +52,7 @@ public final class InternetEngine {
         void onParticipants(List<Member> members);
         void onIncoming(String nickname, String message);
         void onManualSignal(String code, String kind);
+        default void onCallSignal(JSONObject signal) {}
     }
     private static final int MAX_VISIBLE_MESSAGES = 300;
     private static final long HISTORY_COOLDOWN_MS = RoomPolicy.HISTORY_COOLDOWN_MS;
@@ -381,6 +382,18 @@ public final class InternetEngine {
     }
 
     /** User-requested refresh; never blocks Android's main thread. */
+    public void sendCallSignal(JSONObject packet) {
+        if(stopped || packet==null || !packet.optString("to").matches("[a-zA-Z0-9-]{1,80}"))return;
+        if(!"call".equals(packet.optString("t")))return;
+        String action=packet.optString("action");
+        if(!("invite".equals(action)||"accept".equals(action)||"decline".equals(action)||
+                "hangup".equals(action)||"busy".equals(action)||"offer".equals(action)||
+                "answer".equals(action)||"ice".equals(action)))return;
+        String payload=packet.optString("sdp");
+        if(payload.length()>15000 || packet.toString().length()>19000)return;
+        signal(packet);
+    }
+
     public void refreshPings() {
         if(stopped)return;
         if(meshMode){
@@ -851,6 +864,10 @@ public final class InternetEngine {
                     break;
                 case "ice":
                     addIce(packet, from);
+                    break;
+                case "call":
+                    if(packet.optString("callId").matches("[a-f0-9-]{36}"))
+                        ui.post(()->{if(!stopped)listener.onCallSignal(packet);});
                     break;
                 case "msg":
                     JSONObject incoming = packet.optJSONObject("m");
