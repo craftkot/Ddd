@@ -989,7 +989,24 @@ public final class MainActivity extends Activity {
             welcome.setPadding(dp(16),dp(50),dp(16),dp(20));
             feed.addView(welcome);
         } else {
+            String lastDay=null;
             for (JSONObject m : messages) {
+                long when=m.optLong("at",System.currentTimeMillis());
+                String day=ChatTimeline.dayKey(when);
+                if(!day.equals(lastDay)){
+                    TextView divider=text(ChatTimeline.label(when,System.currentTimeMillis()),12,WHITE,true);
+                    divider.setGravity(Gravity.CENTER);
+                    divider.setPadding(dp(14),dp(6),dp(14),dp(6));
+                    divider.setBackground(round(PANEL,16));
+                    LinearLayout holder=new LinearLayout(this);
+                    holder.setGravity(Gravity.CENTER);
+                    LinearLayout.LayoutParams dateMargin=new LinearLayout.LayoutParams(-1,-2);
+                    dateMargin.topMargin=dp(8);
+                    dateMargin.bottomMargin=dp(14);
+                    feed.addView(holder,dateMargin);
+                    holder.addView(divider,new LinearLayout.LayoutParams(-2,-2));
+                    lastDay=day;
+                }
                 boolean own = myId.equals(m.optString("from")) ||
                         (myId.isEmpty() && m.optString("name").equals(profile().getString("nick","")));
                 LinearLayout row = new LinearLayout(this);
@@ -999,6 +1016,7 @@ public final class MainActivity extends Activity {
                 feed.addView(row,rp);
                 LinearLayout bubble = new LinearLayout(this);
                 bubble.setOrientation(LinearLayout.VERTICAL);
+                bubble.setMinimumWidth(dp(140));
                 bubble.setPadding(dp(12),dp(9),dp(12),dp(8));
                 bubble.setBackground(round(own?Color.rgb(77,55,123):SURFACE,18));
                 row.addView(bubble);
@@ -1072,8 +1090,15 @@ public final class MainActivity extends Activity {
                 if (own && "p2p".equals(delivery)) clockText += " · Передано P2P";
                 TextView time = text(clockText,10,
                         "pending".equals(delivery) ? Color.rgb(255,185,105) : MUTED,false);
-                time.setGravity(Gravity.RIGHT);
-                bubble.addView(time);
+                time.setGravity(Gravity.END);
+                time.setMinWidth(dp(116));
+                time.setMaxWidth(dp(290));
+                time.setPadding(dp(4),dp(4),dp(2),0);
+                // Keep metadata in its own measured row: short messages must not clip the clock.
+                LinearLayout metadata=new LinearLayout(this);
+                metadata.setGravity(Gravity.END);
+                metadata.addView(time,new LinearLayout.LayoutParams(-2,-2));
+                bubble.addView(metadata,new LinearLayout.LayoutParams(-1,-2));
             }
         }
         scroll.post(()->{
