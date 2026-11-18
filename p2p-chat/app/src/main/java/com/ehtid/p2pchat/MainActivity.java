@@ -74,6 +74,8 @@ public final class MainActivity extends Activity {
     private TextView status, codeLabel, codePeek, pingHeader, profileLabel, membersLabel, homeServerLabel;
     private final ImagePreviews imagePreviews=new ImagePreviews();
     private final SquarePreviews squarePreviews=new SquarePreviews();
+    private final GifPreviews gifPreviews=new GifPreviews();
+    private final List<GifSlot> gifSlots=new ArrayList<>();
     private final List<SquareSlot> squareSlots=new ArrayList<>();
     private final List<PreviewSlot> previewSlots=new ArrayList<>();
     private boolean previewRefreshQueued;
@@ -386,10 +388,19 @@ public final class MainActivity extends Activity {
         composer.addView(attach,new LinearLayout.LayoutParams(dp(43),dp(46)));
         attach.setOnClickListener(v->new AlertDialog.Builder(this)
                 .setTitle("Добавить в EHTID")
-                .setItems(new String[]{"Файл или фото","Квадратное видеосообщение"},(d,which)->{
-                    if(which==0)chooseAttachment();else chooseSquare();
+                .setItems(new String[]{"Файл или фото","GIF-поиск","Квадратное видеосообщение"},(d,which)->{
+                    if(which==0)chooseAttachment();
+                    else if(which==1)openGifPicker();
+                    else chooseSquare();
                 }).show());
         composer.addView(input,new LinearLayout.LayoutParams(0,-2,1f));
+        TextView gifButton=button("GIF",PANEL,11);
+        gifButton.setContentDescription("Искать GIF-анимации");
+        gifButton.setPadding(dp(7),dp(6),dp(7),dp(6));
+        LinearLayout.LayoutParams gifButtonLp=new LinearLayout.LayoutParams(dp(42),dp(44));
+        gifButtonLp.rightMargin=dp(3);
+        composer.addView(gifButton,gifButtonLp);
+        gifButton.setOnClickListener(v->openGifPicker());
         micButton = iconButton(R.drawable.ic_ehtid_mic,PANEL,"Записать голосовое сообщение");
         composer.addView(micButton,new LinearLayout.LayoutParams(dp(43),dp(46)));
         micButton.setOnClickListener(v->toggleRecording());
@@ -882,6 +893,46 @@ public final class MainActivity extends Activity {
         },"EHTID-Square-Prepare").start();
     }
 
+    private void openGifPicker() {
+        if(service==null){
+            status.setText("● Сначала подключись к комнате");
+            return;
+        }
+        new GifPicker(this,this::sendGif).show();
+    }
+
+    private void sendGif(GifSources.Item item) {
+        String selectedRoom=code;
+        status.setText("● Загружаем GIF из "+item.provider+"…");
+        new Thread(()->{
+            try {
+                byte[] bytes=GifSources.download(item.original,MediaTransfer.MAX_FILE_BYTES);
+                JSONObject media=MediaTransfer.upload(bytes,selectedRoom,
+                        "GIF-"+System.currentTimeMillis()+".gif","image/gif","gif",0,
+                        (part,total)->runOnUiThread(()->{
+                            if(selectedRoom.equals(code))
+                                status.setText("● GIF · отправка "+part+"/"+total);
+                        }));
+                media.put("provider",item.provider);
+                media.put("credit",item.credit.length()>80?item.credit.substring(0,80):item.credit);
+                // The source page is a public attribution URL, never a remote file URL.
+                if(item.page.startsWith("https://") && item.page.length()<400)
+                    media.put("sourcePage",item.page);
+                MediaTransfer.saveLocal(this,selectedRoom,media,bytes);
+                runOnUiThread(()->{
+                    if(!selectedRoom.equals(code) || service==null){
+                        status.setText("● GIF загружен, но комната сменилась · отправка отменена");
+                        return;
+                    }
+                    service.sendAttachment(media);
+                    status.setText("● GIF отправляется · "+item.provider);
+                });
+            } catch(Exception e){
+                runOnUiThread(()->status.setText("● GIF: "+e.getMessage()));
+            }
+        },"EHTID-GIF-Send").start();
+    }
+
     private void chooseAttachment() {
         Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.setType("*/*");
@@ -1096,6 +1147,7 @@ public final class MainActivity extends Activity {
         expandingHistory=false;
         previewSlots.clear();
         squareSlots.clear();
+        gifSlots.clear();
         feed.removeAllViews();
         if(allMessages>messages.size() && historyViewLimit<5000){
             TextView older=button("↑ Загрузить ранние сообщения ("+
@@ -1172,7 +1224,29 @@ public final class MainActivity extends Activity {
                         info+=" • "+String.format(Locale.getDefault(),"%02d:%02d",duration/60,duration%60);
                     }
                     bubble.addView(text(info,11,MUTED,false));
-                    if("image".equals(kind)){
+                    if("gif".equals(kind)){
+                        GifAnimationView animation=new GifAnimationView(this);
+                        animation.setBackground(round(PANEL,15));
+                        LinearLayout.LayoutParams gp=new LinearLayout.LayoutParams(dp(255),dp(190));
+                        gp.topMargin=dp(7);
+                        bubble.addView(animation,gp);
+                        TextView gifHint=text("GIF · "+media.optString("provider","из чата"),11,MUTED,false);
+                        bubble.addView(gifHint);
+                        animation.setContentDescription("Анимированная GIF · нажми для просмотра");
+                        animation.setOnClickListener(v->openMedia(media));
+                        if(size<=3*1024*1024)
+                            gifSlots.add(new GifSlot(code,media,animation,gifHint));
+                        else gifHint.setText("GIF больше 3 МБ · нажми для загрузки");
+                        String sourcePage=media.optString("sourcePage");
+                        if(sourcePage.startsWith("https://")){
+                            TextView credit=text("Источник: "+media.optString("credit","открыть"),11,ONLINE,false);
+                            bubble.addView(credit);
+                            credit.setOnClickListener(v->{
+                                try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(sourcePage)));}
+                                catch(Exception ignored){}
+                            });
+                        }
+                    } else if("image".equals(kind)){
                         ImageView preview=new ImageView(this);
                         preview.setBackground(round(PANEL,14));
                         preview.setScaleType(ImageView.ScaleType.FIT_CENTER);
@@ -1259,6 +1333,16 @@ public final class MainActivity extends Activity {
         });
     }
 
+    private static final class GifSlot {
+        final String room;
+        final JSONObject media;
+        final GifAnimationView view;
+        final TextView hint;
+        boolean started;
+        GifSlot(String room,JSONObject media,GifAnimationView view,TextView hint){
+            this.room=room;this.media=media;this.view=view;this.hint=hint;
+        }
+    }
     private static final class SquareSlot {
         final String room;
         final JSONObject media;
@@ -1285,6 +1369,18 @@ public final class MainActivity extends Activity {
             previewRefreshQueued=false;
             if(page!=0)return;
             Rect visible=new Rect();
+            for(GifSlot slot:gifSlots){
+                if(slot.started || !slot.room.equals(code) ||
+                        !slot.view.getGlobalVisibleRect(visible) ||
+                        visible.width()<32 || visible.height()<32)continue;
+                slot.started=true;
+                gifPreviews.load(getApplicationContext(),slot.room,slot.media,file->{
+                    if(!slot.room.equals(code) || !slot.view.isAttachedToWindow())return;
+                    if(file!=null && slot.view.open(file))
+                        slot.hint.setText("GIF · "+slot.media.optString("provider","EHTID"));
+                    else slot.hint.setText("GIF · нажми для загрузки");
+                });
+            }
             for(SquareSlot slot:squareSlots){
                 if(slot.started||!slot.room.equals(code)||
                         !slot.poster.getGlobalVisibleRect(visible)||
@@ -1358,6 +1454,7 @@ public final class MainActivity extends Activity {
                     status.setText("● Вложение готово");
                     if("voice".equals(kind))playVoice(local);
                     else if("image".equals(kind))showImage(expanded);
+                    else if("gif".equals(kind))showGif(local);
                     else if("square".equals(kind))playSquare(local);
                     else openOtherFile(local,media.optString("mime","application/octet-stream"));
                 });
@@ -1365,6 +1462,21 @@ public final class MainActivity extends Activity {
                 runOnUiThread(()->status.setText("● Не удалось открыть файл: "+error.getMessage()));
             }
         },"EHTID-Download").start();
+    }
+
+    private void showGif(File local) {
+        GifAnimationView gif=new GifAnimationView(this);
+        if(!gif.open(local)){
+            status.setText("● Невозможно открыть GIF");
+            return;
+        }
+        FrameLayout layout=new FrameLayout(this);
+        layout.setBackgroundColor(PANEL);
+        layout.addView(gif,new FrameLayout.LayoutParams(-1,dp(320)));
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("GIF EHTID")
+                .setView(layout).setPositiveButton("Закрыть",null).create();
+        d.setOnDismissListener(v->gif.stop());
+        d.show();
     }
 
     private void playSquare(File local) {
@@ -1748,6 +1860,7 @@ public final class MainActivity extends Activity {
     @Override protected void onDestroy() {
         imagePreviews.close();
         squarePreviews.close();
+        gifPreviews.close();
         if(recorder!=null)stopRecording(false);
         if(voicePlayer!=null) {
             try {voicePlayer.release();} catch(Exception ignored){}
