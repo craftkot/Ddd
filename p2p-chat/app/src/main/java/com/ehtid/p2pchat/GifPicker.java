@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Rect;
+import java.nio.ByteBuffer;
 import android.graphics.ImageDecoder;
 import android.graphics.drawable.Animatable;
 import android.graphics.drawable.Drawable;
@@ -43,6 +45,14 @@ public final class GifPicker {
     private AlertDialog dialog;
     private EditText search;
     private GridLayout tiles;
+    private ScrollView galleryScroll;
+    private final List<PosterSlot> posterSlots=new ArrayList<>();
+    private static final class PosterSlot {
+        final String url;
+        final ImageView target;
+        boolean started;
+        PosterSlot(String url,ImageView target){this.url=url;this.target=target;}
+    }
     private TextView label;
     private TextView more;
     private LinearLayout toolbar;
@@ -92,12 +102,13 @@ public final class GifPicker {
         label=text("Выбери GIF для отправки",12);
         label.setTextColor(0xffb0a5c2);
         root.addView(label);
-        ScrollView scrolling=new ScrollView(activity);
-        scrolling.setFillViewport(false);
+        galleryScroll=new ScrollView(activity);
+        galleryScroll.setFillViewport(false);
         tiles=new GridLayout(activity);
         tiles.setColumnCount(2);
-        scrolling.addView(tiles);
-        root.addView(scrolling,new LinearLayout.LayoutParams(-1,0,1));
+        galleryScroll.addView(tiles);
+        root.addView(galleryScroll,new LinearLayout.LayoutParams(-1,0,1));
+        galleryScroll.setOnScrollChangeListener((v,x,y,oldX,oldY)->checkPosters());
         more=text("Ещё результаты",14);
         more.setBackgroundColor(surface);
         root.addView(more,new LinearLayout.LayoutParams(-1,dp(46)));
@@ -189,6 +200,8 @@ public final class GifPicker {
         if(dialog==null||!dialog.isShowing())return;
         if(first){
             ++generation;page=0;results.clear();tiles.removeAllViews();
+            posterSlots.clear();
+            galleryScroll.scrollTo(0,0);
             loading=false;
         }
         if(loading)return;
@@ -255,10 +268,24 @@ public final class GifPicker {
             preview.setOnClickListener(v->select(item));
             title.setOnClickListener(v->select(item));
             star.setOnClickListener(v->toggleFavorite(item));
-            preview.post(()->{
-                if(preview.isAttachedToWindow())
-                    loadPoster(item.preview,preview);
-            });
+            posterSlots.add(new PosterSlot(item.preview,preview));
+        }
+        tiles.post(this::checkPosters);
+    }
+    private void checkPosters(){
+        Rect rect=new Rect();
+        for(PosterSlot slot:posterSlots){
+            if(!slot.target.isAttachedToWindow())continue;
+            boolean visible=slot.target.getGlobalVisibleRect(rect) &&
+                    rect.height()>32 && rect.width()>32;
+            Drawable d=slot.target.getDrawable();
+            if(d instanceof Animatable){
+                if(visible)((Animatable)d).start();
+                else ((Animatable)d).stop();
+            }
+            if(!visible || slot.started)continue;
+            slot.started=true;
+            loadPoster(slot.url,slot.target);
         }
     }
     private void select(GifSources.Item item) {
@@ -269,14 +296,21 @@ public final class GifPicker {
         if(!GifSources.safeMediaUrl(url))return;
         IO.execute(()->{
             try{
-                byte[] bytes=GifSources.download(url,2*1024*1024);
-                File file=new File(activity.getCacheDir(),"gif-preview-"+Integer.toHexString(url.hashCode())+".gif");
-                try(FileOutputStream out=new FileOutputStream(file)){out.write(bytes);}
+                byte[] bytes=GifSources.download(url,1024*1024);
                 main.post(()->{
                     if(!target.isAttachedToWindow())return;
                     try {
                         if(Build.VERSION.SDK_INT>=28){
-                            Drawable drawable=ImageDecoder.decodeDrawable(ImageDecoder.createSource(file));
+                            Drawable drawable=ImageDecoder.decodeDrawable(
+                                ImageDecoder.createSource(ByteBuffer.wrap(bytes)),
+                                (decoder,info,source)->{
+                                    int w=info.getSize().getWidth(),h=info.getSize().getHeight();
+                                    if(w<=0 || h<=0 || w>4096 || h>4096)
+                                        throw new java.io.IOException("Unsafe GIF dimensions");
+                                    float scale=Math.min(1f,240f/Math.max(w,h));
+                                    decoder.setTargetSize(Math.max(1,(int)(w*scale)),
+                                            Math.max(1,(int)(h*scale)));
+                                });
                             target.setImageDrawable(drawable);
                             if(drawable instanceof Animatable)((Animatable)drawable).start();
                         }else{
