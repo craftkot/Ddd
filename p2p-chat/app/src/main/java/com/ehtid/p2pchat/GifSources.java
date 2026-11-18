@@ -105,7 +105,19 @@ public final class GifSources {
             JSONObject original=variants.optJSONObject("original");
             JSONObject down=variants.optJSONObject("fixed_width");
             if(original==null)continue;
-            String full=original.optString("url");
+            JSONObject best=null;
+            for(String quality:new String[]{"original","downsized_medium","downsized",
+                    "fixed_height","fixed_width"}) {
+                JSONObject option=variants.optJSONObject(quality);
+                if(option==null)continue;
+                long bytes=option.optLong("size",-1);
+                String candidate=option.optString("url");
+                if(safeMediaUrl(candidate) && (bytes<0 || bytes<=MAX_GIF)){
+                    best=option;break;
+                }
+            }
+            if(best==null)continue;
+            String full=best.optString("url");
             String preview=down==null?full:down.optString("url",full);
             if(!safeMediaUrl(full)||!safeMediaUrl(preview))continue;
             // Content may exceed 10 MiB; actual fetch is bounded before upload.
@@ -137,7 +149,9 @@ public final class GifSources {
             JSONObject md=files.optJSONObject("md");
             JSONObject sm=files.optJSONObject("sm");
             JSONObject gifFile=hd==null?null:hd.optJSONObject("gif");
+            if(gifFile!=null && gifFile.optLong("size",0)>MAX_GIF)gifFile=null;
             if(gifFile==null && md!=null)gifFile=md.optJSONObject("gif");
+            if(gifFile==null && sm!=null)gifFile=sm.optJSONObject("gif");
             if(gifFile==null)continue;
             String original=gifFile.optString("url");
             JSONObject previewFile=sm==null?null:sm.optJSONObject("gif");
