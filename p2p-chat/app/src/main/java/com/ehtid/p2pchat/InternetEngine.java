@@ -601,7 +601,9 @@ public final class InternetEngine {
         String kind=media.optString("kind","file");
         String label="voice".equals(kind)?"🎤 Голосовое сообщение":
                 "image".equals(kind)?"🖼 Изображение":
-                "square".equals(kind)?"▣ Квадратное видео":"📎 "+media.optString("name","Файл");
+                "square".equals(kind)?"▣ Квадратное видео":
+                "gif".equals(kind)?"GIF · "+media.optString("provider","анимация"):
+                "📎 "+media.optString("name","Файл");
         if(label.length()>1000)label=label.substring(0,1000);
         JSONObject msg=obj("id",UUID.randomUUID().toString());
         put(msg,"from",id);
