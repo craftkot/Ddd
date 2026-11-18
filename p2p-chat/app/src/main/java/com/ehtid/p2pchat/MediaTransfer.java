@@ -164,7 +164,8 @@ public final class MediaTransfer {
         meta.put("size",plain.length);
         meta.put("mime",safeMime(mime));
         meta.put("name",safeName(filename));
-        meta.put("kind","voice".equals(kind)?"voice":
+        meta.put("kind","gif".equals(kind)&&"image/gif".equals(mime)?"gif":
+                "voice".equals(kind)?"voice":
                 "square".equals(kind)&&mime!=null&&mime.startsWith("video/")?"square":
                 mime!=null&&mime.startsWith("image/")?"image":"file");
         if(durationMs>0)meta.put("duration",durationMs);
