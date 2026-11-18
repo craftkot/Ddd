@@ -119,7 +119,8 @@ public final class GifSources {
         if(key.isEmpty())throw new IOException("Для KLIPY нужен API-ключ в настройках GIF");
         // KLIPY partner v1 API, response variants may differ between API plans.
         String url="https://api.klipy.com/api/v1/"+enc(key)+"/gifs/search?"
-                +"q="+enc(q)+"&per_page=24&page="+(page+1)+"&locale=ru_RU";
+                +"q="+enc(q)+"&per_page=24&page="+(page+1)
+                +"&locale=ru&format_filter=gif&content_filter=medium";
         JSONObject root=new JSONObject(text(url));
         JSONObject nested=root.optJSONObject("data");
         JSONArray data=nested==null?root.optJSONArray("data"):nested.optJSONArray("data");
@@ -131,10 +132,15 @@ public final class GifSources {
             if(gif==null)continue;
             JSONObject files=gif.optJSONObject("file");
             if(files==null)files=gif.optJSONObject("files");
-            JSONObject gifFile=files==null?null:files.optJSONObject("gif");
+            if(files==null)continue;
+            JSONObject hd=files.optJSONObject("hd");
+            JSONObject md=files.optJSONObject("md");
+            JSONObject sm=files.optJSONObject("sm");
+            JSONObject gifFile=hd==null?null:hd.optJSONObject("gif");
+            if(gifFile==null && md!=null)gifFile=md.optJSONObject("gif");
             if(gifFile==null)continue;
             String original=gifFile.optString("url");
-            JSONObject previewFile=files.optJSONObject("gif_small");
+            JSONObject previewFile=sm==null?null:sm.optJSONObject("gif");
             String preview=previewFile==null?original:previewFile.optString("url",original);
             if(!safeMediaUrl(original)||!safeMediaUrl(preview))continue;
             items.add(new Item("KLIPY",gif.optString("title","GIF"),preview,original,
@@ -149,7 +155,7 @@ public final class GifSources {
                     url.getPort()!=-1)return false;
             String host=url.getHost().toLowerCase(Locale.ROOT);
             return host.equals("upload.wikimedia.org") ||
-                    host.equals("static.klipy.com") ||
+                    host.matches("static[0-9]*\\.klipy\\.com") ||
                     host.equals("media.giphy.com") ||
                     host.matches("media[0-9]+\\.giphy\\.com") ||
                     host.equals("i.giphy.com");
