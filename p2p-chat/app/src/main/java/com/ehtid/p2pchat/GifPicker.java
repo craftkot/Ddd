@@ -306,7 +306,7 @@ public final class GifPicker {
                                 (decoder,info,source)->{
                                     int w=info.getSize().getWidth(),h=info.getSize().getHeight();
                                     if(w<=0 || h<=0 || w>4096 || h>4096)
-                                        throw new java.io.IOException("Unsafe GIF dimensions");
+                                        throw new IllegalArgumentException("Unsafe GIF dimensions");
                                     float scale=Math.min(1f,240f/Math.max(w,h));
                                     decoder.setTargetSize(Math.max(1,(int)(w*scale)),
                                             Math.max(1,(int)(h*scale)));
